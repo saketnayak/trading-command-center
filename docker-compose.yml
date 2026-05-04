@@ -31,8 +31,11 @@ services:
       SMTP_HOST: "${SMTP_HOST:-}"
       SMTP_PORT: "${SMTP_PORT:-587}"
       SMTP_USER: "${SMTP_USER:-}"
-      SMTP_PASS: "${SMTP_PASS:-}"
-      INVITE_FROM_EMAIL: "${INVITE_FROM_EMAIL:-noreply@agentfloor.local}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-noreply@agentfloor.local}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      FRONTEND_URL: "${NEXTAUTH_URL:-http://localhost}"
     ports:
       - "8000:8000"
 
