@@ -1,7 +1,11 @@
 import asyncio
+import os
 from queue import Queue as SyncQueue
 from datetime import datetime, timezone
 from langchain_core.callbacks import BaseCallbackHandler
+
+# Serializes the env-var fallback path so concurrent runs don't race on os.environ
+_env_fallback_lock = asyncio.Lock()
 
 AGENT_NODES = {
     "fundamentals_analyst", "sentiment_analyst", "news_analyst",
@@ -125,8 +129,7 @@ async def execute_run(run_id: str, config: dict) -> None:
 
         llm = await _build_llm(config.get("llm_provider", ""), config.get("llm_model", ""))
 
-        import os
-        _prev_base = os.environ.get("OPENAI_BASE_URL")
+        _prev_base = os.environ.get("OPENAI_API_BASE")
         _prev_key = os.environ.get("OPENAI_API_KEY")
         _patched_env = False
 
@@ -135,31 +138,34 @@ async def execute_run(run_id: str, config: dict) -> None:
         except TypeError as exc:
             if "llm" not in str(exc) and "unexpected keyword" not in str(exc):
                 raise
-            # TradingAgentsGraph does not accept an llm arg — fall back to env-var patching
+            # TradingAgentsGraph does not accept an llm arg — fall back to env-var patching.
+            # Acquires _env_fallback_lock to prevent concurrent runs from racing on os.environ.
             if llm is not None:
-                os.environ["OPENAI_BASE_URL"] = llm.openai_api_base or ""
-                os.environ["OPENAI_API_KEY"] = "ollama"
                 _patched_env = True
             graph = TradingAgentsGraph()
 
         lc_config = RunnableConfig(callbacks=[emitter])
-        try:
-            result = await asyncio.to_thread(
-                graph.propagate,
-                config["ticker"],
-                config["analysis_date"],
-                config=lc_config,
-            )
-        finally:
+        async with (_env_fallback_lock if _patched_env else asyncio.Lock()):
             if _patched_env:
-                if _prev_base is None:
-                    os.environ.pop("OPENAI_BASE_URL", None)
-                else:
-                    os.environ["OPENAI_BASE_URL"] = _prev_base
-                if _prev_key is None:
-                    os.environ.pop("OPENAI_API_KEY", None)
-                else:
-                    os.environ["OPENAI_API_KEY"] = _prev_key
+                os.environ["OPENAI_API_BASE"] = llm.openai_api_base or ""
+                os.environ["OPENAI_API_KEY"] = "ollama"
+            try:
+                result = await asyncio.to_thread(
+                    graph.propagate,
+                    config["ticker"],
+                    config["analysis_date"],
+                    config=lc_config,
+                )
+            finally:
+                if _patched_env:
+                    if _prev_base is None:
+                        os.environ.pop("OPENAI_API_BASE", None)
+                    else:
+                        os.environ["OPENAI_API_BASE"] = _prev_base
+                    if _prev_key is None:
+                        os.environ.pop("OPENAI_API_KEY", None)
+                    else:
+                        os.environ["OPENAI_API_KEY"] = _prev_key
         await async_q.put(None)  # sentinel
         await process_task
 
