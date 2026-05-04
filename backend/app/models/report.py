@@ -10,7 +10,7 @@ class Report(Base):
     __tablename__ = "reports"
     __table_args__ = (UniqueConstraint("run_id"),)
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("runs.id"), unique=True)
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("runs.id"))
     trader_decision: Mapped[str] = mapped_column(String)
     verdict: Mapped[RunVerdict] = mapped_column(SAEnum(RunVerdict))
     suggested_entry: Mapped[str | None] = mapped_column(String, nullable=True)
