@@ -1,5 +1,5 @@
 import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -37,6 +37,12 @@ export async function createRun(req: CreateRunRequest): Promise<Run> {
 
 export async function abortRun(id: string): Promise<void> {
   await fetchWithAuth(`/runs/${id}`, { method: "DELETE" });
+}
+
+export async function getReport(runId: string): Promise<Report> {
+  const r = await fetchWithAuth(`/runs/${runId}/report`);
+  if (!r.ok) throw new Error("Report not found");
+  return r.json();
 }
 
 export async function getRunEvents(id: string): Promise<AgentEventPayload[]> {
