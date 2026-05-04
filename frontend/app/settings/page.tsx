@@ -20,6 +20,7 @@ export default function SettingsPage() {
   const { data: apiKeys = [] } = useQuery({
     queryKey: ["apiKeys"],
     queryFn: getApiKeys,
+    enabled: isAdmin,
   });
 
   const { data: users = [] } = useQuery({
@@ -52,6 +53,7 @@ export default function SettingsPage() {
     <>
       <TopNav />
       <main className="p-6 max-w-3xl mx-auto flex flex-col gap-8">
+        {isAdmin && (
         <section>
           <h2 className="text-slate-200 text-sm font-semibold mb-3">API Keys</h2>
           <div className="bg-navy-700 border border-slate-800 rounded-lg divide-y divide-slate-800">
@@ -68,7 +70,9 @@ export default function SettingsPage() {
             )}
           </div>
         </section>
+        )}
 
+        {isAdmin && (
         <section>
           <h2 className="text-slate-200 text-sm font-semibold mb-3">Local Inference Servers</h2>
           <div className="bg-navy-700 border border-slate-800 rounded-lg divide-y divide-slate-800">
@@ -83,6 +87,7 @@ export default function SettingsPage() {
             ))}
           </div>
         </section>
+        )}
 
         {isAdmin && (
           <section>
