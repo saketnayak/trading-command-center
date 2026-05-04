@@ -62,16 +62,20 @@ async def delete_api_key(provider: str, db: AsyncSession = Depends(get_db), _adm
 async def _validate_key(provider: str, key: str) -> bool:
     """Test call to validate the key. Returns True if valid."""
     try:
-        if provider == "openai":
-            import httpx
-            async with httpx.AsyncClient() as client:
+        import httpx
+        async with httpx.AsyncClient() as client:
+            if provider == "openai":
                 r = await client.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {key}"}, timeout=5)
                 return r.status_code == 200
-        if provider == "alpha_vantage":
-            import httpx
-            async with httpx.AsyncClient() as client:
+            if provider == "alpha_vantage":
                 r = await client.get(f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=5min&apikey={key}", timeout=5)
                 return "Time Series" in r.text or "Meta Data" in r.text
+            if provider == "ollama":
+                r = await client.get(f"{key}/api/tags", timeout=5)
+                return r.status_code == 200
+            if provider == "vllm":
+                r = await client.get(f"{key}/health", timeout=5)
+                return r.status_code == 200
         return True  # unknown providers pass validation
     except Exception:
         return False
