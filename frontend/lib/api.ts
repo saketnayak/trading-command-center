@@ -82,3 +82,7 @@ export async function updateUserRole(id: string, role: string): Promise<User> {
   if (!r.ok) throw new Error("Failed to update user");
   return r.json();
 }
+
+export async function deleteUser(id: string): Promise<void> {
+  await fetchWithAuth(`/users/${id}`, { method: "DELETE" });
+}
