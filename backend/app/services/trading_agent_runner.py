@@ -125,23 +125,41 @@ async def execute_run(run_id: str, config: dict) -> None:
 
         llm = await _build_llm(config.get("llm_provider", ""), config.get("llm_model", ""))
 
+        import os
+        _prev_base = os.environ.get("OPENAI_BASE_URL")
+        _prev_key = os.environ.get("OPENAI_API_KEY")
+        _patched_env = False
+
         try:
             graph = TradingAgentsGraph(llm=llm) if llm else TradingAgentsGraph()
-        except TypeError:
+        except TypeError as exc:
+            if "llm" not in str(exc) and "unexpected keyword" not in str(exc):
+                raise
             # TradingAgentsGraph does not accept an llm arg — fall back to env-var patching
-            import os
             if llm is not None:
-                os.environ["OPENAI_BASE_URL"] = llm.openai_api_base or ""
+                os.environ["OPENAI_BASE_URL"] = llm.base_url or ""
                 os.environ["OPENAI_API_KEY"] = "ollama"
+                _patched_env = True
             graph = TradingAgentsGraph()
 
         lc_config = RunnableConfig(callbacks=[emitter])
-        result = await asyncio.to_thread(
-            graph.propagate,
-            config["ticker"],
-            config["analysis_date"],
-            config=lc_config,
-        )
+        try:
+            result = await asyncio.to_thread(
+                graph.propagate,
+                config["ticker"],
+                config["analysis_date"],
+                config=lc_config,
+            )
+        finally:
+            if _patched_env:
+                if _prev_base is None:
+                    os.environ.pop("OPENAI_BASE_URL", None)
+                else:
+                    os.environ["OPENAI_BASE_URL"] = _prev_base
+                if _prev_key is None:
+                    os.environ.pop("OPENAI_API_KEY", None)
+                else:
+                    os.environ["OPENAI_API_KEY"] = _prev_key
         await async_q.put(None)  # sentinel
         await process_task
 
