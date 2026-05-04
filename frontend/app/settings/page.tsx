@@ -5,7 +5,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getApiKeys, getUsers, inviteUser } from "@/lib/api";
 import { TopNav } from "@/components/layout/TopNav";
 import { ApiKeyRow } from "@/components/settings/ApiKeyRow";
+import { ServerUrlRow } from "@/components/settings/ServerUrlRow";
 import { TeamMemberRow } from "@/components/settings/TeamMemberRow";
+
+const LOCAL_PROVIDERS = ["ollama", "vllm"];
+const LOCAL_LABELS: Record<string, string> = { ollama: "Ollama Server", vllm: "vLLM Server" };
 
 export default function SettingsPage() {
   const { data: session } = useSession();
@@ -23,6 +27,10 @@ export default function SettingsPage() {
     queryFn: getUsers,
     enabled: isAdmin,
   });
+
+  const cloudKeys = apiKeys.filter((k) => !LOCAL_PROVIDERS.includes(k.provider));
+  const localKey = (provider: string) => apiKeys.find((k) => k.provider === provider);
+  const refetchKeys = () => queryClient.invalidateQueries({ queryKey: ["apiKeys"] });
 
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteStatus, setInviteStatus] = useState<"idle" | "success" | "error">("idle");
@@ -47,17 +55,32 @@ export default function SettingsPage() {
         <section>
           <h2 className="text-slate-200 text-sm font-semibold mb-3">API Keys</h2>
           <div className="bg-navy-700 border border-slate-800 rounded-lg divide-y divide-slate-800">
-            {apiKeys.map((k) => (
+            {cloudKeys.map((k) => (
               <ApiKeyRow
                 key={k.provider}
                 provider={k.provider}
                 isSet={k.is_valid}
-                onSaved={() => queryClient.invalidateQueries({ queryKey: ["apiKeys"] })}
+                onSaved={refetchKeys}
               />
             ))}
-            {apiKeys.length === 0 && (
+            {cloudKeys.length === 0 && (
               <p className="text-slate-500 text-xs px-4 py-3">No API keys configured.</p>
             )}
+          </div>
+        </section>
+
+        <section>
+          <h2 className="text-slate-200 text-sm font-semibold mb-3">Local Inference Servers</h2>
+          <div className="bg-navy-700 border border-slate-800 rounded-lg divide-y divide-slate-800">
+            {LOCAL_PROVIDERS.map((provider) => (
+              <ServerUrlRow
+                key={provider}
+                provider={provider as "ollama" | "vllm"}
+                label={LOCAL_LABELS[provider]}
+                isValid={localKey(provider)?.is_valid ?? false}
+                onSaved={refetchKeys}
+              />
+            ))}
           </div>
         </section>
 
