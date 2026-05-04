@@ -137,7 +137,7 @@ async def execute_run(run_id: str, config: dict) -> None:
                 raise
             # TradingAgentsGraph does not accept an llm arg — fall back to env-var patching
             if llm is not None:
-                os.environ["OPENAI_BASE_URL"] = llm.base_url or ""
+                os.environ["OPENAI_BASE_URL"] = llm.openai_api_base or ""
                 os.environ["OPENAI_API_KEY"] = "ollama"
                 _patched_env = True
             graph = TradingAgentsGraph()
