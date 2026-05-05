@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: agentfloor
+      POSTGRES_PASSWORD: agentfloor
+      POSTGRES_DB: agentfloor
+    volumes:
+      - agentfloor_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agentfloor"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ghcr.io/saketnayak/agentfloor-backend:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentfloor:agentfloor@db:5432/agentfloor
+      JWT_SECRET: "${JWT_SECRET}"
+      ENCRYPTION_KEY: "${ENCRYPTION_KEY}"
+      NEXTAUTH_URL: "${NEXTAUTH_URL:-http://localhost}"
+      OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
+      ALPHA_VANTAGE_KEY: "${ALPHA_VANTAGE_KEY:-}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-noreply@agentfloor.local}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
+      FRONTEND_URL: "${NEXTAUTH_URL:-http://localhost}"
+
+  frontend:
+    image: ghcr.io/saketnayak/agentfloor-frontend:latest
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      NEXTAUTH_URL: "${NEXTAUTH_URL:-http://localhost}"
+      NEXTAUTH_SECRET: "${NEXTAUTH_SECRET}"
+      INTERNAL_API_URL: "http://backend:8000"
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - frontend
+      - backend
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  agentfloor_pgdata:
