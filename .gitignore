@@ -24,3 +24,6 @@ out/
 # Tools
 .superpowers/
 .DS_Store
+
+# TradingAgents output cache
+backend/results/
