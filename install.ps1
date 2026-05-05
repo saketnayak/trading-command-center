@@ -87,7 +87,7 @@ GOOGLE_CLIENT_SECRET=
     $acl.SetAccessRuleProtection($true, $false)
     $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
         [System.Security.Principal.WindowsIdentity]::GetCurrent().User,
-        "ReadWrite", "Allow")
+        "Modify", "Allow")
     $acl.AddAccessRule($rule)
     Set-Acl $EnvFile $acl
 } else {
