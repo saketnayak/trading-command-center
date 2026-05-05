@@ -2,8 +2,9 @@
 set -euo pipefail
 
 INSTALL_DIR="$HOME/.agentfloor"
-REPO_RAW="https://raw.githubusercontent.com/saketnayak/trading-command-center/main"
 VERSION="${AGENTFLOOR_VERSION:-latest}"
+REPO_REF="${AGENTFLOOR_VERSION:-main}"
+REPO_RAW="https://raw.githubusercontent.com/saketnayak/trading-command-center/${REPO_REF}"
 
 # ── colours ────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; CYAN='\033[0;36m'; BOLD='\033[1m'; RESET='\033[0m'
@@ -86,7 +87,7 @@ info "Waiting for AgentFloor to be ready (up to 90s)..."
 TIMEOUT=90; ELAPSED=0
 until curl -sf http://localhost/api/health >/dev/null 2>&1; do
   sleep 2; ELAPSED=$((ELAPSED + 2))
-  [ "$ELAPSED" -ge "$TIMEOUT" ] && fatal "Timed out. Check logs with: agentfloor logs"
+  [ "$ELAPSED" -ge "$TIMEOUT" ] && fatal "Timed out. Check logs with: docker compose --env-file $INSTALL_DIR/.env -f $INSTALL_DIR/docker-compose.yml logs"
 done
 
 # ── install the agentfloor alias ───────────────────────────────────────────
