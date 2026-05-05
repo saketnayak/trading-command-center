@@ -2,7 +2,10 @@
 import { useEffect, useRef, useCallback } from "react";
 import type { AgentEventPayload } from "./types";
 
-const WS_BASE = process.env.NEXT_PUBLIC_API_URL?.replace("http", "ws") ?? "ws://localhost:8000";
+const WS_BASE =
+  typeof window !== "undefined"
+    ? `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}`
+    : (process.env.NEXT_PUBLIC_API_URL?.replace(/^http/, "ws") ?? "ws://localhost:8000");
 
 export function useAgentStream(runId: string, onEvent: (e: AgentEventPayload) => void) {
   const wsRef = useRef<WebSocket | null>(null);

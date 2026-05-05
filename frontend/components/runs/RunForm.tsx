@@ -7,9 +7,9 @@ const ANALYSTS = ["market", "social", "news", "fundamentals", "technical"];
 const LOCAL_PROVIDERS = ["ollama", "vllm"];
 
 const PLACEHOLDERS: Record<string, string> = {
-  openai: "gpt-4o",
-  anthropic: "claude-opus-4-5",
-  google: "gemini-2.0-flash",
+  openai: "gpt-5.5",
+  anthropic: "claude-sonnet-4-6",
+  google: "gemini-3-flash-preview",
   ollama: "llama3",
   vllm: "mistralai/Mistral-7B-Instruct-v0.3",
 };
@@ -20,18 +20,19 @@ interface Props {
 
 export function RunForm({ onSuccess }: Props) {
   const [ticker, setTicker] = useState("");
+  const [label, setLabel] = useState("");
   const [analysisDate, setAnalysisDate] = useState(new Date().toISOString().slice(0, 10));
-  const [analysts, setAnalysts] = useState<string[]>(["market"]);
+  const [analysts, setAnalysts] = useState<string[]>(["market", "social", "news", "fundamentals", "technical"]);
   const [provider, setProvider] = useState("openai");
   const [model, setModel] = useState("");
-  const [quickResearch, setQuickResearch] = useState(false);
+  const [depth, setDepth] = useState<"quick" | "standard" | "deep">("standard");
 
   const isLocal = LOCAL_PROVIDERS.includes(provider);
 
-  const { data: models = [], isLoading: modelsLoading, isError: modelsError } = useQuery({
+  const { data: models = [], isLoading: modelsLoading } = useQuery({
     queryKey: ["models", provider],
     queryFn: () => getProviderModels(provider),
-    enabled: isLocal,
+    enabled: true,
     retry: false,
   });
 
@@ -65,12 +66,24 @@ export function RunForm({ onSuccess }: Props) {
       analysts,
       llm_provider: provider,
       llm_model: model || PLACEHOLDERS[provider],
-      depth: quickResearch ? "quick" : "standard",
+      depth,
+      ...(label ? { label } : {}),
     });
   }
 
   return (
     <form onSubmit={handleSubmit} className="bg-navy-700 border border-slate-800 rounded-lg p-6 max-w-lg">
+      <div className="mb-4">
+        <label className="block text-slate-400 text-xs mb-1">Label <span className="text-slate-600">(optional)</span></label>
+        <input
+          type="text"
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="e.g. pre-earnings check"
+          className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-600"
+        />
+      </div>
+
       <div className="mb-4">
         <label className="block text-slate-400 text-xs mb-1">Ticker</label>
         <input
@@ -137,54 +150,45 @@ export function RunForm({ onSuccess }: Props) {
 
       <div className="mb-4">
         <label className="block text-slate-400 text-xs mb-1">LLM Model</label>
-        {isLocal ? (
-          modelsLoading ? (
-            <select disabled className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-500 text-sm">
-              <option>Loading models…</option>
-            </select>
-          ) : modelsError || models.length === 0 ? (
-            <>
-              <input
-                type="text"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder={PLACEHOLDERS[provider]}
-                className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-600"
-              />
-              <p className="text-amber-400 text-xs mt-1">Server unreachable — enter model name manually</p>
-            </>
-          ) : (
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-600"
-            >
-              {models.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          )
-        ) : (
-          <input
-            type="text"
+        {modelsLoading ? (
+          <select disabled className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-500 text-sm">
+            <option>Loading models…</option>
+          </select>
+        ) : models.length > 0 ? (
+          <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            placeholder={PLACEHOLDERS[provider]}
             className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-600"
-          />
+          >
+            {models.map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        ) : (
+          <>
+            <input
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder={PLACEHOLDERS[provider]}
+              className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-600"
+            />
+            {isLocal && <p className="text-amber-400 text-xs mt-1">Server unreachable — enter model name manually</p>}
+          </>
         )}
       </div>
 
       <div className="mb-6">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={quickResearch}
-            onChange={(e) => setQuickResearch(e.target.checked)}
-            className="accent-blue-600"
-          />
-          <span className="text-slate-400 text-xs">Quick research (faster, less thorough)</span>
-        </label>
+        <label className="block text-slate-400 text-xs mb-1">Research Depth</label>
+        <select
+          value={depth}
+          onChange={(e) => setDepth(e.target.value as "quick" | "standard" | "deep")}
+          className="w-full bg-slate-800 border border-slate-700 rounded px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-blue-600"
+        >
+          <option value="quick">Quick — 1 debate round, faster</option>
+          <option value="standard">Standard — 2 debate rounds</option>
+          <option value="deep">Deep — 3 debate rounds, most thorough</option>
+        </select>
       </div>
 
       <button
