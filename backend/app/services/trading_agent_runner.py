@@ -1,16 +1,32 @@
 import asyncio
 import os
+import re
 from queue import Queue as SyncQueue
 from datetime import datetime, timezone
 from langchain_core.callbacks import BaseCallbackHandler
 
-# Serializes the env-var fallback path so concurrent runs don't race on os.environ
+# Serializes env-var patching so concurrent local-inference runs don't race on os.environ.
 _env_fallback_lock = asyncio.Lock()
 
 AGENT_NODES = {
-    "fundamentals_analyst", "sentiment_analyst", "news_analyst",
-    "technical_analyst", "bull_researcher", "bear_researcher",
-    "trader", "risk_manager",
+    "market_analyst", "social_analyst", "news_analyst",
+    "fundamentals_analyst", "technical_analyst",
+    "bull_researcher", "bear_researcher",
+    "trader", "risk_judge",
+}
+
+# Maps AgentFloor provider names to TradingAgentsConfig llm_provider literals.
+_PROVIDER_MAP: dict[str, str] = {
+    "openai": "openai",
+    "anthropic": "anthropic",
+    "google": "google_genai",
+    "ollama": "ollama",
+    "vllm": "openai",  # vLLM is OpenAI-compatible
+}
+
+_DEPTH_PARAMS: dict[str, dict] = {
+    "quick":    {"max_debate_rounds": 1, "max_risk_discuss_rounds": 1, "max_recur_limit": 30},
+    "standard": {"max_debate_rounds": 2, "max_risk_discuss_rounds": 2, "max_recur_limit": 100},
 }
 
 
@@ -43,11 +59,10 @@ class _SyncEmitter(BaseCallbackHandler):
         self._current = None
 
 
-async def _build_llm(provider: str, model: str):
-    """Return a ChatOpenAI configured for local inference, or None for cloud providers."""
+async def _get_local_url(provider: str) -> str | None:
+    """Return the stored base URL for a local inference provider, or None."""
     if provider not in ("ollama", "vllm"):
         return None
-
     from app.database import AsyncSessionLocal
     from app.models.api_key import ApiKey
     from app.services.encryption import decrypt_key
@@ -55,20 +70,9 @@ async def _build_llm(provider: str, model: str):
 
     async with AsyncSessionLocal() as db:
         row = (await db.execute(select(ApiKey).where(ApiKey.provider == provider))).scalar_one_or_none()
-
     if not row:
         return None
-
-    from langchain_openai import ChatOpenAI
-    base_url = decrypt_key(row.encrypted_key).rstrip("/")
-    if not base_url.endswith("/v1"):
-        base_url = f"{base_url}/v1"
-
-    return ChatOpenAI(
-        base_url=base_url,
-        model=model,
-        api_key="ollama",
-    )
+    return decrypt_key(row.encrypted_key).rstrip("/")
 
 
 async def execute_run(run_id: str, config: dict) -> None:
@@ -125,61 +129,73 @@ async def execute_run(run_id: str, config: dict) -> None:
 
     try:
         from tradingagents.graph.trading_graph import TradingAgentsGraph
-        from langchain_core.runnables import RunnableConfig
+        from tradingagents.config import TradingAgentsConfig
 
-        llm = await _build_llm(config.get("llm_provider", ""), config.get("llm_model", ""))
+        provider = config.get("llm_provider", "openai")
+        model = config.get("llm_model", "")
+        depth = config.get("depth", "standard")
+        analysts = config.get("analysts") or ["market", "social", "news", "fundamentals", "technical"]
+        depth_params = _DEPTH_PARAMS.get(depth, _DEPTH_PARAMS["standard"])
+        ta_provider = _PROVIDER_MAP.get(provider, provider)
 
-        _prev_base = os.environ.get("OPENAI_API_BASE")
-        _prev_key = os.environ.get("OPENAI_API_KEY")
-        _patched_env = False
+        local_url = await _get_local_url(provider)
 
-        try:
-            graph = TradingAgentsGraph(llm=llm) if llm else TradingAgentsGraph()
-        except TypeError as exc:
-            if "llm" not in str(exc) and "unexpected keyword" not in str(exc):
-                raise
-            # TradingAgentsGraph does not accept an llm arg — fall back to env-var patching.
-            # Acquires _env_fallback_lock to prevent concurrent runs from racing on os.environ.
-            if llm is not None:
-                _patched_env = True
-            graph = TradingAgentsGraph()
+        ta_config = TradingAgentsConfig(
+            llm_provider=ta_provider,
+            deep_think_llm=model,
+            quick_think_llm=model,
+            **depth_params,
+        )
 
-        lc_config = RunnableConfig(callbacks=[emitter])
-        async with (_env_fallback_lock if _patched_env else asyncio.Lock()):
-            if _patched_env:
-                os.environ["OPENAI_API_BASE"] = llm.openai_api_base or ""
-                os.environ["OPENAI_API_KEY"] = "ollama"
+        # Determine which env vars need patching for local inference servers.
+        env_patch: dict[str, str] = {}
+        if provider == "ollama" and local_url:
+            env_patch["OLLAMA_HOST"] = local_url
+        elif provider == "vllm" and local_url:
+            vllm_url = local_url if local_url.endswith("/v1") else f"{local_url}/v1"
+            env_patch["OPENAI_BASE_URL"] = vllm_url
+            env_patch["OPENAI_API_KEY"] = "vllm"
+
+        needs_lock = bool(env_patch)
+        prev_env: dict[str, str | None] = {k: os.environ.get(k) for k in env_patch}
+
+        async with (_env_fallback_lock if needs_lock else asyncio.Lock()):
+            for k, v in env_patch.items():
+                os.environ[k] = v
             try:
-                result = await asyncio.to_thread(
+                graph = TradingAgentsGraph(
+                    config=ta_config,
+                    selected_analysts=analysts,
+                    callbacks=[emitter],
+                )
+                final_state, signal = await asyncio.to_thread(
                     graph.propagate,
                     config["ticker"],
                     config["analysis_date"],
-                    config=lc_config,
                 )
             finally:
-                if _patched_env:
-                    if _prev_base is None:
-                        os.environ.pop("OPENAI_API_BASE", None)
+                for k in env_patch:
+                    prev = prev_env[k]
+                    if prev is None:
+                        os.environ.pop(k, None)
                     else:
-                        os.environ["OPENAI_API_BASE"] = _prev_base
-                    if _prev_key is None:
-                        os.environ.pop("OPENAI_API_KEY", None)
-                    else:
-                        os.environ["OPENAI_API_KEY"] = _prev_key
+                        os.environ[k] = prev
+
         await async_q.put(None)  # sentinel
         await process_task
 
-        verdict = _parse_verdict(result)
+        verdict = _parse_verdict(signal)
+        raw = final_state.model_dump() if hasattr(final_state, "model_dump") else {}
         async with AsyncSessionLocal() as db:
             db.add(Report(
                 run_id=run_id,
-                trader_decision=str(result.get("trader_decision", "")),
+                trader_decision=str(getattr(final_state, "final_trade_decision", "")),
                 verdict=verdict,
-                suggested_entry=result.get("suggested_entry"),
-                suggested_stop=result.get("suggested_stop"),
-                suggested_target=result.get("suggested_target"),
-                risk_assessment=str(result.get("risk_assessment", "")),
-                raw_report=result if isinstance(result, dict) else {},
+                suggested_entry=None,
+                suggested_stop=None,
+                suggested_target=None,
+                risk_assessment="",
+                raw_report=raw,
             ))
             await db.commit()
 
@@ -193,6 +209,8 @@ async def execute_run(run_id: str, config: dict) -> None:
         await ws_manager.broadcast(run_id, {"type": "run_aborted", "run_id": run_id})
 
     except Exception as exc:
+        import traceback, logging
+        logging.getLogger(__name__).error("Run %s failed: %s", run_id, traceback.format_exc())
         drain_task.cancel()
         process_task.cancel()
         await _set_status(RunStatus.failed)
@@ -202,9 +220,37 @@ async def execute_run(run_id: str, config: dict) -> None:
         drain_task.cancel()
 
 
-def _parse_verdict(result: dict) -> "RunVerdict":
+def _extract_prices(text: str) -> tuple[str | None, str | None, str | None]:
+    """Regex-parse entry, stop-loss, and price target from free-form LLM text."""
+    def _find(patterns: list[str]) -> str | None:
+        for pat in patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                return m.group(1)
+        return None
+
+    entry = _find([
+        r"entry\s+price\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+        r"entry\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+        r"buy\s+at\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+    ])
+    stop = _find([
+        r"stop[\s-]*loss\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+        r"stop\s+at\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+        r"stop\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+    ])
+    target = _find([
+        r"price\s+target\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+        r"take[\s-]*profit\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+        r"profit\s+target\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+        r"target\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+    ])
+    return entry, stop, target
+
+
+def _parse_verdict(signal: str) -> "RunVerdict":
     from app.models.run import RunVerdict
-    raw = str(result.get("decision", result.get("action", "hold"))).lower()
+    raw = signal.lower()
     if "buy" in raw:
         return RunVerdict.buy
     if "sell" in raw:
