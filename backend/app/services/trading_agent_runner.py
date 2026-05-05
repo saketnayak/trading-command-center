@@ -12,7 +12,9 @@ AGENT_NODES = {
     "market_analyst", "social_analyst", "news_analyst",
     "fundamentals_analyst", "technical_analyst",
     "bull_researcher", "bear_researcher",
-    "trader", "risk_judge",
+    "trader",
+    "aggressive_analyst", "conservative_analyst", "neutral_analyst",
+    "risk_judge",
 }
 
 # Maps AgentFloor provider names to TradingAgentsConfig llm_provider literals.
@@ -25,8 +27,9 @@ _PROVIDER_MAP: dict[str, str] = {
 }
 
 _DEPTH_PARAMS: dict[str, dict] = {
-    "quick":    {"max_debate_rounds": 1, "max_risk_discuss_rounds": 1, "max_recur_limit": 30},
-    "standard": {"max_debate_rounds": 2, "max_risk_discuss_rounds": 2, "max_recur_limit": 100},
+    "quick":    {"max_debate_rounds": 1, "max_risk_discuss_rounds": 1, "max_recur_limit": 75},
+    "standard": {"max_debate_rounds": 2, "max_risk_discuss_rounds": 2, "max_recur_limit": 150},
+    "deep":     {"max_debate_rounds": 3, "max_risk_discuss_rounds": 3, "max_recur_limit": 200},
 }
 
 
@@ -59,10 +62,15 @@ class _SyncEmitter(BaseCallbackHandler):
         self._current = None
 
 
-async def _get_local_url(provider: str) -> str | None:
-    """Return the stored base URL for a local inference provider, or None."""
-    if provider not in ("ollama", "vllm"):
-        return None
+_CLOUD_KEY_ENV: dict[str, str] = {
+    "openai": "OPENAI_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "google": "GOOGLE_API_KEY",
+}
+
+
+async def _get_stored_key(provider: str) -> str | None:
+    """Return the decrypted stored API key for any provider, or None."""
     from app.database import AsyncSessionLocal
     from app.models.api_key import ApiKey
     from app.services.encryption import decrypt_key
@@ -72,7 +80,7 @@ async def _get_local_url(provider: str) -> str | None:
         row = (await db.execute(select(ApiKey).where(ApiKey.provider == provider))).scalar_one_or_none()
     if not row:
         return None
-    return decrypt_key(row.encrypted_key).rstrip("/")
+    return decrypt_key(row.encrypted_key)
 
 
 async def execute_run(run_id: str, config: dict) -> None:
@@ -97,6 +105,11 @@ async def execute_run(run_id: str, config: dict) -> None:
             event = await async_q.get()
             if event is None:
                 break
+            await ws_manager.broadcast(run_id, event)
+            # Token events are streamed live; skip persisting them to avoid
+            # thousands of rows per run. Full output lives in Report.raw_report.
+            if event.get("type") == "token":
+                continue
             sequence[0] += 1
             event["sequence"] = sequence[0]
             async with AsyncSessionLocal() as db:
@@ -108,7 +121,6 @@ async def execute_run(run_id: str, config: dict) -> None:
                     sequence=sequence[0],
                 ))
                 await db.commit()
-            await ws_manager.broadcast(run_id, event)
 
     async def _set_status(status: RunStatus, verdict: RunVerdict | None = None):
         async with AsyncSessionLocal() as db:
@@ -138,7 +150,7 @@ async def execute_run(run_id: str, config: dict) -> None:
         depth_params = _DEPTH_PARAMS.get(depth, _DEPTH_PARAMS["standard"])
         ta_provider = _PROVIDER_MAP.get(provider, provider)
 
-        local_url = await _get_local_url(provider)
+        stored_key = await _get_stored_key(provider)
 
         ta_config = TradingAgentsConfig(
             llm_provider=ta_provider,
@@ -147,12 +159,17 @@ async def execute_run(run_id: str, config: dict) -> None:
             **depth_params,
         )
 
-        # Determine which env vars need patching for local inference servers.
+        # Patch env vars needed by TradingAgents: API keys for cloud providers,
+        # server URLs for local inference.
         env_patch: dict[str, str] = {}
-        if provider == "ollama" and local_url:
-            env_patch["OLLAMA_HOST"] = local_url
-        elif provider == "vllm" and local_url:
-            vllm_url = local_url if local_url.endswith("/v1") else f"{local_url}/v1"
+        if provider in _CLOUD_KEY_ENV and stored_key:
+            env_patch[_CLOUD_KEY_ENV[provider]] = stored_key
+        elif provider == "ollama" and stored_key:
+            env_patch["OLLAMA_HOST"] = stored_key.rstrip("/")
+        elif provider == "vllm" and stored_key:
+            vllm_url = stored_key.rstrip("/")
+            if not vllm_url.endswith("/v1"):
+                vllm_url += "/v1"
             env_patch["OPENAI_BASE_URL"] = vllm_url
             env_patch["OPENAI_API_KEY"] = "vllm"
 
@@ -168,10 +185,14 @@ async def execute_run(run_id: str, config: dict) -> None:
                     selected_analysts=analysts,
                     callbacks=[emitter],
                 )
-                final_state, signal = await asyncio.to_thread(
-                    graph.propagate,
-                    config["ticker"],
-                    config["analysis_date"],
+                from app.config import settings as _settings
+                final_state, signal = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        graph.propagate,
+                        config["ticker"],
+                        config["analysis_date"],
+                    ),
+                    timeout=_settings.run_timeout_seconds,
                 )
             finally:
                 for k in env_patch:
@@ -196,13 +217,22 @@ async def execute_run(run_id: str, config: dict) -> None:
                 suggested_entry=suggested_entry,
                 suggested_stop=suggested_stop,
                 suggested_target=suggested_target,
-                risk_assessment="",
+                risk_assessment=_extract_risk_assessment(final_state),
                 raw_report=raw,
             ))
             await db.commit()
 
         await _set_status(RunStatus.completed, verdict)
         await ws_manager.broadcast(run_id, {"type": "run_completed", "run_id": run_id})
+
+    except asyncio.TimeoutError:
+        import logging
+        from app.config import settings as _cfg
+        logging.getLogger(__name__).error("Run %s timed out after %ss", run_id, _cfg.run_timeout_seconds)
+        drain_task.cancel()
+        process_task.cancel()
+        await _set_status(RunStatus.failed)
+        await ws_manager.broadcast(run_id, {"type": "error", "message": f"Run timed out after {_cfg.run_timeout_seconds}s"})
 
     except asyncio.CancelledError:
         drain_task.cancel()
@@ -220,6 +250,18 @@ async def execute_run(run_id: str, config: dict) -> None:
 
     finally:
         drain_task.cancel()
+
+
+def _extract_risk_assessment(state) -> str:
+    rds = getattr(state, "risk_debate_state", None)
+    if not rds:
+        return ""
+    parts = []
+    if getattr(rds, "judge_decision", ""):
+        parts.append(rds.judge_decision)
+    if getattr(rds, "history", ""):
+        parts.append(rds.history)
+    return "\n\n".join(parts)
 
 
 def _extract_prices(text: str) -> tuple[str | None, str | None, str | None]:
@@ -252,9 +294,13 @@ def _extract_prices(text: str) -> tuple[str | None, str | None, str | None]:
 
 def _parse_verdict(signal: str) -> "RunVerdict":
     from app.models.run import RunVerdict
-    raw = signal.lower()
-    if "buy" in raw:
+    _NEGATION = r"(?:do\s+not|don'?t|not\s+a?)\s+"
+    buy_match = re.search(r'\bbuy\b', signal, re.IGNORECASE)
+    buy_negated = re.search(_NEGATION + r'buy\b', signal, re.IGNORECASE)
+    sell_match = re.search(r'\bsell\b', signal, re.IGNORECASE)
+    sell_negated = re.search(_NEGATION + r'sell\b', signal, re.IGNORECASE)
+    if buy_match and not buy_negated:
         return RunVerdict.buy
-    if "sell" in raw:
+    if sell_match and not sell_negated:
         return RunVerdict.sell
     return RunVerdict.hold

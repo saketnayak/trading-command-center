@@ -3,10 +3,10 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func, case
 from sqlalchemy.orm import selectinload
 from app.database import get_db
-from app.models.run import Run
+from app.models.run import Run, RunStatus, RunVerdict
 from app.models.report import Report
 from app.models.agent_event import AgentEvent
 from app.schemas.run import RunCreateRequest, RunResponse
@@ -50,6 +50,8 @@ async def list_runs(
     verdict: str | None = Query(None),
     user_id: UUID | None = Query(None),
     archived: bool = Query(False),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
@@ -61,6 +63,7 @@ async def list_runs(
         q = q.where(Run.verdict == verdict)
     if user_id:
         q = q.where(Run.created_by == user_id)
+    q = q.limit(limit).offset(offset)
     result = await db.execute(q)
     runs = result.scalars().all()
     return [_run_to_response(run) for run in runs]
@@ -94,6 +97,39 @@ async def create_run(
         "analysts": run.analysts,
     })
     return run
+
+
+@router.get("/runs/stats")
+async def get_run_stats(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    result = await db.execute(
+        select(
+            func.count().label("total"),
+            func.sum(case((Run.verdict == RunVerdict.buy, 1), else_=0)).label("buy_count"),
+            func.sum(case((Run.verdict == RunVerdict.sell, 1), else_=0)).label("sell_count"),
+            func.sum(case((Run.verdict == RunVerdict.hold, 1), else_=0)).label("hold_count"),
+            func.sum(case((Run.status == RunStatus.completed, 1), else_=0)).label("completed"),
+            func.sum(case((Run.status == RunStatus.failed, 1), else_=0)).label("failed"),
+        ).select_from(Run).where(Run.archived == False)
+    )
+    row = result.one()
+    dur_result = await db.execute(
+        select(
+            func.avg(func.extract("epoch", Run.completed_at) - func.extract("epoch", Run.started_at))
+        ).select_from(Run).where(
+            Run.archived == False,
+            Run.status == RunStatus.completed,
+            Run.started_at.isnot(None),
+            Run.completed_at.isnot(None),
+        )
+    )
+    avg_dur = dur_result.scalar() or 0
+    return {
+        "total": row.total or 0,
+        "verdicts": {"buy": row.buy_count or 0, "sell": row.sell_count or 0, "hold": row.hold_count or 0},
+        "completed": row.completed or 0,
+        "failed": row.failed or 0,
+        "avg_duration_secs": round(avg_dur),
+    }
 
 
 @router.get("/runs/{run_id}", response_model=RunResponse)
@@ -164,7 +200,7 @@ async def get_run_events(run_id: UUID, db: AsyncSession = Depends(get_db), _user
         select(AgentEvent).where(AgentEvent.run_id == run_id).order_by(AgentEvent.sequence)
     )
     events = result.scalars().all()
-    return [{"type": e.event_type, "agent": e.agent_name, "payload": e.payload, "sequence": e.sequence} for e in events]
+    return [e.payload for e in events]
 
 
 @router.websocket("/ws/runs/{run_id}")

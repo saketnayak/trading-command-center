@@ -10,7 +10,27 @@ from app.dependencies import get_current_user
 
 router = APIRouter()
 
-_SUPPORTED = {"ollama", "vllm"}
+_SUPPORTED_LOCAL = {"ollama", "vllm"}
+
+_STATIC_MODELS: dict[str, list[str]] = {
+    "openai": [
+        "gpt-5.5", "gpt-5.5-pro",
+        "gpt-5.4-mini", "gpt-5.4-nano",
+        "gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+        "o3-pro", "o3", "o4-mini",
+        "gpt-4o", "gpt-4o-mini",
+    ],
+    "anthropic": [
+        "claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5-20251001",
+        "claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022",
+    ],
+    "google": [
+        "gemini-3.1-pro-preview", "gemini-3-flash-preview", "gemini-3.1-flash-lite-preview",
+        "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite",
+        "gemini-2.0-flash", "gemini-2.0-flash-lite",
+        "gemini-1.5-pro", "gemini-1.5-flash",
+    ],
+}
 
 
 @router.get("/{provider}/models", response_model=list[str])
@@ -19,12 +39,15 @@ async def list_models(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
-    if provider not in _SUPPORTED:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown provider '{provider}'. Supported: {sorted(_SUPPORTED)}")
+    if provider in _STATIC_MODELS:
+        return _STATIC_MODELS[provider]
+
+    if provider not in _SUPPORTED_LOCAL:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown provider '{provider}'")
 
     row = (await db.execute(select(ApiKey).where(ApiKey.provider == provider))).scalar_one_or_none()
     if not row:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No URL configured for provider '{provider}'")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No URL configured for local provider '{provider}'")
 
     base_url = decrypt_key(row.encrypted_key).rstrip("/")
 
