@@ -1,5 +1,5 @@
 import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -16,8 +16,14 @@ async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Resp
   });
 }
 
-export async function getRuns(params?: { ticker?: string; verdict?: string }): Promise<Run[]> {
-  const qs = new URLSearchParams(params as Record<string, string>).toString();
+export async function getRuns(params?: { ticker?: string; verdict?: string; archived?: boolean; limit?: number; offset?: number }): Promise<Run[]> {
+  const p: Record<string, string> = {};
+  if (params?.ticker) p.ticker = params.ticker;
+  if (params?.verdict) p.verdict = params.verdict;
+  if (params?.archived) p.archived = "true";
+  if (params?.limit != null) p.limit = String(params.limit);
+  if (params?.offset != null) p.offset = String(params.offset);
+  const qs = new URLSearchParams(p).toString();
   const r = await fetchWithAuth(`/runs${qs ? `?${qs}` : ""}`);
   if (!r.ok) throw new Error("Failed to fetch runs");
   return r.json();
@@ -37,6 +43,20 @@ export async function createRun(req: CreateRunRequest): Promise<Run> {
 
 export async function abortRun(id: string): Promise<void> {
   await fetchWithAuth(`/runs/${id}`, { method: "DELETE" });
+}
+
+export async function archiveRun(id: string): Promise<Run> {
+  const r = await fetchWithAuth(`/runs/${id}/archive`, { method: "POST" });
+  if (!r.ok) throw new Error("Failed to archive run");
+  return r.json();
+}
+
+export async function deleteRun(id: string): Promise<void> {
+  const r = await fetchWithAuth(`/runs/${id}/delete`, { method: "DELETE" });
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    throw new Error(body?.detail ?? "Failed to delete run");
+  }
 }
 
 export async function getReport(runId: string): Promise<Report> {
@@ -97,4 +117,18 @@ export async function getProviderModels(provider: string): Promise<string[]> {
   const r = await fetchWithAuth(`/llm-providers/${provider}/models`);
   if (!r.ok) throw new Error(`Could not fetch models for ${provider}`);
   return r.json();
+}
+
+export async function getRunStats(): Promise<RunStats> {
+  const r = await fetchWithAuth("/runs/stats");
+  if (!r.ok) throw new Error("Failed to fetch stats");
+  return r.json();
+}
+
+export async function updateProfile(data: { name?: string; current_password?: string; new_password?: string }): Promise<void> {
+  const r = await fetchWithAuth("/auth/me", { method: "PATCH", body: JSON.stringify(data) });
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    throw new Error(body?.detail ?? "Failed to update profile");
+  }
 }

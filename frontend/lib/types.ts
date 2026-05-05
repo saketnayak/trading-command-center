@@ -55,6 +55,14 @@ export interface ApiKeyStatus {
   masked_key: string;
 }
 
+export interface RunStats {
+  total: number;
+  verdicts: { buy: number; sell: number; hold: number };
+  completed: number;
+  failed: number;
+  avg_duration_secs: number;
+}
+
 export interface CreateRunRequest {
   ticker: string;
   analysis_date: string;
