@@ -22,3 +22,21 @@ def create_access_token(user_id: str, role: str) -> str:
 
 def decode_access_token(token: str) -> dict:
     return jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+
+
+def create_invite_token(email: str) -> str:
+    exp = datetime.now(timezone.utc) + timedelta(hours=48)
+    return jwt.encode({"sub": email, "type": "invite", "exp": exp}, settings.jwt_secret, algorithm=ALGORITHM)
+
+
+def verify_invite_token(token: str) -> str:
+    """Returns the invited email address, or raises ValueError."""
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+        if payload.get("type") != "invite":
+            raise ValueError("Invalid token type")
+        return payload["sub"]
+    except jwt.ExpiredSignatureError:
+        raise ValueError("Invite token has expired")
+    except jwt.InvalidTokenError:
+        raise ValueError("Invalid invite token")

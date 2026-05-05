@@ -14,5 +14,6 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "noreply@agentfloor.local"
     frontend_url: str = "http://localhost:3000"
+    run_timeout_seconds: int = 3600
 
 settings = Settings()

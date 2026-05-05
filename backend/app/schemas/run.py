@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 from datetime import date, datetime
 from uuid import UUID
 
@@ -11,6 +11,13 @@ class RunCreateRequest(BaseModel):
     depth: str  # quick|standard|deep
     analysts: list[str] = ["market", "social", "news", "fundamentals", "technical"]
     label: str | None = None
+
+    @field_validator('depth')
+    @classmethod
+    def validate_depth(cls, v: str) -> str:
+        if v not in ('quick', 'standard', 'deep'):
+            raise ValueError("depth must be one of: quick, standard, deep")
+        return v
 
 
 class RunResponse(BaseModel):

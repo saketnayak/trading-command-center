@@ -20,3 +20,9 @@ class TokenResponse(BaseModel):
 
 class InviteRequest(BaseModel):
     email: EmailStr
+
+
+class UpdateMeRequest(BaseModel):
+    name: str | None = None
+    current_password: str | None = None
+    new_password: str | None = None
