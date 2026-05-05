@@ -1,4 +1,8 @@
+import uuid
+import base64
+import json
 import pytest
+from datetime import date
 from httpx import AsyncClient, ASGITransport
 from main import app
 
@@ -7,6 +11,111 @@ async def _get_token(client, email="runs@test.com"):
     await client.post("/auth/register", json={"email": email, "password": "pw", "name": "Test"})
     r = await client.post("/auth/login", json={"email": email, "password": "pw"})
     return r.json()["access_token"]
+
+
+async def _decode_user_id(token: str) -> str:
+    payload_b64 = token.split(".")[1]
+    payload_b64 += "=" * (-len(payload_b64) % 4)
+    return json.loads(base64.b64decode(payload_b64))["sub"]
+
+
+@pytest.mark.asyncio
+async def test_get_run_includes_price_levels():
+    """GET /runs/{id} returns price fields populated from the associated Report."""
+    from app.database import AsyncSessionLocal
+    from app.models.run import Run, RunStatus, RunVerdict
+    from app.models.report import Report
+
+    run_id = uuid.uuid4()
+    email = f"prices_{run_id.hex[:8]}@test.com"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/auth/register", json={"email": email, "password": "pw", "name": "T"})
+        r = await client.post("/auth/login", json={"email": email, "password": "pw"})
+        token = r.json()["access_token"]
+        user_id = await _decode_user_id(token)
+
+        async with AsyncSessionLocal() as db:
+            db.add(Run(
+                id=run_id,
+                created_by=uuid.UUID(user_id),
+                ticker="NVDA",
+                analysis_date=date(2024, 6, 1),
+                llm_provider="openai",
+                llm_model="gpt-4o",
+                depth="standard",
+                analysts=["market"],
+                status=RunStatus.completed,
+                verdict=RunVerdict.buy,
+            ))
+            await db.flush()
+            db.add(Report(
+                run_id=run_id,
+                trader_decision="Entry: $200. Stop Loss: $185. Target: $230.",
+                verdict=RunVerdict.buy,
+                suggested_entry="200",
+                suggested_stop="185",
+                suggested_target="230",
+                risk_assessment="",
+            ))
+            await db.commit()
+
+        r = await client.get(f"/runs/{run_id}", headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 200
+        data = r.json()
+        assert data["suggested_entry"] == "200"
+        assert data["suggested_stop"] == "185"
+        assert data["suggested_target"] == "230"
+
+
+@pytest.mark.asyncio
+async def test_list_runs_includes_price_levels():
+    """GET /runs returns price fields in each run that has a completed Report."""
+    from app.database import AsyncSessionLocal
+    from app.models.run import Run, RunStatus, RunVerdict
+    from app.models.report import Report
+
+    run_id = uuid.uuid4()
+    email = f"prices2_{run_id.hex[:8]}@test.com"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        await client.post("/auth/register", json={"email": email, "password": "pw", "name": "T"})
+        r = await client.post("/auth/login", json={"email": email, "password": "pw"})
+        token = r.json()["access_token"]
+        user_id = await _decode_user_id(token)
+
+        async with AsyncSessionLocal() as db:
+            db.add(Run(
+                id=run_id,
+                created_by=uuid.UUID(user_id),
+                ticker="TSLA",
+                analysis_date=date(2024, 6, 1),
+                llm_provider="openai",
+                llm_model="gpt-4o",
+                depth="standard",
+                analysts=["market"],
+                status=RunStatus.completed,
+                verdict=RunVerdict.hold,
+            ))
+            await db.flush()
+            db.add(Report(
+                run_id=run_id,
+                trader_decision="Entry: $150. Stop: $140. Target: $175.",
+                verdict=RunVerdict.hold,
+                suggested_entry="150",
+                suggested_stop="140",
+                suggested_target="175",
+                risk_assessment="",
+            ))
+            await db.commit()
+
+        r = await client.get("/runs", headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 200
+        run_data = next((x for x in r.json() if x["id"] == str(run_id)), None)
+        assert run_data is not None
+        assert run_data["suggested_entry"] == "150"
+        assert run_data["suggested_stop"] == "140"
+        assert run_data["suggested_target"] == "175"
 
 
 @pytest.mark.asyncio

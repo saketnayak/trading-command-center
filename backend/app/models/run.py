@@ -1,7 +1,7 @@
 import uuid, enum
 from datetime import datetime, date
 from sqlalchemy import String, Enum as SAEnum, DateTime, Date, ARRAY, ForeignKey, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 class RunStatus(str, enum.Enum):
@@ -28,7 +28,10 @@ class Run(Base):
     analysts: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     label: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[RunStatus] = mapped_column(SAEnum(RunStatus), default=RunStatus.pending)
+    archived: Mapped[bool] = mapped_column(default=False)
     verdict: Mapped[RunVerdict | None] = mapped_column(SAEnum(RunVerdict), nullable=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    report = relationship("Report", uselist=False, lazy="noload")
