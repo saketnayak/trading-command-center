@@ -33,6 +33,22 @@ export default function RunResultsPage() {
           <Link href="/runs" className="text-blue-400 hover:underline text-sm">
             ← Back to History
           </Link>
+          {report && (
+            <button
+              onClick={() => {
+                const blob = new Blob([JSON.stringify(report.raw_report, null, 2)], { type: "application/json" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `${run?.ticker ?? "report"}-${id.slice(0, 8)}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded px-3 py-1"
+            >
+              Download JSON
+            </button>
+          )}
         </div>
 
         {isRunning && (
