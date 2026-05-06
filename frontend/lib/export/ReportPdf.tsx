@@ -85,35 +85,12 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginBottom: 24,
   },
-  priceGrid: {
-    flexDirection: "row",
-    gap: 24,
-    marginBottom: 24,
-  },
-  priceItem: {
-    flexDirection: "column",
-    gap: 3,
-  },
-  priceLabel: {
-    fontSize: 8,
-    color: "#94a3b8",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-  },
-  priceValue: {
-    fontSize: 13,
-    fontFamily: "Helvetica-Bold",
-    color: "#1a1a2e",
-  },
-  metaRow: {
-    flexDirection: "row",
-    gap: 16,
-    flexWrap: "wrap",
-  },
-  metaItem: {
-    flexDirection: "row",
-    gap: 4,
-  },
+  priceGrid: { flexDirection: "row", gap: 24, marginBottom: 24 },
+  priceItem: { flexDirection: "column", gap: 3 },
+  priceLabel: { fontSize: 8, color: "#94a3b8", letterSpacing: 1, textTransform: "uppercase" },
+  priceValue: { fontSize: 13, fontFamily: "Helvetica-Bold", color: "#1a1a2e" },
+  metaRow: { flexDirection: "row", gap: 16, flexWrap: "wrap" },
+  metaItem: { flexDirection: "row", gap: 4 },
   metaLabel: { fontSize: 9, color: "#94a3b8" },
   metaValue: { fontSize: 9, color: "#1a1a2e" },
   sectionTitle: {

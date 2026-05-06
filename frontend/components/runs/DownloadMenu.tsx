@@ -34,24 +34,18 @@ export function DownloadMenu({ run, report }: Props) {
   }, [open]);
 
   const disabled = !report;
-  const stem =
-    run && report
-      ? `${run.ticker}-${run.analysis_date}-report`
-      : "report";
+  const stem = run && report ? `${run.ticker}-${run.analysis_date}-report` : "report";
 
   function handleJson() {
     if (!report) return;
-    const blob = new Blob([JSON.stringify(report.raw_report, null, 2)], {
-      type: "application/json",
-    });
+    const blob = new Blob([JSON.stringify(report.raw_report, null, 2)], { type: "application/json" });
     triggerDownload(blob, `${stem}.json`);
     setOpen(false);
   }
 
   function handleMarkdown() {
     if (!run || !report) return;
-    const md = buildMarkdown(run, report);
-    const blob = new Blob([md], { type: "text/markdown" });
+    const blob = new Blob([buildMarkdown(run, report)], { type: "text/markdown" });
     triggerDownload(blob, `${stem}.md`);
     setOpen(false);
   }
@@ -65,9 +59,7 @@ export function DownloadMenu({ run, report }: Props) {
         import("@react-pdf/renderer"),
         import("@/lib/export/ReportPdf"),
       ]);
-      const blob = await pdf(
-        <ReportDocument run={run} report={report} />
-      ).toBlob();
+      const blob = await pdf(<ReportDocument run={run} report={report} />).toBlob();
       triggerDownload(blob, `${stem}.pdf`);
     } catch (err) {
       console.error("PDF generation failed:", err);
