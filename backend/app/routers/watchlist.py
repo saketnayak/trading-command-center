@@ -1,0 +1,187 @@
+from uuid import UUID
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, ConfigDict
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from app.database import get_db
+from app.models.watchlist import Watchlist, WatchlistItem
+from app.models.user import User
+from app.dependencies import get_current_user
+
+router = APIRouter()
+
+
+class WatchlistItemCreate(BaseModel):
+    ticker: str
+    llm_provider: str
+    llm_model: str
+    depth: str = "standard"
+    analysts: list[str] = []
+    schedule_cron: str | None = None
+
+
+class WatchlistItemUpdate(BaseModel):
+    schedule_cron: str | None = None
+    enabled: bool | None = None
+    llm_provider: str | None = None
+    llm_model: str | None = None
+    depth: str | None = None
+    analysts: list[str] | None = None
+
+
+class WatchlistItemResponse(BaseModel):
+    id: UUID
+    watchlist_id: UUID
+    ticker: str
+    llm_provider: str
+    llm_model: str
+    depth: str
+    analysts: list[str]
+    schedule_cron: str | None
+    enabled: bool
+    last_run_at: datetime | None
+    next_run_at: datetime | None
+    added_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WatchlistResponse(BaseModel):
+    id: UUID
+    created_by: UUID
+    name: str
+    items: list[WatchlistItemResponse]
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+async def _get_or_create_watchlist(user_id: UUID, db: AsyncSession) -> Watchlist:
+    result = await db.execute(
+        select(Watchlist)
+        .where(Watchlist.created_by == user_id)
+        .options(selectinload(Watchlist.items))
+    )
+    wl = result.scalar_one_or_none()
+    if not wl:
+        wl = Watchlist(created_by=user_id)
+        db.add(wl)
+        await db.commit()
+        await db.refresh(wl)
+        wl.items = []
+    return wl
+
+
+@router.get("/watchlist", response_model=WatchlistResponse)
+async def get_watchlist(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    return await _get_or_create_watchlist(user.id, db)
+
+
+@router.post("/watchlist/items", response_model=WatchlistItemResponse, status_code=status.HTTP_201_CREATED)
+async def add_watchlist_item(
+    req: WatchlistItemCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    wl = await _get_or_create_watchlist(user.id, db)
+    existing = await db.execute(
+        select(WatchlistItem).where(
+            WatchlistItem.watchlist_id == wl.id,
+            WatchlistItem.ticker == req.ticker.upper(),
+        )
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status.HTTP_409_CONFLICT, f"{req.ticker.upper()} already in watchlist")
+    item = WatchlistItem(
+        watchlist_id=wl.id,
+        ticker=req.ticker.upper(),
+        llm_provider=req.llm_provider,
+        llm_model=req.llm_model,
+        depth=req.depth,
+        analysts=req.analysts,
+        schedule_cron=req.schedule_cron,
+    )
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+@router.patch("/watchlist/items/{item_id}", response_model=WatchlistItemResponse)
+async def update_watchlist_item(
+    item_id: UUID,
+    req: WatchlistItemUpdate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    item = await db.get(WatchlistItem, item_id)
+    if not item:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    wl = await db.get(Watchlist, item.watchlist_id)
+    if str(wl.created_by) != str(user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized")
+    for field, value in req.model_dump(exclude_none=True).items():
+        setattr(item, field, value)
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
+@router.delete("/watchlist/items/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def remove_watchlist_item(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    item = await db.get(WatchlistItem, item_id)
+    if not item:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    wl = await db.get(Watchlist, item.watchlist_id)
+    if str(wl.created_by) != str(user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized")
+    await db.delete(item)
+    await db.commit()
+
+
+@router.post("/watchlist/items/{item_id}/run", status_code=status.HTTP_201_CREATED)
+async def trigger_watchlist_run(
+    item_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Manually trigger an immediate run for a watchlist item."""
+    from datetime import date
+    item = await db.get(WatchlistItem, item_id)
+    if not item:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Item not found")
+    wl = await db.get(Watchlist, item.watchlist_id)
+    if str(wl.created_by) != str(user.id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized")
+
+    from app.models.run import Run
+    from app.services.job_manager import start_run
+    run = Run(
+        created_by=user.id,
+        ticker=item.ticker,
+        analysis_date=date.today(),
+        llm_provider=item.llm_provider,
+        llm_model=item.llm_model,
+        depth=item.depth,
+        analysts=item.analysts,
+        label=f"Watchlist: {item.ticker}",
+    )
+    db.add(run)
+    item.last_run_at = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(run)
+    await start_run(str(run.id), {
+        "ticker": run.ticker,
+        "analysis_date": str(run.analysis_date),
+        "llm_provider": run.llm_provider,
+        "llm_model": run.llm_model,
+        "depth": run.depth,
+        "analysts": run.analysts,
+    })
+    return {"run_id": str(run.id)}

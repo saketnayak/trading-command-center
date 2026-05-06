@@ -6,7 +6,7 @@ from sqlalchemy import update
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.run import Run, RunStatus
-from app.routers import auth, runs, api_keys, users, llm_providers
+from app.routers import auth, runs, api_keys, users, llm_providers, watchlist
 
 
 @asynccontextmanager
@@ -36,6 +36,7 @@ app.include_router(runs.router, tags=["runs"])
 app.include_router(api_keys.router, prefix="/api-keys", tags=["api-keys"])
 app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(llm_providers.router, prefix="/llm-providers", tags=["llm-providers"])
+app.include_router(watchlist.router, tags=["watchlist"])
 
 
 @app.get("/health")
