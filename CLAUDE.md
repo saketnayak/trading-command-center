@@ -95,10 +95,17 @@ Local Postgres from `docker compose up db` is mapped to **port 5433** (not 5432)
 - `/runs` — run history with ticker/status filters
 - `/runs/new` — launch a new run (analyst selection, LLM config)
 - `/runs/[id]/live` — live monitor with WebSocket event feed + pipeline status
-- `/runs/[id]` — results viewer (verdict, per-analyst tabs, bull/bear debate)
+- `/runs/[id]` — results viewer (verdict, per-analyst tabs, bull/bear debate, download menu)
 - `/settings` — API key management + team admin (admin-only sections)
 
+**Export (`lib/export/`):** Three client-side utilities used by `DownloadMenu`:
+- `buildMarkdown(run, report)` — assembles a `.md` string covering all report fields (verdict, analyst reports, debate, plan, final decision). Missing fields are silently omitted.
+- `parseMdForPdf(text)` — line-by-line Markdown → `MdSegment[]` (h1/h2/h3/bullet/paragraph/blank). Used by `ReportPdf.tsx` to render text inside `@react-pdf/renderer` (which does not accept HTML).
+- `ReportDocument` — `@react-pdf/renderer` Document component. Cover page + one section per report field, each starting a new page via `<View break>`. Shared fixed header (AgentFloor | TICKER — date) on every page. Dynamically imported in `DownloadMenu` so the ~400 KB bundle is not loaded until first PDF click.
+
 **Data fetching:** TanStack Query v5 (`useQuery` / `useMutation`). `QueryClient` and `SessionProvider` are set up in `app/providers.tsx`, which wraps `app/layout.tsx`.
+
+**Components (`components/runs/`):** `TraderDecision`, `AnalystReports`, `BullBearDebate`, `DownloadMenu` (JSON/Markdown/PDF dropdown — replaces the former inline JSON button), `PipelinePanel`, `AgentFeed`, `RunTable`, `RunFilters`, `StatsBar`.
 
 ### Deployment
 
