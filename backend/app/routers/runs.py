@@ -39,6 +39,23 @@ class RunWithReport(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class RunOutcomeResponse(BaseModel):
+    id: UUID
+    run_id: UUID
+    ticker: str
+    verdict: str
+    analysis_date: str
+    price_at_analysis: float | None
+    price_7d: float | None
+    price_14d: float | None
+    price_30d: float | None
+    price_90d: float | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 router = APIRouter()
 
 
@@ -141,6 +158,52 @@ async def get_run_stats(db: AsyncSession = Depends(get_db), _user: User = Depend
     }
 
 
+@router.get("/runs/performance")
+async def get_performance_stats(
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.models.outcome import RunOutcome
+    result = await db.execute(select(RunOutcome))
+    outcomes = result.scalars().all()
+    total = len(outcomes)
+    if total == 0:
+        return {"total": 0, "accuracy_7d": None, "accuracy_14d": None, "accuracy_30d": None, "accuracy_90d": None, "outcomes": []}
+
+    def accuracy(days_attr: str) -> float | None:
+        scored = [o for o in outcomes if o.price_at_analysis and getattr(o, days_attr)]
+        if not scored:
+            return None
+        correct = sum(
+            1 for o in scored
+            if (o.verdict == "buy" and getattr(o, days_attr) > o.price_at_analysis)
+            or (o.verdict == "sell" and getattr(o, days_attr) < o.price_at_analysis)
+        )
+        return round(correct / len(scored) * 100, 1)
+
+    return {
+        "total": total,
+        "accuracy_7d": accuracy("price_7d"),
+        "accuracy_14d": accuracy("price_14d"),
+        "accuracy_30d": accuracy("price_30d"),
+        "accuracy_90d": accuracy("price_90d"),
+        "outcomes": [
+            {
+                "run_id": str(o.run_id),
+                "ticker": o.ticker,
+                "verdict": o.verdict,
+                "analysis_date": o.analysis_date,
+                "price_at_analysis": o.price_at_analysis,
+                "price_7d": o.price_7d,
+                "price_14d": o.price_14d,
+                "price_30d": o.price_30d,
+                "price_90d": o.price_90d,
+            }
+            for o in outcomes
+        ],
+    }
+
+
 @router.get("/runs/compare")
 async def compare_runs(
     a: UUID = Query(...),
@@ -223,6 +286,20 @@ async def get_report(run_id: UUID, db: AsyncSession = Depends(get_db), _user: Us
     if not report:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found")
     return report
+
+
+@router.get("/runs/{run_id}/outcome", response_model=RunOutcomeResponse)
+async def get_run_outcome(
+    run_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    from app.services.outcome_service import get_or_create_outcome
+    try:
+        outcome = await get_or_create_outcome(str(run_id), db)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc))
+    return outcome
 
 
 @router.get("/runs/{run_id}/events")

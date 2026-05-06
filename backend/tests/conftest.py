@@ -8,6 +8,6 @@ async def clean_db():
     """Truncate all tables before each test so each test starts with a clean slate."""
     async with engine.begin() as conn:
         await conn.execute(text(
-            "TRUNCATE users, runs, agent_events, reports, api_keys RESTART IDENTITY CASCADE"
+            "TRUNCATE users, runs, agent_events, reports, api_keys, run_outcomes RESTART IDENTITY CASCADE"
         ))
     yield
