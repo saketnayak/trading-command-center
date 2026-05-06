@@ -24,7 +24,10 @@ AgentFloor wraps TradingAgents in a production-quality web application so that m
 | **Live monitoring** | Real-time WebSocket feed of every agent event as it happens |
 | **Structured reports** | Verdict (BUY / SELL / HOLD), price levels, per-analyst reports, bull/bear debate |
 | **Export** | Download any completed report as **PDF**, **Markdown**, or **JSON** |
-| **Multiple LLM providers** | OpenAI, Anthropic, Google, Groq, and more — configurable per run |
+| **Watchlist & scheduling** | Track tickers with recurring schedules (daily, weekdays, weekly, custom days) — runs fire automatically via APScheduler |
+| **Run comparison** | Open two completed runs side-by-side to compare verdicts, analyst views, and debate |
+| **Outcome tracking** | After each run, prices are fetched at +7d/+14d/+30d/+90d via Alpha Vantage; a performance page shows accuracy stats across all runs |
+| **Multiple LLM providers** | OpenAI, Anthropic, Google, Groq, and more — configurable per run; Ollama/vLLM for local inference |
 | **Secure API key storage** | Provider keys stored encrypted at rest |
 | **One-command deploy** | Docker Compose stack: Postgres + FastAPI + Next.js + Nginx |
 
@@ -137,6 +140,13 @@ Nginx listens on port 80 and routes:
 | `SMTP_PASSWORD` | | |
 | `SMTP_FROM` | | From address for invite emails |
 
+**Provider API keys** (entered via the Settings page, stored encrypted):
+
+| Provider key | Purpose |
+|---|---|
+| `openai`, `anthropic`, `google`, `groq`, … | LLM inference for runs |
+| `alpha_vantage` | Fetches historical closing prices for the outcome tracker (+7d/+14d/+30d/+90d). Without this key, the OutcomeCard shows `—` for all price columns. |
+
 See `.env.example` for the full list with defaults.
 
 ---
@@ -177,6 +187,9 @@ See `.env.example` for the full list with defaults.
 4. A drain coroutine writes `AgentEvent` rows to Postgres and broadcasts over WebSocket
 5. The frontend Live page connects via WebSocket and renders events as they arrive
 6. On completion, the final state is parsed into a `Report` row and surfaced on the Results page
+7. `outcome_service.py` then lazily fetches closing prices from Alpha Vantage at +7d/+14d/+30d/+90d and persists a `RunOutcome` row (requires an Alpha Vantage API key saved in Settings)
+
+Watchlist runs follow the same lifecycle from step 1 onward — the scheduler simply creates the `Run` row and calls `start_run()` on the configured cron schedule.
 
 ---
 
@@ -184,12 +197,14 @@ See `.env.example` for the full list with defaults.
 
 ```
 backend/
-  main.py                  # FastAPI app, router mounts, CORS
+  main.py                  # FastAPI app, router mounts, lifespan (scheduler)
   app/
-    routers/               # auth, runs, api_keys, users, llm_providers
-    models/                # SQLAlchemy ORM: User, Run, AgentEvent, Report, ApiKey
+    routers/               # auth, runs, api_keys, users, llm_providers, watchlist
+    models/                # User, Run, AgentEvent, Report, ApiKey,
+    │                      #   RunOutcome, Watchlist, WatchlistItem
     services/              # auth, encryption, email, websocket_manager,
-    │                      #   job_manager, trading_agent_runner
+    │                      #   job_manager, trading_agent_runner,
+    │                      #   outcome_service, scheduler
     schemas/               # Pydantic request/response models
     config.py              # pydantic-settings — all env vars
   tests/
@@ -198,12 +213,16 @@ backend/
 frontend/
   app/                     # Next.js App Router pages
     runs/                  # list, new, [id]/live, [id] (results)
+    │                      #   compare (side-by-side), performance (outcome stats)
+    watchlist/             # ticker watchlist + visual schedule builder
     settings/
   components/
-    runs/                  # RunTable, TraderDecision, AnalystReports,
-    │                      #   BullBearDebate, DownloadMenu, …
+    runs/                  # RunTable, RunForm, RunFilters, StatsBar,
+    │                      #   TraderDecision, AnalystReports, BullBearDebate,
+    │                      #   DownloadMenu, ComparisonPanel, OutcomeCard,
+    │                      #   PipelinePanel, AgentFeed, AgentSidebar
     layout/                # TopNav
-    ui/                    # Markdown renderer
+    ui/                    # Markdown renderer, shared primitives
   lib/
     api.ts                 # typed API client (fetchWithAuth)
     types.ts               # shared TypeScript types
