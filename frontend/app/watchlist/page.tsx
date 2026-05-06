@@ -63,6 +63,11 @@ function fmtHour(h: number) {
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:00 ${ampm}`;
 }
+function fmtTime(h: number, m: number) {
+  const ampm = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${pad(m)} ${ampm}`;
+}
 
 // ─── Schedule Builder ────────────────────────────────────────────────────────
 
@@ -171,10 +176,10 @@ function ScheduleBuilder({ onChange }: ScheduleBuilderProps) {
         </code>
         {cron && (
           <span className="text-xs text-slate-500">
-            {freq === "daily" && `Runs every day at ${fmtHour(hour)}${minute > 0 ? `:${pad(minute)}` : ""}`}
-            {freq === "weekdays" && `Runs Mon–Fri at ${fmtHour(hour)}${minute > 0 ? `:${pad(minute)}` : ""}`}
-            {freq === "weekly" && `Runs every ${DAYS.find((d) => d.value === selectedDays[0])?.label ?? ""} at ${fmtHour(hour)}${minute > 0 ? `:${pad(minute)}` : ""}`}
-            {freq === "custom_days" && `Runs on ${selectedDays.map((v) => DAYS.find((d) => d.value === v)?.label).join(", ")} at ${fmtHour(hour)}${minute > 0 ? `:${pad(minute)}` : ""}`}
+            {freq === "daily" && `Runs every day at ${fmtTime(hour, minute)}`}
+            {freq === "weekdays" && `Runs Mon–Fri at ${fmtTime(hour, minute)}`}
+            {freq === "weekly" && `Runs every ${DAYS.find((d) => d.value === selectedDays[0])?.label ?? ""} at ${fmtTime(hour, minute)}`}
+            {freq === "custom_days" && `Runs on ${selectedDays.map((v) => DAYS.find((d) => d.value === v)?.label).join(", ")} at ${fmtTime(hour, minute)}`}
           </span>
         )}
       </div>
@@ -188,13 +193,13 @@ function CronLabel({ cron }: { cron: string | null }) {
   if (!cron) return <span className="text-slate-500 text-xs">Manual only</span>;
   // try to produce a human label from known patterns
   const daily = cron.match(/^(\d+) (\d+) \* \* \*$/);
-  if (daily) return <span className="text-slate-300 text-xs">Daily {fmtHour(Number(daily[2]))}{Number(daily[1]) > 0 ? `:${pad(Number(daily[1]))}` : ""}</span>;
+  if (daily) return <span className="text-slate-300 text-xs">Daily {fmtTime(Number(daily[2]), Number(daily[1]))}</span>;
   const wdays = cron.match(/^(\d+) (\d+) \* \* 1-5$/);
-  if (wdays) return <span className="text-slate-300 text-xs">Weekdays {fmtHour(Number(wdays[2]))}</span>;
+  if (wdays) return <span className="text-slate-300 text-xs">Weekdays {fmtTime(Number(wdays[2]), Number(wdays[1]))}</span>;
   const weekly = cron.match(/^(\d+) (\d+) \* \* (\d)$/);
   if (weekly) {
     const day = DAYS.find((d) => d.value === Number(weekly[3]));
-    return <span className="text-slate-300 text-xs">{day?.label ?? `Day ${weekly[3]}`} {fmtHour(Number(weekly[2]))}</span>;
+    return <span className="text-slate-300 text-xs">{day?.label ?? `Day ${weekly[3]}`} {fmtTime(Number(weekly[2]), Number(weekly[1]))}</span>;
   }
   return <span className="text-slate-300 text-xs font-mono">{cron}</span>;
 }
