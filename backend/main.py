@@ -1,9 +1,27 @@
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import update
 from app.config import settings
+from app.database import AsyncSessionLocal
+from app.models.run import Run, RunStatus
 from app.routers import auth, runs, api_keys, users, llm_providers
 
-app = FastAPI(title="AgentFloor API")
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    async with AsyncSessionLocal() as db:
+        await db.execute(
+            update(Run)
+            .where(Run.status == RunStatus.running)
+            .values(status=RunStatus.failed, completed_at=datetime.now(timezone.utc))
+        )
+        await db.commit()
+    yield
+
+
+app = FastAPI(title="AgentFloor API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,20 +36,6 @@ app.include_router(runs.router, tags=["runs"])
 app.include_router(api_keys.router, prefix="/api-keys", tags=["api-keys"])
 app.include_router(users.router, prefix="/users", tags=["users"])
 app.include_router(llm_providers.router, prefix="/llm-providers", tags=["llm-providers"])
-
-@app.on_event("startup")
-async def recover_zombie_runs():
-    from datetime import datetime, timezone
-    from sqlalchemy import update
-    from app.database import AsyncSessionLocal
-    from app.models.run import Run, RunStatus
-    async with AsyncSessionLocal() as db:
-        await db.execute(
-            update(Run)
-            .where(Run.status == RunStatus.running)
-            .values(status=RunStatus.failed, completed_at=datetime.now(timezone.utc))
-        )
-        await db.commit()
 
 
 @app.get("/health")
