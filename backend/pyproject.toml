@@ -20,6 +20,7 @@ dependencies = [
     "langchain-core>=0.3",
     "langchain-openai>=1.0",
     "tradingagents>=0.3",
+    "apscheduler>=4.0.0a5",
 ]
 
 [project.optional-dependencies]
