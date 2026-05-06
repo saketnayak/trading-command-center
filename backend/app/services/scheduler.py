@@ -69,6 +69,7 @@ async def start_scheduler() -> AsyncScheduler:
     global _scheduler
     _scheduler = AsyncScheduler()
     await _scheduler.__aenter__()
+    await _scheduler.start_in_background()  # actually runs the scheduler loop
     await _reload_jobs(_scheduler)
     return _scheduler
 

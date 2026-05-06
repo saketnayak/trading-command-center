@@ -106,6 +106,8 @@ async def add_watchlist_item(
     db.add(item)
     await db.commit()
     await db.refresh(item)
+    from app.services.scheduler import reload_jobs
+    await reload_jobs()
     return item
 
 
@@ -126,6 +128,8 @@ async def update_watchlist_item(
         setattr(item, field, value)
     await db.commit()
     await db.refresh(item)
+    from app.services.scheduler import reload_jobs
+    await reload_jobs()
     return item
 
 
@@ -143,6 +147,8 @@ async def remove_watchlist_item(
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized")
     await db.delete(item)
     await db.commit()
+    from app.services.scheduler import reload_jobs
+    await reload_jobs()
 
 
 @router.post("/watchlist/items/{item_id}/run", status_code=status.HTTP_201_CREATED)
