@@ -1,0 +1,58 @@
+"use client";
+import type { RunOutcome } from "@/lib/types";
+
+function pct(base: number | null, target: number | null): string {
+  if (!base || !target) return "—";
+  const p = ((target - base) / base) * 100;
+  return (p >= 0 ? "+" : "") + p.toFixed(2) + "%";
+}
+
+function pctColor(base: number | null, target: number | null, verdict: string): string {
+  if (!base || !target) return "text-slate-400";
+  const up = target > base;
+  const correct = (verdict === "buy" && up) || (verdict === "sell" && !up);
+  return correct ? "text-green-400" : "text-red-400";
+}
+
+const CHECKPOINTS: Array<{ label: string; key: keyof RunOutcome }> = [
+  { label: "Day 0", key: "price_at_analysis" },
+  { label: "+7d", key: "price_7d" },
+  { label: "+14d", key: "price_14d" },
+  { label: "+30d", key: "price_30d" },
+  { label: "+90d", key: "price_90d" },
+];
+
+export function OutcomeCard({ outcome }: { outcome: RunOutcome }) {
+  const base = outcome.price_at_analysis;
+
+  return (
+    <div className="bg-navy-800 border border-slate-700 rounded-xl p-5">
+      <h2 className="text-sm font-semibold text-slate-300 uppercase tracking-wide mb-4">
+        Trade Outcome
+      </h2>
+      <div className="grid grid-cols-5 gap-3">
+        {CHECKPOINTS.map(({ label, key }) => {
+          const price = outcome[key] as number | null;
+          return (
+            <div key={label} className="flex flex-col items-center bg-navy-900 rounded-lg p-3 gap-1">
+              <span className="text-xs text-slate-400">{label}</span>
+              <span className="text-sm font-semibold text-white">
+                {price ? `$${price.toFixed(2)}` : "—"}
+              </span>
+              {key !== "price_at_analysis" && (
+                <span className={`text-xs font-medium ${pctColor(base, price, outcome.verdict)}`}>
+                  {pct(base, price)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-xs text-slate-500 mt-3">
+        Verdict was{" "}
+        <span className="font-semibold text-slate-400">{outcome.verdict.toUpperCase()}</span>.
+        Prices fetched from Alpha Vantage. Future dates show "—" until available.
+      </p>
+    </div>
+  );
+}

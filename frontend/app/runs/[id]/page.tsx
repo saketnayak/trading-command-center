@@ -6,8 +6,10 @@ import { TopNav } from "@/components/layout/TopNav";
 import { TraderDecision } from "@/components/runs/TraderDecision";
 import { AnalystReports } from "@/components/runs/AnalystReports";
 import { BullBearDebate } from "@/components/runs/BullBearDebate";
-import { getRun, getReport } from "@/lib/api";
+import { getRun, getReport, getRunOutcome } from "@/lib/api";
 import { DownloadMenu } from "@/components/runs/DownloadMenu";
+import { OutcomeCard } from "@/components/runs/OutcomeCard";
+import type { RunOutcome } from "@/lib/types";
 
 export default function RunResultsPage() {
   const { id } = useParams<{ id: string }>();
@@ -20,6 +22,13 @@ export default function RunResultsPage() {
   const { data: report } = useQuery({
     queryKey: ["report", id],
     queryFn: () => getReport(id),
+    enabled: run?.status === "completed",
+    retry: false,
+  });
+
+  const { data: outcome } = useQuery<RunOutcome>({
+    queryKey: ["outcome", id],
+    queryFn: () => getRunOutcome(id),
     enabled: run?.status === "completed",
     retry: false,
   });
@@ -54,6 +63,7 @@ export default function RunResultsPage() {
         )}
 
         <TraderDecision run={run} report={report} />
+        {outcome && <OutcomeCard outcome={outcome} />}
         <AnalystReports report={report} analysts={run?.analysts ?? []} />
         <BullBearDebate report={report} />
       </main>

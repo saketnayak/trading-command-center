@@ -82,3 +82,37 @@ export interface CompareResult {
   a: RunWithReport;
   b: RunWithReport;
 }
+
+export interface RunOutcome {
+  id: string;
+  run_id: string;
+  ticker: string;
+  verdict: string;
+  analysis_date: string;
+  price_at_analysis: number | null;
+  price_7d: number | null;
+  price_14d: number | null;
+  price_30d: number | null;
+  price_90d: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PerformanceStats {
+  total: number;
+  accuracy_7d: number | null;
+  accuracy_14d: number | null;
+  accuracy_30d: number | null;
+  accuracy_90d: number | null;
+  outcomes: Array<{
+    run_id: string;
+    ticker: string;
+    verdict: string;
+    analysis_date: string;
+    price_at_analysis: number | null;
+    price_7d: number | null;
+    price_14d: number | null;
+    price_30d: number | null;
+    price_90d: number | null;
+  }>;
+}

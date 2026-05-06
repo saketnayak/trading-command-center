@@ -1,5 +1,5 @@
 import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -136,5 +136,17 @@ export async function updateProfile(data: { name?: string; current_password?: st
 export async function compareRuns(a: string, b: string): Promise<CompareResult> {
   const r = await fetchWithAuth(`/runs/compare?a=${a}&b=${b}`);
   if (!r.ok) throw new Error("Failed to fetch comparison");
+  return r.json();
+}
+
+export async function getRunOutcome(runId: string): Promise<RunOutcome> {
+  const r = await fetchWithAuth(`/runs/${runId}/outcome`);
+  if (!r.ok) throw new Error("Outcome not available");
+  return r.json();
+}
+
+export async function getPerformanceStats(): Promise<PerformanceStats> {
+  const r = await fetchWithAuth("/runs/performance");
+  if (!r.ok) throw new Error("Failed to fetch performance stats");
   return r.json();
 }
