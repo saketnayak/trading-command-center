@@ -95,23 +95,49 @@ If no fingerprint matches: raise `422` with a human-readable message explaining 
 
 **Parser column maps:**
 
-- **Moomoo:** `symbol` → ticker, `qty.` → shares, `avg cost` → avg_cost
-- **Fidelity:** `symbol` → ticker, `quantity` → shares, `average cost basis` or `cost basis total / quantity` → avg_cost
-- **Schwab:** `symbol` → ticker, `quantity` → shares, `cost basis` / `quantity` → avg_cost (derived)
-- **Generic:** first column matching `ticker`/`symbol` → ticker, first matching `shares`/`quantity` → shares, first matching `avg_cost`/`average cost`/`avg cost` → avg_cost (optional)
+- **Moomoo:** `symbol` → ticker, `qty.` → shares, `avg cost` → avg_cost (direct column)
+- **Fidelity:** `symbol` → ticker, `quantity` → shares, avg_cost derived as `cost basis total / quantity` (Fidelity does not export a per-share avg cost column)
+- **Schwab:** `symbol` → ticker, `quantity` → shares, avg_cost derived as `cost basis / quantity` (Schwab exports total cost basis, not per-share)
+- **Generic:** first column matching `ticker`/`symbol` → ticker, first matching `shares`/`quantity` → shares, first matching `avg_cost`/`average cost`/`avg cost` → avg_cost (optional, taken as-is — expected to be per-share)
 
 ### Price Enrichment (`GET /portfolio/{id}/current`)
 
 1. Load latest `PortfolioSnapshot` for the portfolio; if none, return `{"holdings": [], "snapshot": null}`.
-2. For each unique ticker, call Alpha Vantage `GLOBAL_QUOTE` endpoint — same API key and client used by `outcome_service.py`.
-3. Cache results in-process (module-level dict with expiry timestamp) for **1 hour** to respect the free-tier 25 req/day limit.
-4. For each holding, compute:
+2. Fetch the current user's Alpha Vantage API key from the `api_keys` table (provider = `"alpha_vantage"`). If no key is set, skip price fetching entirely — all holdings are returned with `current_price: null` and the response includes `"price_unavailable_reason": "no_av_key"` so the frontend can show a hint linking to Settings.
+3. For each unique ticker, call Alpha Vantage `GLOBAL_QUOTE` endpoint using the same HTTP client pattern as `outcome_service.py`.
+4. Cache results in-process (shared module-level dict keyed by ticker, with per-entry expiry timestamp) for **1 hour** to respect the free-tier 25 req/day limit. Cache is shared across users since price data is public.
+5. For each holding, compute:
    - `current_price`: from AV or `null`
    - `market_value`: `shares × current_price` or `null`
    - `unrealized_pnl`: `(current_price - avg_cost) × shares` or `null`
    - `unrealized_pnl_pct`: `(current_price / avg_cost - 1) × 100` or `null`
 5. Last run verdict: one SQL query — for each ticker, fetch the most recent `Run` row where `created_by = current_user.id` and `status = "completed"`, returning `verdict`, `analysis_date`, `run_id`.
 6. Return combined payload per holding.
+
+**Response schema (`GET /portfolio/{id}/current`):**
+
+```json
+{
+  "snapshot": { "id": "uuid", "uploaded_at": "iso8601", "broker": "moomoo", "row_count": 8 },
+  "price_unavailable_reason": null,
+  "totals": { "market_value": 84320.0, "unrealized_pnl": 6140.0, "unrealized_pnl_pct": 7.9 },
+  "holdings": [
+    {
+      "ticker": "AAPL",
+      "shares": 50.0,
+      "avg_cost": 162.40,
+      "currency": "USD",
+      "current_price": 189.20,
+      "market_value": 9460.0,
+      "unrealized_pnl": 1340.0,
+      "unrealized_pnl_pct": 16.5,
+      "last_run": { "run_id": "uuid", "verdict": "buy", "analysis_date": "2026-05-04" }
+    }
+  ]
+}
+```
+
+`last_run` is `null` if no completed run exists for that ticker by this user. `current_price`, `market_value`, `unrealized_pnl`, `unrealized_pnl_pct` are `null` if AV data is unavailable. `totals` fields are `null` if no prices are available.
 
 ### Export (`GET /portfolio/{id}/export`)
 
@@ -147,7 +173,7 @@ Protected by `middleware.ts` (already covers all non-auth routes). Accessible vi
 | Market Value | `—` if price unavailable |
 | Unrealized P&L | `+$X (+Y%)` in green; `-$X (-Y%)` in red; `—` if no cost/price |
 | Last Analysis | BUY/SELL/HOLD badge + `"Nd ago →"` link to run detail; `"Not analyzed"` if none |
-| Actions | "Analyze" button → navigates to `/runs/new?ticker=TICKER` pre-filled |
+| Actions | "Analyze" button → navigates to `/runs/new?ticker=TICKER` pre-filled; **Note:** `/runs/new` needs a new `ticker` query-param read on mount to pre-fill the ticker field — this is a small dependency to implement alongside the portfolio feature |
 
 ### Empty state
 
@@ -190,6 +216,7 @@ TanStack Query `useQuery` for `GET /portfolio/{id}/current`. `useMutation` for u
 - Alpha Vantage calls mocked in all tests (no live network)
 - Last-run verdict join: correct verdict and `run_id` returned per ticker
 - Authorization: user A cannot access user B's portfolios
+- No AV key set: `GET /current` returns all holdings with `current_price: null` and `price_unavailable_reason: "no_av_key"`
 
 ---
 
