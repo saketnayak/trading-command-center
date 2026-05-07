@@ -1,5 +1,5 @@
 import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -131,6 +131,12 @@ export async function getRunStats(): Promise<RunStats> {
   return r.json();
 }
 
+export async function getSmtpStatus(): Promise<{ configured: boolean; from_address: string | null }> {
+  const r = await fetchWithAuth("/auth/smtp-status");
+  if (!r.ok) throw new Error("Failed to fetch SMTP status");
+  return r.json();
+}
+
 export async function updateProfile(data: { name?: string; current_password?: string; new_password?: string }): Promise<void> {
   const r = await fetchWithAuth("/auth/me", { method: "PATCH", body: JSON.stringify(data) });
   if (!r.ok) {
@@ -189,4 +195,57 @@ export async function triggerWatchlistRun(itemId: string): Promise<{ run_id: str
   const r = await fetchWithAuth(`/watchlist/items/${itemId}/run`, { method: "POST" });
   if (!r.ok) throw new Error("Failed to trigger run");
   return r.json();
+}
+
+// Portfolio
+export async function listPortfolios(): Promise<Portfolio[]> {
+  const r = await fetchWithAuth("/portfolio");
+  if (!r.ok) throw new Error("Failed to fetch portfolios");
+  return r.json();
+}
+
+export async function createPortfolio(name: string): Promise<Portfolio> {
+  const r = await fetchWithAuth("/portfolio", { method: "POST", body: JSON.stringify({ name }) });
+  if (!r.ok) throw new Error("Failed to create portfolio");
+  return r.json();
+}
+
+export async function deletePortfolio(portfolioId: string): Promise<void> {
+  await fetchWithAuth(`/portfolio/${portfolioId}`, { method: "DELETE" });
+}
+
+export async function uploadPortfolioSnapshot(portfolioId: string, file: File): Promise<PortfolioSnapshot> {
+  const session = await getSession();
+  const token = (session as { accessToken?: string })?.accessToken;
+  const form = new FormData();
+  form.append("file", file);
+  const r = await fetch(`${BASE}/portfolio/${portfolioId}/upload`, {
+    method: "POST",
+    body: form,
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!r.ok) throw new Error("Failed to upload snapshot");
+  return r.json();
+}
+
+export async function getPortfolioCurrent(portfolioId: string): Promise<PortfolioCurrentResponse> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/current`);
+  if (!r.ok) throw new Error("Failed to fetch portfolio");
+  return r.json();
+}
+
+export async function listPortfolioSnapshots(portfolioId: string): Promise<PortfolioSnapshot[]> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/snapshots`);
+  if (!r.ok) throw new Error("Failed to fetch snapshots");
+  return r.json();
+}
+
+export async function deletePortfolioSnapshot(portfolioId: string, snapshotId: string): Promise<void> {
+  await fetchWithAuth(`/portfolio/${portfolioId}/snapshots/${snapshotId}`, { method: "DELETE" });
+}
+
+export async function exportPortfolioCsv(portfolioId: string): Promise<Blob> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/export`);
+  if (!r.ok) throw new Error("Failed to export portfolio");
+  return r.blob();
 }

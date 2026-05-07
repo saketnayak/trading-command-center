@@ -149,3 +149,50 @@ export interface PerformanceStats {
     price_90d: number | null;
   }>;
 }
+
+export interface Portfolio {
+  id: string;
+  name: string;
+  created_at: string;
+  last_snapshot_at: string | null;
+  holding_count: number;
+}
+
+export interface PortfolioSnapshot {
+  id: string;
+  portfolio_id: string;
+  uploaded_at: string;
+  broker: string | null;
+  row_count: number;
+}
+
+export interface PortfolioHoldingLastRun {
+  run_id: string;
+  verdict: string;
+  analysis_date: string;
+}
+
+export interface PortfolioHolding {
+  ticker: string;
+  shares: number;
+  avg_cost: number | null;
+  currency: string;
+  current_price: number | null;
+  market_value: number | null;
+  unrealized_pnl: number | null;
+  unrealized_pnl_pct: number | null;
+  last_run: PortfolioHoldingLastRun | null;
+}
+
+export interface PortfolioTotals {
+  market_value: number | null;
+  unrealized_pnl: number | null;
+  unrealized_pnl_pct: number | null;
+}
+
+export interface PortfolioCurrentResponse {
+  snapshot: PortfolioSnapshot | null;
+  price_unavailable_reason: string | null;
+  totals: PortfolioTotals;
+  holdings: PortfolioHolding[];
+}
