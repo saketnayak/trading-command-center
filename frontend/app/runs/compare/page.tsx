@@ -49,7 +49,7 @@ function RunPicker({ anchorId }: { anchorId: string }) {
 
   const { data: runs = [], isLoading } = useQuery({
     queryKey: ["runs-for-compare"],
-    queryFn: () => getRuns({ archived: false }),
+    queryFn: () => getRuns({ archived: false, limit: 200 }),
   });
 
   const eligible = runs.filter((r) => r.status === "completed" && r.id !== anchorId);

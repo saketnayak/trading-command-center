@@ -98,7 +98,10 @@ async def get_or_create_outcome(run_id: str, db: AsyncSession) -> RunOutcome:
                     outcome.price_30d = price
                 elif days == 90:
                     outcome.price_90d = price
-        await db.commit()
-        await db.refresh(outcome)
+
+    # Always commit — covers both the new-row case (flush above needs a commit)
+    # and the price-update case. No-op if nothing changed on an existing row.
+    await db.commit()
+    await db.refresh(outcome)
 
     return outcome
