@@ -211,7 +211,8 @@ export async function createPortfolio(name: string): Promise<Portfolio> {
 }
 
 export async function deletePortfolio(portfolioId: string): Promise<void> {
-  await fetchWithAuth(`/portfolio/${portfolioId}`, { method: "DELETE" });
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}`, { method: "DELETE" });
+  if (!r.ok) throw new Error("Failed to delete portfolio");
 }
 
 export async function uploadPortfolioSnapshot(portfolioId: string, file: File): Promise<PortfolioSnapshot> {
@@ -241,7 +242,8 @@ export async function listPortfolioSnapshots(portfolioId: string): Promise<Portf
 }
 
 export async function deletePortfolioSnapshot(portfolioId: string, snapshotId: string): Promise<void> {
-  await fetchWithAuth(`/portfolio/${portfolioId}/snapshots/${snapshotId}`, { method: "DELETE" });
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/snapshots/${snapshotId}`, { method: "DELETE" });
+  if (!r.ok) throw new Error("Failed to delete snapshot");
 }
 
 export async function exportPortfolioCsv(portfolioId: string): Promise<Blob> {
