@@ -68,8 +68,18 @@ async def _validate_key(provider: str, key: str) -> bool:
                 r = await client.get("https://api.openai.com/v1/models", headers={"Authorization": f"Bearer {key}"}, timeout=5)
                 return r.status_code == 200
             if provider == "alpha_vantage":
-                r = await client.get(f"https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=IBM&interval=5min&apikey={key}", timeout=5)
-                return "Time Series" in r.text or "Meta Data" in r.text
+                # TIME_SERIES_INTRADAY is now premium; use GLOBAL_QUOTE (free tier)
+                r = await client.get(f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey={key}", timeout=5)
+                data = r.json()
+                info = (data.get("Information") or data.get("Note") or "").lower()
+                # Explicit rejections: demo key or invalid API call
+                if "demo" in info or "invalid api call" in info:
+                    return False
+                # Got real quote data
+                if "Global Quote" in data:
+                    return True
+                # Rate-limited (free tier) — key is real but we've hit the daily cap
+                return r.status_code == 200
             if provider == "ollama":
                 r = await client.get(f"{key.rstrip('/')}/api/tags", timeout=5)
                 return r.status_code == 200
