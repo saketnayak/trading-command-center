@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, DragEvent } from "react";
+import { useState, useRef, useEffect, DragEvent } from "react";
 
 interface UploadDrawerProps {
   open: boolean;
@@ -20,6 +20,14 @@ export function UploadDrawer({ open, onClose, onUpload, uploading }: UploadDrawe
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      setPendingFile(null);
+      setError(null);
+      setDragging(false);
+    }
+  }, [open]);
 
   if (!open) return null;
 
