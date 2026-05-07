@@ -1,7 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { getPortfolioEarnings } from "@/lib/api";
-import type { EarningsEvent, PortfolioHolding } from "@/lib/types";
+import type { PortfolioHolding } from "@/lib/types";
 
 interface Props {
   portfolioId: string;
