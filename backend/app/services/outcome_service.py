@@ -10,8 +10,8 @@ from app.models.run import Run
 from app.services.encryption import decrypt_key
 
 
-async def _get_alpha_vantage_key(db: AsyncSession) -> Optional[str]:
-    result = await db.execute(select(ApiKey).where(ApiKey.provider == "alpha_vantage"))
+async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
+    result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
     key_row = result.scalar_one_or_none()
     if not key_row or not key_row.is_valid:
         return None
@@ -19,21 +19,19 @@ async def _get_alpha_vantage_key(db: AsyncSession) -> Optional[str]:
 
 
 async def _fetch_closing_price(symbol: str, target_date: date, api_key: str) -> Optional[float]:
-    url = (
-        f"https://www.alphavantage.co/query"
-        f"?function=TIME_SERIES_DAILY&symbol={symbol}&outputsize=full&apikey={api_key}"
-    )
+    from datetime import datetime, timezone as tz
+    # Fetch a 7-day window ending at target_date to catch weekends/holidays; take the last close.
+    to_ts = int(datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=tz.utc).timestamp())
+    from_date = target_date - timedelta(days=7)
+    from_ts = int(datetime(from_date.year, from_date.month, from_date.day, tzinfo=tz.utc).timestamp())
+    url = f"https://finnhub.io/api/v1/stock/candle?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}&token={api_key}"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.get(url)
             r.raise_for_status()
             data = r.json()
-        series = data.get("Time Series (Daily)", {})
-        # Walk back up to 5 days to handle weekends/holidays
-        for offset in range(5):
-            key = str(target_date - timedelta(days=offset))
-            if key in series:
-                return float(series[key]["4. close"])
+        if data.get("s") == "ok" and data.get("c"):
+            return float(data["c"][-1])
     except Exception:
         pass
     return None
@@ -83,7 +81,7 @@ async def get_or_create_outcome(run_id: str, db: AsyncSession) -> RunOutcome:
         needs_fetch.append(90)
 
     if needs_fetch:
-        api_key = await _get_alpha_vantage_key(db)
+        api_key = await _get_finnhub_key(db)
         if api_key:
             for days in needs_fetch:
                 target = analysis_date + timedelta(days=days)

@@ -173,6 +173,7 @@ export interface PortfolioHoldingLastRun {
 }
 
 export interface PortfolioHolding {
+  id: string;
   ticker: string;
   shares: number;
   avg_cost: number | null;

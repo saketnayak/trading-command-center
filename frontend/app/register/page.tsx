@@ -20,8 +20,27 @@ function RegisterForm() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email, password, invite_token: inviteToken }),
     });
-    if (!r.ok) { setError("Registration failed. The invite link may have expired."); return; }
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      setError(body.detail ?? "Registration failed.");
+      return;
+    }
     await signIn("credentials", { email, password, callbackUrl: "/runs" });
+  }
+
+  if (!inviteToken) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-navy-900">
+        <div className="w-80 bg-navy-700 border border-slate-800 rounded-lg p-8 text-center">
+          <div className="text-blue-400 font-bold text-lg tracking-widest mb-4">⬡ AgentFloor</div>
+          <p className="text-slate-300 text-sm mb-2">Invite required</p>
+          <p className="text-slate-500 text-xs">
+            Registration requires an invite link from an admin. Ask your admin to send you an invite from the Settings page.
+          </p>
+          <a href="/login" className="mt-6 inline-block text-blue-400 hover:text-blue-300 text-xs">← Back to login</a>
+        </div>
+      </div>
+    );
   }
 
   return (

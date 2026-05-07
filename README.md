@@ -26,7 +26,8 @@ AgentFloor wraps TradingAgents in a production-quality web application so that m
 | **Export** | Download any completed report as **PDF**, **Markdown**, or **JSON** |
 | **Watchlist & scheduling** | Track tickers with recurring schedules (daily, weekdays, weekly, custom days) — runs fire automatically via APScheduler |
 | **Run comparison** | Select two completed runs via checkboxes in the history table and click "Compare 2 runs →", or open any run and click "Compare →" to pick a second run from a list — no URL editing required |
-| **Outcome tracking** | After each run, prices are fetched at +7d/+14d/+30d/+90d via Alpha Vantage; a performance page shows accuracy stats across all runs |
+| **Outcome tracking** | After each run, prices are fetched at +7d/+14d/+30d/+90d via Finnhub; a performance page shows accuracy stats across all runs |
+| **Portfolio tracker** | Upload a broker CSV to track holdings with live prices, unrealized P&L, and last analysis verdict per ticker; edit rows inline (add/modify/delete) or export to CSV |
 | **Multiple LLM providers** | OpenAI, Anthropic, Google, Groq, and more — configurable per run; Ollama/vLLM for local inference |
 | **Secure API key storage** | Provider keys stored encrypted at rest |
 | **One-command deploy** | Docker Compose stack: Postgres + FastAPI + Next.js + Nginx |
@@ -105,7 +106,7 @@ App at **http://localhost:3000**
 
 ### First login
 
-Go to `/register` — the first user automatically becomes **admin**. All subsequent users need an invite link generated from the Settings page.
+Go to `/register` — the first user automatically becomes **admin**. All subsequent users need an invite link. As admin, go to **Settings → Team**, enter an email, and click **Invite Member**. If SMTP is configured, the link is emailed; otherwise it appears inline in the UI for copy-paste.
 
 ---
 
@@ -145,7 +146,7 @@ Nginx listens on port 80 and routes:
 | Provider key | Purpose |
 |---|---|
 | `openai`, `anthropic`, `google`, `groq`, … | LLM inference for runs |
-| `alpha_vantage` | Fetches historical closing prices for the outcome tracker (+7d/+14d/+30d/+90d). Without this key, the OutcomeCard shows `—` for all price columns. |
+| `finnhub` | Live portfolio prices (free tier: 60 req/min, no daily cap) and historical closing prices for outcome tracking (+7d/+14d/+30d/+90d via the `/stock/candle` endpoint). Without this key, portfolio prices and OutcomeCard price columns show `—`. Get a free key at [finnhub.io](https://finnhub.io). |
 
 See `.env.example` for the full list with defaults.
 
@@ -187,7 +188,7 @@ See `.env.example` for the full list with defaults.
 4. A drain coroutine writes `AgentEvent` rows to Postgres and broadcasts over WebSocket
 5. The frontend Live page connects via WebSocket and renders events as they arrive
 6. On completion, the final state is parsed into a `Report` row and surfaced on the Results page
-7. `outcome_service.py` then lazily fetches closing prices from Alpha Vantage at +7d/+14d/+30d/+90d and persists a `RunOutcome` row (requires an Alpha Vantage API key saved in Settings)
+7. `outcome_service.py` then lazily fetches closing prices from Finnhub (`/stock/candle`) at +7d/+14d/+30d/+90d and persists a `RunOutcome` row (requires a Finnhub API key saved in Settings)
 
 Watchlist runs follow the same lifecycle from step 1 onward — the scheduler simply creates the `Run` row and calls `start_run()` on the configured cron schedule.
 
@@ -199,12 +200,13 @@ Watchlist runs follow the same lifecycle from step 1 onward — the scheduler si
 backend/
   main.py                  # FastAPI app, router mounts, lifespan (scheduler)
   app/
-    routers/               # auth, runs, api_keys, users, llm_providers, watchlist
+    routers/               # auth, runs, api_keys, users, llm_providers, watchlist, portfolio
     models/                # User, Run, AgentEvent, Report, ApiKey,
-    │                      #   RunOutcome, Watchlist, WatchlistItem
+    │                      #   RunOutcome, Watchlist, WatchlistItem,
+    │                      #   Portfolio, PortfolioSnapshot, PortfolioHolding
     services/              # auth, encryption, email, websocket_manager,
     │                      #   job_manager, trading_agent_runner,
-    │                      #   outcome_service, scheduler
+    │                      #   outcome_service (Finnhub), scheduler
     schemas/               # Pydantic request/response models
     config.py              # pydantic-settings — all env vars
   tests/
@@ -215,12 +217,14 @@ frontend/
     runs/                  # list, new, [id]/live, [id] (results)
     │                      #   compare (side-by-side), performance (outcome stats)
     watchlist/             # ticker watchlist + visual schedule builder
+    portfolio/             # portfolio manager (CSV upload, live prices, inline editing)
     settings/
   components/
     runs/                  # RunTable, RunForm, RunFilters, StatsBar,
     │                      #   TraderDecision, AnalystReports, BullBearDebate,
     │                      #   DownloadMenu, ComparisonPanel, OutcomeCard,
     │                      #   PipelinePanel, AgentFeed, AgentSidebar
+    portfolio/             # PortfolioSwitcher, PortfolioHeader, UploadDrawer, HoldingsTable
     layout/                # TopNav
     ui/                    # Markdown renderer, shared primitives
   lib/

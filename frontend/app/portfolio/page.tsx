@@ -129,6 +129,7 @@ export default function PortfolioPage() {
 
         {selectedId && !loadingCurrent && current && (
           <HoldingsTable
+            portfolioId={selectedId}
             holdings={current.holdings}
             priceUnavailableReason={current.price_unavailable_reason}
           />

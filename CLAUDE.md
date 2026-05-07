@@ -63,7 +63,7 @@ Local Postgres from `docker compose up db` is mapped to **port 5433** (not 5432)
 
 ### Backend (`backend/`)
 
-`main.py` mounts six routers and manages the APScheduler lifespan:
+`main.py` mounts seven routers and manages the APScheduler lifespan:
 
 | Prefix | Router | Purpose |
 |---|---|---|
@@ -73,10 +73,11 @@ Local Postgres from `docker compose up db` is mapped to **port 5433** (not 5432)
 | `/users` | `users.py` | Profile, team admin |
 | `/llm-providers` | `llm_providers.py` | Static model lists + live local server queries (Ollama/vLLM) |
 | (none) | `watchlist.py` | Watchlist CRUD, schedule management, manual run trigger, scheduler diagnostics (`GET /watchlist/scheduler/jobs`) |
+| (none) | `portfolio.py` | Portfolio CRUD, CSV snapshot upload, holding-level add/edit/delete, live price enrichment, CSV export |
 
 CORS is restricted to `settings.frontend_url`.
 
-**Auth flow:** `POST /auth/register` — first user gets `admin` role automatically. Subsequent registrations require a valid invite token. `POST /auth/login` returns a JWT. All other routes use `get_current_user` (dependency in `app/dependencies.py`) which validates the Bearer token and loads the `User` row.
+**Auth flow:** `POST /auth/register` — first user gets `admin` role automatically. Subsequent registrations require a valid invite token. `POST /auth/login` returns a JWT. All other routes use `get_current_user` (dependency in `app/dependencies.py`) which validates the Bearer token and loads the `User` row. `POST /auth/invite` generates a signed invite token and emails the link; when SMTP is not configured the invite URL is returned in the response body (`invite_url` field) so the admin can copy-paste it.
 
 **Run lifecycle:**
 1. `POST /runs` creates a `Run` row and immediately calls `start_run()` from `job_manager.py`.
@@ -84,7 +85,7 @@ CORS is restricted to `settings.frontend_url`.
 3. `trading_agent_runner.py` runs `TradingAgentsGraph.propagate()` in a thread (`asyncio.to_thread`) because TradingAgents is synchronous. A `_SyncEmitter(BaseCallbackHandler)` puts events into a `SyncQueue`; a drain coroutine transfers them to an `asyncio.Queue`; a process coroutine persists `AgentEvent` rows and broadcasts over WebSocket.
 4. `DELETE /runs/{run_id}` calls `abort_run()` which cancels the asyncio task, triggering `CancelledError` in the runner, which sets status to `aborted`.
 5. `GET /runs/{run_id}/report` returns the `Report` row created at completion.
-6. On completion, `outcome_service.py` lazily fetches closing prices from Alpha Vantage at +7d/+14d/+30d/+90d and persists a `RunOutcome` row.
+6. On completion, `outcome_service.py` lazily fetches closing prices from Finnhub (`/stock/candle`) at +7d/+14d/+30d/+90d and persists a `RunOutcome` row.
 
 **Watchlist & Scheduler:** `watchlist.py` router manages per-user watchlists (one per user, auto-created on first access). Each `WatchlistItem` stores ticker, LLM config, and an optional cron expression. `services/scheduler.py` wraps APScheduler 4.x `AsyncScheduler`. On startup it calls `start_in_background()` (required — `__aenter__` alone leaves the scheduler in `RunState.stopped`) then `_reload_jobs()` to register all enabled items. After every watchlist mutation the router calls `reload_jobs()` so changes take effect without restart.
 
@@ -94,7 +95,7 @@ CORS is restricted to `settings.frontend_url`.
 
 **Config:** All settings are in `app/config.py` via pydantic-settings. Env var names: `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FRONTEND_URL`.
 
-**Tests:** All tests share one event loop (`asyncio_default_test_loop_scope = "session"` in pyproject.toml). The `clean_db` session-scoped autouse fixture in `conftest.py` TRUNCATEs all tables before each test session: `users, runs, agent_events, reports, api_keys, run_outcomes, watchlists, watchlist_items`.
+**Tests:** All tests share one event loop (`asyncio_default_test_loop_scope = "session"` in pyproject.toml). The `clean_db` session-scoped autouse fixture in `conftest.py` TRUNCATEs all tables before each test session: `users, runs, agent_events, reports, api_keys, run_outcomes, watchlists, watchlist_items, portfolios, portfolio_snapshots, portfolio_holdings`.
 
 ### Frontend (`frontend/`)
 
@@ -113,7 +114,8 @@ CORS is restricted to `settings.frontend_url`.
 - `/runs/compare` — side-by-side comparison of two runs. Entry points: (1) check up to two completed runs on the history page — a banner with "Compare 2 runs →" appears; (2) click "Compare →" on any run detail page — the compare page shows a run picker when only `?a=<id>` is in the URL. Full comparison loads at `?a=<id>&b=<id>`.
 - `/runs/performance` — accuracy stats (7d/14d/30d/90d) and outcomes table across all completed runs
 - `/watchlist` — ticker watchlist with visual schedule builder; per-item manual run trigger
-- `/settings` — API key management (including Alpha Vantage for outcome tracking) + team admin (admin-only)
+- `/portfolio` — portfolio manager: CSV upload, live prices via Finnhub, unrealized P&L, inline row editing (add/edit/delete holdings), CSV export. Multiple portfolios per user; each portfolio holds versioned snapshots.
+- `/settings` — API key management (Finnhub for portfolio prices + outcome tracking; LLM providers) + team admin (admin-only). Invite URL is shown inline when SMTP is not configured.
 
 **Export (`lib/export/`):** Three client-side utilities used by `DownloadMenu`:
 - `buildMarkdown(run, report)` — assembles a `.md` string covering all report fields (verdict, analyst reports, debate, plan, final decision). Missing fields are silently omitted.
@@ -122,7 +124,11 @@ CORS is restricted to `settings.frontend_url`.
 
 **Data fetching:** TanStack Query v5 (`useQuery` / `useMutation`). `QueryClient` and `SessionProvider` are set up in `app/providers.tsx`, which wraps `app/layout.tsx`.
 
-**Components (`components/runs/`):** `TraderDecision`, `AnalystReports`, `BullBearDebate`, `DownloadMenu` (JSON/Markdown/PDF dropdown), `ComparisonPanel` (side-by-side run columns with agreement badge), `OutcomeCard` (price grid at +7/14/30/90d), `PipelinePanel`, `AgentFeed`, `AgentSidebar`, `RunTable` (accepts optional `selectedIds`/`onSelectionChange` for checkbox multi-select; caps at 2 with FIFO replacement; only completed runs are selectable), `RunFilters`, `RunForm`, `StatsBar`.
+**Components (`components/runs/`):** `TraderDecision`, `AnalystReports`, `BullBearDebate`, `DownloadMenu` (JSON/Markdown/PDF dropdown), `ComparisonPanel` (side-by-side run columns with agreement badge), `OutcomeCard` (price grid at +7/14/30/90d, sourced from Finnhub), `PipelinePanel`, `AgentFeed`, `AgentSidebar`, `RunTable` (accepts optional `selectedIds`/`onSelectionChange` for checkbox multi-select; caps at 2 with FIFO replacement; only completed runs are selectable), `RunFilters`, `RunForm`, `StatsBar`.
+
+**Components (`components/portfolio/`):** `PortfolioSwitcher` (dropdown with create/delete), `PortfolioHeader` (totals bar with upload/export buttons), `UploadDrawer` (drag-drop CSV zone), `HoldingsTable` (inline-editable table — click Edit to modify ticker/shares/avg cost in place, ✕ to delete a row, "+ Add row" to insert a new holding; current price/market value/P&L are read-only, sourced from Finnhub). The `price_unavailable_reason` field is `"no_finnhub_key"` when no Finnhub key is stored.
+
+**Portfolio data model:** `Portfolio` → `PortfolioSnapshot` → `PortfolioHolding` (cascade delete). Each upload creates a new snapshot. Holding-level endpoints (`POST/PATCH/DELETE /portfolio/{id}/holdings/{holding_id}`) mutate the latest snapshot and keep `row_count` in sync. Prices are fetched concurrently via `asyncio.gather` and cached in-process for 1 hour.
 
 ### Deployment
 

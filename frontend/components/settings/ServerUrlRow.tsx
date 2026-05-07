@@ -23,8 +23,10 @@ export function ServerUrlRow({ provider, label, isValid, onSaved }: ServerUrlRow
 
   return (
     <div className="flex items-center gap-4 px-4 py-3">
-      <span className="text-slate-200 text-sm w-28">{label}</span>
-      <span className={`text-xs w-28 ${isValid ? "text-green-400" : "text-slate-500"}`}>
+      <div className="w-36 shrink-0">
+        <div className="text-slate-200 text-sm">{label}</div>
+      </div>
+      <span className={`text-xs w-28 shrink-0 ${isValid ? "text-green-400" : "text-slate-500"}`}>
         {isValid ? "Connected ✓" : "Not configured"}
       </span>
       <input

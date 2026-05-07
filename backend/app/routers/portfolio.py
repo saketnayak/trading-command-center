@@ -60,6 +60,7 @@ class LastRun(BaseModel):
 
 
 class HoldingResponse(BaseModel):
+    id: UUID
     ticker: str
     shares: float
     avg_cost: Optional[float]
@@ -69,6 +70,20 @@ class HoldingResponse(BaseModel):
     unrealized_pnl: Optional[float]
     unrealized_pnl_pct: Optional[float]
     last_run: Optional[LastRun]
+
+
+class HoldingPatch(BaseModel):
+    ticker: Optional[str] = None
+    shares: Optional[float] = None
+    avg_cost: Optional[float] = None
+    currency: Optional[str] = None
+
+
+class HoldingCreate(BaseModel):
+    ticker: str
+    shares: float
+    avg_cost: Optional[float] = None
+    currency: str = "USD"
 
 
 class Totals(BaseModel):
@@ -84,10 +99,10 @@ class CurrentResponse(BaseModel):
     holdings: list[HoldingResponse]
 
 
-# ── AV price helpers ──────────────────────────────────────────────────────────
+# ── Finnhub price helpers ─────────────────────────────────────────────────────
 
-async def _get_av_key(db: AsyncSession) -> Optional[str]:
-    result = await db.execute(select(ApiKey).where(ApiKey.provider == "alpha_vantage"))
+async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
+    result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
     key_row = result.scalar_one_or_none()
     if not key_row or not key_row.is_valid:
         return None
@@ -100,17 +115,14 @@ async def _fetch_price(ticker: str, api_key: str) -> Optional[float]:
         price, expiry = _price_cache[ticker]
         if now < expiry:
             return price
-    url = (
-        f"https://www.alphavantage.co/query"
-        f"?function=GLOBAL_QUOTE&symbol={ticker}&apikey={api_key}"
-    )
+    url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={api_key}"
     try:
         async with httpx.AsyncClient(timeout=8) as client:
             r = await client.get(url)
             r.raise_for_status()
             data = r.json()
-        price_str = data.get("Global Quote", {}).get("05. price")
-        price = float(price_str) if price_str else None
+        c = data.get("c")
+        price = float(c) if c is not None and c != 0 else None
     except Exception:
         price = None
     _price_cache[ticker] = (price, now + _CACHE_TTL)
@@ -241,10 +253,10 @@ async def get_current_holdings(
             holdings=[],
         )
 
-    av_key = await _get_av_key(db)
+    av_key = await _get_finnhub_key(db)
     price_unavailable_reason: Optional[str] = None
     if not av_key:
-        price_unavailable_reason = "no_av_key"
+        price_unavailable_reason = "no_finnhub_key"
 
     # Fetch last run verdict per ticker (most recent completed run for this user)
     tickers = [h.ticker for h in snapshot.holdings]
@@ -294,6 +306,7 @@ async def get_current_holdings(
                 total_cost += h.avg_cost * h.shares
 
         enriched.append(HoldingResponse(
+            id=h.id,
             ticker=h.ticker,
             shares=h.shares,
             avg_cost=h.avg_cost,
@@ -345,7 +358,7 @@ async def export_portfolio(
     if not snapshot:
         raise HTTPException(status_code=404, detail="No snapshots found for this portfolio")
 
-    av_key = await _get_av_key(db)
+    av_key = await _get_finnhub_key(db)
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["Ticker", "Shares", "Avg Cost", "Current Price", "Market Value",
@@ -426,4 +439,93 @@ async def delete_snapshot(
     if not snap:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     await db.delete(snap)
+    await db.commit()
+
+
+# ── Holding-level CRUD ────────────────────────────────────────────────────────
+
+async def _get_latest_snapshot(portfolio_id: UUID, user_id, db: AsyncSession) -> PortfolioSnapshot:
+    port_result = await db.execute(select(Portfolio).where(Portfolio.id == portfolio_id, Portfolio.user_id == user_id))
+    if not port_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+    snap_result = await db.execute(
+        select(PortfolioSnapshot)
+        .where(PortfolioSnapshot.portfolio_id == portfolio_id)
+        .order_by(desc(PortfolioSnapshot.uploaded_at))
+        .limit(1)
+    )
+    snap = snap_result.scalar_one_or_none()
+    if not snap:
+        raise HTTPException(status_code=404, detail="No snapshot found — upload a CSV first")
+    return snap
+
+
+async def _get_holding_for_user(holding_id: UUID, portfolio_id: UUID, user_id, db: AsyncSession) -> PortfolioHolding:
+    result = await db.execute(
+        select(PortfolioHolding)
+        .join(PortfolioSnapshot, PortfolioHolding.snapshot_id == PortfolioSnapshot.id)
+        .join(Portfolio, PortfolioSnapshot.portfolio_id == Portfolio.id)
+        .where(PortfolioHolding.id == holding_id, Portfolio.id == portfolio_id, Portfolio.user_id == user_id)
+    )
+    h = result.scalar_one_or_none()
+    if not h:
+        raise HTTPException(status_code=404, detail="Holding not found")
+    return h
+
+
+@router.post("/portfolio/{portfolio_id}/holdings", response_model=dict, status_code=201)
+async def add_holding(
+    portfolio_id: UUID,
+    body: HoldingCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    snap = await _get_latest_snapshot(portfolio_id, user.id, db)
+    h = PortfolioHolding(
+        snapshot_id=snap.id,
+        ticker=body.ticker.upper().strip(),
+        shares=body.shares,
+        avg_cost=body.avg_cost,
+        currency=body.currency,
+    )
+    db.add(h)
+    snap.row_count += 1
+    await db.commit()
+    await db.refresh(h)
+    return {"id": str(h.id)}
+
+
+@router.patch("/portfolio/{portfolio_id}/holdings/{holding_id}", status_code=204)
+async def update_holding(
+    portfolio_id: UUID,
+    holding_id: UUID,
+    body: HoldingPatch,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    h = await _get_holding_for_user(holding_id, portfolio_id, user.id, db)
+    if body.ticker is not None:
+        h.ticker = body.ticker.upper().strip()
+    if body.shares is not None:
+        h.shares = body.shares
+    if body.avg_cost is not None:
+        h.avg_cost = body.avg_cost
+    if body.currency is not None:
+        h.currency = body.currency
+    await db.commit()
+
+
+@router.delete("/portfolio/{portfolio_id}/holdings/{holding_id}", status_code=204)
+async def delete_holding(
+    portfolio_id: UUID,
+    holding_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    h = await _get_holding_for_user(holding_id, portfolio_id, user.id, db)
+    snap_result = await db.execute(select(PortfolioSnapshot).where(PortfolioSnapshot.id == h.snapshot_id))
+    snap = snap_result.scalar_one_or_none()
+    await db.delete(h)
+    if snap:
+        snap.row_count = max(0, snap.row_count - 1)
     await db.commit()

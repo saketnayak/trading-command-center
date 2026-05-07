@@ -72,14 +72,20 @@ async def _validate_key(provider: str, key: str) -> bool:
                 r = await client.get(f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=IBM&apikey={key}", timeout=5)
                 data = r.json()
                 info = (data.get("Information") or data.get("Note") or "").lower()
-                # Explicit rejections: demo key or invalid API call
                 if "demo" in info or "invalid api call" in info:
                     return False
-                # Got real quote data
                 if "Global Quote" in data:
                     return True
-                # Rate-limited (free tier) — key is real but we've hit the daily cap
                 return r.status_code == 200
+            if provider == "finnhub":
+                r = await client.get(f"https://finnhub.io/api/v1/quote?symbol=AAPL&token={key}", timeout=5)
+                if r.status_code == 401:
+                    return False
+                if r.status_code == 429:
+                    return True  # rate-limited means key is real
+                data = r.json()
+                c = data.get("c")
+                return r.status_code == 200 and isinstance(c, (int, float)) and c != 0
             if provider == "ollama":
                 r = await client.get(f"{key.rstrip('/')}/api/tags", timeout=5)
                 return r.status_code == 200

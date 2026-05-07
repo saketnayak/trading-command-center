@@ -57,12 +57,24 @@ async def invite(req: InviteRequest, _admin: User = Depends(require_admin)):
     token = create_invite_token(req.email)
     invite_url = f"{settings.frontend_url}/register?token={token}"
     await send_invite_email(req.email, invite_url)
-    return {"message": f"Invite sent to {req.email}"}
+    smtp_configured = bool(settings.smtp_host)
+    return {
+        "message": f"Invite sent to {req.email}" if smtp_configured else f"Invite created for {req.email}",
+        "invite_url": None if smtp_configured else invite_url,
+    }
 
 
 @router.get("/me")
 async def me(user: User = Depends(get_current_user)):
     return {"id": str(user.id), "email": user.email, "name": user.name, "role": user.role}
+
+
+@router.get("/smtp-status")
+async def smtp_status(_user: User = Depends(require_admin)):
+    return {
+        "configured": bool(settings.smtp_host),
+        "from_address": settings.smtp_from if settings.smtp_host else None,
+    }
 
 
 @router.patch("/me")

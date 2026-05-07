@@ -51,7 +51,7 @@ export function OutcomeCard({ outcome }: { outcome: RunOutcome }) {
       <p className="text-xs text-slate-500 mt-3">
         Verdict was{" "}
         <span className="font-semibold text-slate-400">{outcome.verdict.toUpperCase()}</span>.
-        Prices fetched from Alpha Vantage. Future dates show &ldquo;—&rdquo; until available.
+        Prices fetched from Finnhub. Future dates show &ldquo;—&rdquo; until available.
       </p>
     </div>
   );

@@ -24,7 +24,9 @@ export function useAgentStream(runId: string, onEvent: (e: AgentEventPayload) =>
 
   useEffect(() => {
     connect();
-    const ping = setInterval(() => wsRef.current?.send("ping"), 30000);
+    const ping = setInterval(() => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send("ping");
+    }, 30000);
     return () => {
       clearInterval(ping);
       wsRef.current?.close(1000);

@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -45,6 +46,10 @@ export default function LoginPage() {
           className="mt-4 w-full bg-slate-800 border border-slate-700 hover:border-slate-500 text-slate-300 rounded px-4 py-2 text-sm">
           Continue with Google
         </button>
+        <p className="mt-6 text-center text-xs text-slate-500">
+          Don&apos;t have an account?{" "}
+          <Link href="/register" className="text-blue-400 hover:text-blue-300">Register</Link>
+        </p>
       </div>
     </div>
   );

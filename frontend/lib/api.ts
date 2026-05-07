@@ -105,8 +105,10 @@ export async function getUsers(): Promise<User[]> {
   return r.json();
 }
 
-export async function inviteUser(email: string): Promise<void> {
-  await fetchWithAuth("/auth/invite", { method: "POST", body: JSON.stringify({ email }) });
+export async function inviteUser(email: string): Promise<{ message: string; invite_url: string | null }> {
+  const r = await fetchWithAuth("/auth/invite", { method: "POST", body: JSON.stringify({ email }) });
+  if (!r.ok) throw new Error("Failed to send invite");
+  return r.json();
 }
 
 export async function updateUserRole(id: string, role: string): Promise<User> {
@@ -250,4 +252,35 @@ export async function exportPortfolioCsv(portfolioId: string): Promise<Blob> {
   const r = await fetchWithAuth(`/portfolio/${portfolioId}/export`);
   if (!r.ok) throw new Error("Failed to export portfolio");
   return r.blob();
+}
+
+export async function addHolding(
+  portfolioId: string,
+  body: { ticker: string; shares: number; avg_cost?: number | null; currency?: string },
+): Promise<{ id: string }> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/holdings`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error("Failed to add holding");
+  return r.json();
+}
+
+export async function updateHolding(
+  portfolioId: string,
+  holdingId: string,
+  body: { ticker?: string; shares?: number; avg_cost?: number | null; currency?: string },
+): Promise<void> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/holdings/${holdingId}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error("Failed to update holding");
+}
+
+export async function deleteHolding(portfolioId: string, holdingId: string): Promise<void> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/holdings/${holdingId}`, {
+    method: "DELETE",
+  });
+  if (!r.ok) throw new Error("Failed to delete holding");
 }

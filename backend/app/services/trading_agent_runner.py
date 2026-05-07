@@ -296,17 +296,30 @@ def _extract_prices(text: str) -> tuple[str | None, str | None, str | None]:
         r"entry\s+price\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
         r"entry\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
         r"buy\s+at\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+        r"entry\s+(?:at|around|near|@)\s*\$?([\d,]+(?:\.\d+)?)",
+        r"(?:initial|suggested)\s+entry\s*[:=]?\s*(?:at\s+)?\$?([\d,]+(?:\.\d+)?)",
+        r"enter\s+(?:at|around|near)\s*\$?([\d,]+(?:\.\d+)?)",
+        r"(?:buy|initiate|open)\s+(?:a?\s*(?:long|position|trade)\s+)?(?:at|near|around|@)\s*\$?([\d,]+(?:\.\d+)?)",
     ])
     stop = _find([
         r"stop[\s-]*loss\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
         r"stop\s+at\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
         r"stop\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+        r"stop[\s-]*loss\s+(?:at|below|above|near|around|@)\s*\$?([\d,]+(?:\.\d+)?)",
+        r"stop\s+(?:below|above|near|around|@)\s*\$?([\d,]+(?:\.\d+)?)",
+        r"trailing\s+stop\s*[:=]?\s*(?:at\s+)?\$?([\d,]+(?:\.\d+)?)",
+        r"stop\s+(?:price\s+)?(?:at|below|above)\s*\$?([\d,]+(?:\.\d+)?)",
     ])
     target = _find([
         r"price\s+target\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
         r"take[\s-]*profit\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
         r"profit\s+target\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
         r"target\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
+        r"(?:price\s+)?target\s+(?:at|near|of|around|@)\s*\$?([\d,]+(?:\.\d+)?)",
+        r"target\s+\$([\d,]+(?:\.\d+)?)",
+        r"(?:take[\s-]*profit|tp)\s*[:=]?\s*(?:at\s+)?\$?([\d,]+(?:\.\d+)?)",
+        r"(?:first\s+)?(?:profit\s+)?target\s*:\s*\$?([\d,]+(?:\.\d+)?)",
+        r"(?:exit|close)\s+(?:at|near|around)\s*\$?([\d,]+(?:\.\d+)?)",
     ])
     return entry, stop, target
 
