@@ -45,7 +45,7 @@ export default function RunResultsPage() {
           </Link>
           <div className="flex items-center gap-3">
             {run && (
-              <Link href={`/runs/compare?a=${id}&b=`} className="text-slate-400 hover:text-blue-400 text-sm">
+              <Link href={`/runs/compare?a=${id}`} className="text-slate-400 hover:text-blue-400 text-sm">
                 Compare →
               </Link>
             )}

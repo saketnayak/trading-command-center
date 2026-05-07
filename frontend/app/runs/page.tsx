@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { TopNav } from "@/components/layout/TopNav";
 import { RunFilters } from "@/components/runs/RunFilters";
 import { RunTable } from "@/components/runs/RunTable";
@@ -20,7 +21,9 @@ type Tab = "active" | "archived";
 export default function RunsPage() {
   const [tab, setTab] = useState<Tab>("active");
   const [filters, setFilters] = useState<FilterValues>({ ticker: "", status: "", verdict: "" });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["runs", tab, filters],
@@ -40,6 +43,10 @@ export default function RunsPage() {
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["runs"] });
+  }
+
+  function handleSelectionChange(ids: string[]) {
+    setSelectedIds(ids);
   }
 
   return (
@@ -74,10 +81,43 @@ export default function RunsPage() {
 
         <StatsBar />
         <RunFilters value={filters} onChange={setFilters} />
+
+        {selectedIds.length > 0 && (
+          <div className="flex items-center justify-between bg-blue-950 border border-blue-800 rounded-lg px-4 py-2.5">
+            <span className="text-sm text-blue-300">
+              {selectedIds.length === 1
+                ? "1 run selected — pick one more to compare"
+                : "2 runs selected"}
+            </span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setSelectedIds([])}
+                className="text-xs text-slate-400 hover:text-slate-200"
+              >
+                Clear
+              </button>
+              {selectedIds.length === 2 && (
+                <button
+                  onClick={() => router.push(`/runs/compare?a=${selectedIds[0]}&b=${selectedIds[1]}`)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded"
+                >
+                  Compare 2 runs →
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {isLoading && <p className="text-slate-500 text-sm">Loading…</p>}
         {isError && <p className="text-red-400 text-sm">Failed to load runs.</p>}
         {!isLoading && !isError && (
-          <RunTable runs={runs} archived={tab === "archived"} onMutate={invalidate} />
+          <RunTable
+            runs={runs}
+            archived={tab === "archived"}
+            onMutate={invalidate}
+            selectedIds={selectedIds}
+            onSelectionChange={handleSelectionChange}
+          />
         )}
       </main>
     </>

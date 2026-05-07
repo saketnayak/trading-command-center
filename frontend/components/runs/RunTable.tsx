@@ -16,6 +16,8 @@ interface RunTableProps {
   runs: Run[];
   archived: boolean;
   onMutate: () => void;
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
 }
 
 const statusBadge: Record<Run["status"], string> = {
@@ -47,7 +49,21 @@ function PriceSummary({ run }: { run: Run }) {
   );
 }
 
-function RunRow({ run, archived, onMutate }: { run: Run; archived: boolean; onMutate: () => void }) {
+function RunRow({
+  run,
+  archived,
+  onMutate,
+  selected,
+  onToggle,
+  selectable,
+}: {
+  run: Run;
+  archived: boolean;
+  onMutate: () => void;
+  selected?: boolean;
+  onToggle?: () => void;
+  selectable?: boolean;
+}) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const archiveMutation = useMutation({
@@ -63,7 +79,19 @@ function RunRow({ run, archived, onMutate }: { run: Run; archived: boolean; onMu
   const isRunning = run.status === "running";
 
   return (
-    <tr className="border-t border-slate-800 hover:bg-slate-800/40">
+    <tr className={`border-t border-slate-800 hover:bg-slate-800/40 ${selected ? "bg-blue-950/30" : ""}`}>
+      {onToggle !== undefined && (
+        <td className="px-3 py-3">
+          <input
+            type="checkbox"
+            checked={!!selected}
+            onChange={onToggle}
+            disabled={!selectable && !selected}
+            className="accent-blue-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
+            title={!selectable && !selected ? "Only completed runs can be compared" : ""}
+          />
+        </td>
+      )}
       <td className="px-4 py-3">
         <span className="text-slate-200 font-mono">{run.ticker}</span>
         {run.label && <p className="text-slate-500 text-xs mt-0.5">{run.label}</p>}
@@ -139,12 +167,26 @@ function RunRow({ run, archived, onMutate }: { run: Run; archived: boolean; onMu
   );
 }
 
-export function RunTable({ runs, archived, onMutate }: RunTableProps) {
+export function RunTable({ runs, archived, onMutate, selectedIds, onSelectionChange }: RunTableProps) {
+  function toggle(id: string) {
+    if (!onSelectionChange) return;
+    if (selectedIds?.includes(id)) {
+      onSelectionChange(selectedIds.filter((x) => x !== id));
+    } else {
+      const next = [...(selectedIds ?? []), id];
+      // keep only the two most-recently selected
+      onSelectionChange(next.length > 2 ? next.slice(next.length - 2) : next);
+    }
+  }
+
+  const showCheckboxes = !!onSelectionChange;
+
   return (
     <div className="overflow-x-auto rounded border border-slate-800">
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-navy-700 text-slate-400 text-xs uppercase tracking-wider">
           <tr>
+            {showCheckboxes && <th className="px-3 py-3 w-8" />}
             <th className="text-left px-4 py-3">Ticker</th>
             <th className="text-left px-4 py-3">Status</th>
             <th className="text-left px-4 py-3">Verdict</th>
@@ -159,13 +201,21 @@ export function RunTable({ runs, archived, onMutate }: RunTableProps) {
         <tbody>
           {runs.length === 0 ? (
             <tr>
-              <td colSpan={9} className="text-center text-slate-500 px-4 py-8">
+              <td colSpan={showCheckboxes ? 10 : 9} className="text-center text-slate-500 px-4 py-8">
                 {archived ? "No archived runs." : "No runs yet."}
               </td>
             </tr>
           ) : (
             runs.map((run) => (
-              <RunRow key={run.id} run={run} archived={archived} onMutate={onMutate} />
+              <RunRow
+                key={run.id}
+                run={run}
+                archived={archived}
+                onMutate={onMutate}
+                selected={selectedIds?.includes(run.id)}
+                onToggle={showCheckboxes ? () => toggle(run.id) : undefined}
+                selectable={run.status === "completed"}
+              />
             ))
           )}
         </tbody>
