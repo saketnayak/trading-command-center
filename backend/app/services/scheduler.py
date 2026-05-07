@@ -68,7 +68,6 @@ async def _reload_jobs(scheduler: AsyncScheduler) -> None:
 
 async def _fire_daily_portfolio_insights() -> None:
     """Generate AI insights for every portfolio that has at least one holding."""
-    import asyncio as _asyncio
     from sqlalchemy.orm import selectinload as _selectinload
     from app.models.portfolio import Portfolio, PortfolioSnapshot
     from app.models.portfolio_insight import PortfolioInsight, InsightStatus, InsightTrigger

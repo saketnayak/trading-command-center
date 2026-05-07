@@ -16,7 +16,7 @@ import httpx
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.portfolio import Portfolio, PortfolioSnapshot, PortfolioHolding
-from app.models.portfolio_insight import PortfolioInsight, InsightStatus, InsightTrigger
+from app.models.portfolio_insight import PortfolioInsight, InsightStatus, InsightTrigger, InsightStance
 from app.models.user import User
 from app.models.run import Run, RunStatus
 from app.models.api_key import ApiKey
@@ -543,12 +543,12 @@ class InsightResponse(BaseModel):
     id: UUID
     portfolio_id: UUID
     generated_at: datetime
-    status: str
-    trigger: str
+    status: InsightStatus
+    trigger: InsightTrigger
     llm_provider: str
     llm_model: str
     health_score: Optional[int]
-    overall_stance: Optional[str]
+    overall_stance: Optional[InsightStance]
     summary: Optional[str]
     action_items: Optional[list]
     risk_alerts: Optional[list]

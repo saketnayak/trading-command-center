@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import AsyncSessionLocal
-from app.models.portfolio import Portfolio, PortfolioSnapshot, PortfolioHolding
+from app.models.portfolio import Portfolio, PortfolioSnapshot
 from app.models.portfolio_insight import PortfolioInsight, InsightStatus, InsightStance
 from app.models.run import Run, RunStatus
 from app.models.api_key import ApiKey
@@ -54,18 +54,36 @@ async def _fetch_sector(ticker: str, finnhub_key: str) -> str:
 
 async def _call_llm(provider: str, model: str, api_key: Optional[str], prompt: str) -> str:
     """Single LLM call returning raw text. Uses direct provider APIs."""
-    if provider in ("openai", "vllm"):
-        url = "https://api.openai.com/v1/chat/completions"
+    _json_payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.3,
+        "max_tokens": 4096,
+    }
+
+    if provider == "openai":
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": prompt}],
-            "response_format": {"type": "json_object"},
-            "temperature": 0.3,
-            "max_tokens": 4096,
-        }
         async with httpx.AsyncClient(timeout=90) as client:
-            r = await client.post(url, json=payload, headers=headers)
+            r = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                json=_json_payload, headers=headers,
+            )
+            r.raise_for_status()
+            return r.json()["choices"][0]["message"]["content"]
+
+    if provider == "vllm":
+        # vLLM exposes an OpenAI-compatible endpoint at a local base URL.
+        from app.config import settings as _s
+        base_url = getattr(_s, "vllm_base_url", "http://localhost:8080")
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+        async with httpx.AsyncClient(timeout=180) as client:
+            r = await client.post(
+                f"{base_url}/v1/chat/completions",
+                json=_json_payload, headers=headers,
+            )
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"]
 
