@@ -1,5 +1,6 @@
 import csv
 import io
+import math
 from dataclasses import dataclass
 from fastapi import HTTPException
 
@@ -13,7 +14,7 @@ class HoldingRow:
 
 
 def _normalize_headers(row: dict) -> dict[str, str]:
-    return {k.lower().strip(): v for k, v in row.items()}
+    return {k.lower().strip(): v for k, v in row.items() if k is not None}
 
 
 def _parse_float(value: str) -> float | None:
@@ -21,7 +22,8 @@ def _parse_float(value: str) -> float | None:
         return None
     cleaned = value.replace("$", "").replace(",", "").replace("%", "").strip()
     try:
-        return float(cleaned)
+        result = float(cleaned)
+        return result if math.isfinite(result) else None
     except ValueError:
         return None
 
@@ -62,13 +64,13 @@ def _parse_fidelity(reader: csv.DictReader) -> list[HoldingRow]:
         if not ticker or ticker.startswith("$") or ticker.startswith("--"):
             continue
         shares = _parse_float(row.get("quantity", ""))
+        if shares is None:
+            continue
         avg_cost = _parse_float(row.get("average cost basis", ""))
         if avg_cost is None:
             cost_total = _parse_float(row.get("cost basis total", ""))
-            if cost_total is not None and shares:
+            if cost_total is not None and shares != 0:
                 avg_cost = cost_total / shares
-        if shares is None:
-            continue
         holdings[ticker] = HoldingRow(ticker=ticker, shares=shares, avg_cost=avg_cost)
     return list(holdings.values())
 
@@ -125,6 +127,8 @@ def parse_portfolio_csv(content: bytes) -> tuple[str, list[HoldingRow]]:
     text = content.decode("utf-8-sig", errors="replace")
     reader = csv.DictReader(io.StringIO(text))
     headers = reader.fieldnames or []
+    if not headers:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
     broker = _detect_broker(list(headers))
     if broker is None:
         raise HTTPException(
