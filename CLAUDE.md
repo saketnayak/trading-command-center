@@ -73,7 +73,7 @@ Local Postgres from `docker compose up db` is mapped to **port 5433** (not 5432)
 | `/users` | `users.py` | Profile, team admin |
 | `/llm-providers` | `llm_providers.py` | Static model lists + live local server queries (Ollama/vLLM) |
 | (none) | `watchlist.py` | Watchlist CRUD, schedule management, manual run trigger, scheduler diagnostics (`GET /watchlist/scheduler/jobs`) |
-| (none) | `portfolio.py` | Portfolio CRUD, CSV snapshot upload, holding-level add/edit/delete, live price enrichment, CSV export |
+| (none) | `portfolio.py` | Portfolio CRUD, CSV snapshot upload, holding-level add/edit/delete, live price enrichment, CSV export, AI insight generation/listing |
 
 CORS is restricted to `settings.frontend_url`.
 
@@ -87,15 +87,15 @@ CORS is restricted to `settings.frontend_url`.
 5. `GET /runs/{run_id}/report` returns the `Report` row created at completion.
 6. On completion, `outcome_service.py` lazily fetches closing prices from Finnhub (`/stock/candle`) at +7d/+14d/+30d/+90d and persists a `RunOutcome` row.
 
-**Watchlist & Scheduler:** `watchlist.py` router manages per-user watchlists (one per user, auto-created on first access). Each `WatchlistItem` stores ticker, LLM config, and an optional cron expression. `services/scheduler.py` wraps APScheduler 4.x `AsyncScheduler`. On startup it calls `start_in_background()` (required — `__aenter__` alone leaves the scheduler in `RunState.stopped`) then `_reload_jobs()` to register all enabled items. After every watchlist mutation the router calls `reload_jobs()` so changes take effect without restart.
+**Watchlist & Scheduler:** `watchlist.py` router manages per-user watchlists (one per user, auto-created on first access). Each `WatchlistItem` stores ticker, LLM config, and an optional cron expression. `services/scheduler.py` wraps APScheduler 4.x `AsyncScheduler`. On startup it calls `start_in_background()` (required — `__aenter__` alone leaves the scheduler in `RunState.stopped`) then `_reload_jobs()` to register all enabled items. After every watchlist mutation the router calls `reload_jobs()` so changes take effect without restart. Additionally, a system-level daily job (`daily_portfolio_insights`, weekdays 09:15 UTC) calls `_fire_daily_portfolio_insights()`, which picks the first configured LLM provider key and generates a `PortfolioInsight` for every portfolio that has holdings and no insight in the last 12 hours.
 
 **WebSocket:** `ws_manager` (singleton in `websocket_manager.py`) maintains `dict[run_id, list[WebSocket]]`. The WS endpoint at `/ws/runs/{run_id}` loops on `receive_text()` to keep the connection alive; clients send `"ping"` every 30 s.
 
 **Encryption:** API keys are stored encrypted. `services/encryption.py` derives a `Fernet` key from the 64-hex-char `ENCRYPTION_KEY` setting.
 
-**Config:** All settings are in `app/config.py` via pydantic-settings. Env var names: `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FRONTEND_URL`.
+**Config:** All settings are in `app/config.py` via pydantic-settings. Env var names: `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FRONTEND_URL`. For local inference: `OLLAMA_HOST` (default `http://localhost:11434`) and `VLLM_BASE_URL` (default `http://localhost:8080`) are read via `getattr(settings, ..., default)` — add them to `config.py` if you need to override the defaults.
 
-**Tests:** All tests share one event loop (`asyncio_default_test_loop_scope = "session"` in pyproject.toml). The `clean_db` session-scoped autouse fixture in `conftest.py` TRUNCATEs all tables before each test session: `users, runs, agent_events, reports, api_keys, run_outcomes, watchlists, watchlist_items, portfolios, portfolio_snapshots, portfolio_holdings`.
+**Tests:** All tests share one event loop (`asyncio_default_test_loop_scope = "session"` in pyproject.toml). The `clean_db` session-scoped autouse fixture in `conftest.py` TRUNCATEs all tables before each test session: `users, runs, agent_events, reports, api_keys, run_outcomes, watchlists, watchlist_items, portfolios, portfolio_snapshots, portfolio_holdings, portfolio_insights`.
 
 ### Frontend (`frontend/`)
 
@@ -114,7 +114,7 @@ CORS is restricted to `settings.frontend_url`.
 - `/runs/compare` — side-by-side comparison of two runs. Entry points: (1) check up to two completed runs on the history page — a banner with "Compare 2 runs →" appears; (2) click "Compare →" on any run detail page — the compare page shows a run picker when only `?a=<id>` is in the URL. Full comparison loads at `?a=<id>&b=<id>`.
 - `/runs/performance` — accuracy stats (7d/14d/30d/90d) and outcomes table across all completed runs
 - `/watchlist` — ticker watchlist with visual schedule builder; per-item manual run trigger
-- `/portfolio` — portfolio manager: CSV upload, live prices via Finnhub, unrealized P&L, inline row editing (add/edit/delete holdings), CSV export. Multiple portfolios per user; each portfolio holds versioned snapshots.
+- `/portfolio` — portfolio manager with two tabs: **Holdings** (CSV upload, live prices via Finnhub, unrealized P&L, inline row editing, CSV export) and **AI Insights** (generate / view AI-powered portfolio briefings — health score, action items, risk alerts, sector exposure). Multiple portfolios per user; each portfolio holds versioned snapshots.
 - `/settings` — API key management (Finnhub for portfolio prices + outcome tracking; LLM providers) + team admin (admin-only). Invite URL is shown inline when SMTP is not configured.
 
 **Export (`lib/export/`):** Three client-side utilities used by `DownloadMenu`:
@@ -126,9 +126,11 @@ CORS is restricted to `settings.frontend_url`.
 
 **Components (`components/runs/`):** `TraderDecision`, `AnalystReports`, `BullBearDebate`, `DownloadMenu` (JSON/Markdown/PDF dropdown), `ComparisonPanel` (side-by-side run columns with agreement badge), `OutcomeCard` (price grid at +7/14/30/90d, sourced from Finnhub), `PipelinePanel`, `AgentFeed`, `AgentSidebar`, `RunTable` (accepts optional `selectedIds`/`onSelectionChange` for checkbox multi-select; caps at 2 with FIFO replacement; only completed runs are selectable), `RunFilters`, `RunForm`, `StatsBar`.
 
-**Components (`components/portfolio/`):** `PortfolioSwitcher` (dropdown with create/delete), `PortfolioHeader` (totals bar with upload/export buttons), `UploadDrawer` (drag-drop CSV zone), `HoldingsTable` (inline-editable table — click Edit to modify ticker/shares/avg cost in place, ✕ to delete a row, "+ Add row" to insert a new holding; current price/market value/P&L are read-only, sourced from Finnhub). The `price_unavailable_reason` field is `"no_finnhub_key"` when no Finnhub key is stored.
+**Components (`components/portfolio/`):** `PortfolioSwitcher` (dropdown with create/delete), `PortfolioHeader` (totals bar with upload/export buttons), `UploadDrawer` (drag-drop CSV zone), `HoldingsTable` (inline-editable table — click Edit to modify ticker/shares/avg cost in place, ✕ to delete a row, "+ Add row" to insert a new holding; current price/market value/P&L are read-only, sourced from Finnhub), `InsightsDashboard` (AI insights tab — sidebar history list, generate form with provider/model picker, SVG health-score ring, action item cards, risk alert cards, CSS-bar sector chart, strengths/weaknesses panels; auto-polls every 2 s while an insight is `pending`/`running`). The `price_unavailable_reason` field is `"no_finnhub_key"` when no Finnhub key is stored.
 
 **Portfolio data model:** `Portfolio` → `PortfolioSnapshot` → `PortfolioHolding` (cascade delete). Each upload creates a new snapshot. Holding-level endpoints (`POST/PATCH/DELETE /portfolio/{id}/holdings/{holding_id}`) mutate the latest snapshot and keep `row_count` in sync. Prices are fetched concurrently via `asyncio.gather` and cached in-process for 1 hour.
+
+**Portfolio Insights:** `Portfolio` also has a one-to-many `insights` relationship to `PortfolioInsight` (cascade delete). Each `PortfolioInsight` row has `status` (`pending`→`running`→`completed`/`failed`), `trigger` (`manual`/`scheduled`), LLM provider/model, and JSONB output fields: `health_score` (1–10 int), `overall_stance` (`bullish`/`bearish`/`neutral`/`mixed`), `summary`, `action_items`, `risk_alerts`, `sector_analysis`, `strengths`, `weaknesses`, and `holdings_snapshot` (prices/P&L captured at generation time). The `portfolio_insight_runner.py` service: fetches live prices (reuses Finnhub cache), fetches sector data from Finnhub `/stock/profile2` (24 h in-process cache), collects last run verdicts from the DB, builds a structured JSON prompt, calls the provider API directly via httpx (OpenAI → `api.openai.com`; Anthropic → `api.anthropic.com`; Google → `generativelanguage.googleapis.com`; Ollama/vLLM → local base URL), and parses/persists the result. Concurrency guard: only one insight per portfolio can be `pending` or `running` at a time (returns 409 if attempted). Endpoints: `POST /portfolio/{id}/insights/generate` (202), `GET /portfolio/{id}/insights/latest`, `GET /portfolio/{id}/insights`, `GET /portfolio/{id}/insights/{insight_id}`.
 
 ### Deployment
 

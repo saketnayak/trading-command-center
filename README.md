@@ -28,6 +28,7 @@ AgentFloor wraps TradingAgents in a production-quality web application so that m
 | **Run comparison** | Select two completed runs via checkboxes in the history table and click "Compare 2 runs →", or open any run and click "Compare →" to pick a second run from a list — no URL editing required |
 | **Outcome tracking** | After each run, prices are fetched at +7d/+14d/+30d/+90d via Finnhub; a performance page shows accuracy stats across all runs |
 | **Portfolio tracker** | Upload a broker CSV to track holdings with live prices, unrealized P&L, and last analysis verdict per ticker; edit rows inline (add/modify/delete) or export to CSV |
+| **AI Portfolio Insights** | One-click AI briefing for your entire portfolio: health score (1–10), stance (bullish/bearish/neutral/mixed), prioritised action items per holding (BUY MORE / TRIM / EXIT / WATCH / REANALYZE), risk alerts (concentration, drawdown, stale analysis, sector overweight), sector exposure chart, and strengths/weaknesses. Also fires automatically every weekday morning via APScheduler. |
 | **Multiple LLM providers** | OpenAI, Anthropic, Google, Groq, and more — configurable per run; Ollama/vLLM for local inference |
 | **Secure API key storage** | Provider keys stored encrypted at rest |
 | **One-command deploy** | Docker Compose stack: Postgres + FastAPI + Next.js + Nginx |
@@ -140,6 +141,7 @@ Nginx listens on port 80 and routes:
 | `SMTP_USER` | | |
 | `SMTP_PASSWORD` | | |
 | `SMTP_FROM` | | From address for invite emails |
+| `VLLM_BASE_URL` | | Base URL for a local vLLM server (default `http://localhost:8080`) |
 
 **Provider API keys** (entered via the Settings page, stored encrypted):
 
@@ -192,6 +194,12 @@ See `.env.example` for the full list with defaults.
 
 Watchlist runs follow the same lifecycle from step 1 onward — the scheduler simply creates the `Run` row and calls `start_run()` on the configured cron schedule.
 
+**Portfolio Insights lifecycle:**
+1. User clicks "Generate Insights" (or the daily 09:15 UTC scheduler fires) → `POST /portfolio/{id}/insights/generate` creates a `PortfolioInsight` row (`status=pending`) and starts an `asyncio.Task`
+2. `portfolio_insight_runner.py` fetches live prices + sector metadata from Finnhub, last run verdicts from the DB, builds a structured JSON prompt, and calls the chosen LLM provider directly via httpx
+3. The parsed JSON response (health score, action items, risk alerts, sector analysis, strengths/weaknesses) is persisted back to the `portfolio_insights` row (`status=completed`)
+4. The frontend polls `GET /portfolio/{id}/insights/latest` every 2 s while `status` is `pending`/`running`, then renders the full insight view on completion
+
 ---
 
 ## Project structure
@@ -203,10 +211,12 @@ backend/
     routers/               # auth, runs, api_keys, users, llm_providers, watchlist, portfolio
     models/                # User, Run, AgentEvent, Report, ApiKey,
     │                      #   RunOutcome, Watchlist, WatchlistItem,
-    │                      #   Portfolio, PortfolioSnapshot, PortfolioHolding
+    │                      #   Portfolio, PortfolioSnapshot, PortfolioHolding,
+    │                      #   PortfolioInsight
     services/              # auth, encryption, email, websocket_manager,
     │                      #   job_manager, trading_agent_runner,
-    │                      #   outcome_service (Finnhub), scheduler
+    │                      #   outcome_service (Finnhub), scheduler,
+    │                      #   portfolio_insight_runner
     schemas/               # Pydantic request/response models
     config.py              # pydantic-settings — all env vars
   tests/
@@ -224,7 +234,8 @@ frontend/
     │                      #   TraderDecision, AnalystReports, BullBearDebate,
     │                      #   DownloadMenu, ComparisonPanel, OutcomeCard,
     │                      #   PipelinePanel, AgentFeed, AgentSidebar
-    portfolio/             # PortfolioSwitcher, PortfolioHeader, UploadDrawer, HoldingsTable
+    portfolio/             # PortfolioSwitcher, PortfolioHeader, UploadDrawer,
+    │                      #   HoldingsTable, InsightsDashboard
     layout/                # TopNav
     ui/                    # Markdown renderer, shared primitives
   lib/
