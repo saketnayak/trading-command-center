@@ -355,7 +355,7 @@ async def export_portfolio(
 
         run_result = await db.execute(
             select(Run)
-            .where(Run.created_by == user.id, Run.ticker == h.ticker, Run.status == RunStatus.completed)
+            .where(Run.created_by == user.id, Run.ticker == h.ticker, Run.status == RunStatus.completed, Run.verdict.isnot(None))
             .order_by(desc(Run.created_at))
             .limit(1)
         )
@@ -380,7 +380,7 @@ async def export_portfolio(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
