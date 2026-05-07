@@ -21,7 +21,7 @@ export default function PortfolioPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [uploadOpen, setUploadOpen] = useState(false);
 
-  const { data: portfolios = [], isLoading: loadingPortfolios, refetch: refetchPortfolios } = useQuery({
+  const { data: portfolios = [], isLoading: loadingPortfolios } = useQuery({
     queryKey: ["portfolios"],
     queryFn: listPortfolios,
   });
@@ -41,7 +41,7 @@ export default function PortfolioPage() {
 
   // Open upload drawer when selected portfolio has no snapshot yet
   useEffect(() => {
-    if (selectedId != null && current !== undefined && current.snapshot === null) {
+    if (selectedId != null && !loadingCurrent && current !== undefined && current.snapshot === null) {
       setUploadOpen(true);
     }
   }, [selectedId, current]);
@@ -49,7 +49,7 @@ export default function PortfolioPage() {
   const createMutation = useMutation({
     mutationFn: (name: string) => createPortfolio(name),
     onSuccess: (p: Portfolio) => {
-      refetchPortfolios();
+      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
       setSelectedId(p.id);
     },
   });
@@ -57,7 +57,7 @@ export default function PortfolioPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deletePortfolio(id),
     onSuccess: () => {
-      refetchPortfolios();
+      queryClient.invalidateQueries({ queryKey: ["portfolios"] });
       setSelectedId(null);
     },
   });
