@@ -69,7 +69,7 @@ export function PortfolioHeader({
         <div className="flex items-center gap-4 shrink-0">
           <div className="text-right">
             <div className="text-slate-200 text-sm font-semibold tabular-nums">
-              {fmt(totals?.market_value, "$")}
+              {fmt(totals!.market_value, "$")}
             </div>
             <div className="text-xs text-slate-500">Market Value</div>
           </div>

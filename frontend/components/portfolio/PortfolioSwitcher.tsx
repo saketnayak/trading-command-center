@@ -55,6 +55,7 @@ export function PortfolioSwitcher({
 
   function handleDeleteClick(e: React.MouseEvent, id: string) {
     e.stopPropagation();
+    if (id === selectedId) return;
     onDelete(id);
   }
 
