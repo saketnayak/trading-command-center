@@ -7,6 +7,7 @@ const NAV = [
   { href: "/runs/new", label: "New Run" },
   { href: "/runs", label: "History" },
   { href: "/watchlist", label: "Watchlist" },
+  { href: "/portfolio", label: "Portfolio" },
   { href: "/runs/performance", label: "Performance" },
   { href: "/settings", label: "Settings" },
 ];
