@@ -60,7 +60,6 @@ if (Test-Path $EnvFile) {
 # ── 5/7  prompt for optional values ───────────────────────────────────────
 if ($GenerateEnv) {
     $OpenAiKey       = Read-Host "Enter your OpenAI API key    (press Enter to skip)"
-    $AlphaVantageKey = Read-Host "Enter your Alpha Vantage key (press Enter to skip)"
     $NextAuthUrl     = Read-Host "Public URL of this install   (default: http://localhost)"
     if (-not $NextAuthUrl) { $NextAuthUrl = "http://localhost" }
 
@@ -72,7 +71,6 @@ ENCRYPTION_KEY=$EncryptionKey
 NEXTAUTH_SECRET=$NextAuthSecret
 NEXTAUTH_URL=$NextAuthUrl
 OPENAI_API_KEY=$OpenAiKey
-ALPHA_VANTAGE_KEY=$AlphaVantageKey
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_USER=

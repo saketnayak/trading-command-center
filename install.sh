@@ -52,7 +52,6 @@ fi
 if [ "${GENERATE_ENV:-0}" = "1" ]; then
   echo ""
   read -rp "Enter your OpenAI API key       (press Enter to skip): " OPENAI_API_KEY
-  read -rp "Enter your Alpha Vantage key    (press Enter to skip): " ALPHA_VANTAGE_KEY
   read -rp "Public URL of this install      (default: http://localhost): " NEXTAUTH_URL
   NEXTAUTH_URL="${NEXTAUTH_URL:-http://localhost}"
   echo ""
@@ -65,7 +64,6 @@ ENCRYPTION_KEY=${ENCRYPTION_KEY}
 NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
 NEXTAUTH_URL=${NEXTAUTH_URL}
 OPENAI_API_KEY=${OPENAI_API_KEY:-}
-ALPHA_VANTAGE_KEY=${ALPHA_VANTAGE_KEY:-}
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_USER=

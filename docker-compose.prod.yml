@@ -25,7 +25,6 @@ services:
       JWT_SECRET: "${JWT_SECRET}"
       ENCRYPTION_KEY: "${ENCRYPTION_KEY}"
       OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
-      ALPHA_VANTAGE_KEY: "${ALPHA_VANTAGE_KEY:-}"
       SMTP_HOST: "${SMTP_HOST:-}"
       SMTP_PORT: "${SMTP_PORT:-587}"
       SMTP_USER: "${SMTP_USER:-}"
