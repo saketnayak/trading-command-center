@@ -148,7 +148,10 @@ async def execute_run(run_id: str, config: dict) -> None:
         provider = config.get("llm_provider", "openai")
         model = config.get("llm_model", "")
         depth = config.get("depth", "standard")
+        from app.utils.asset_type import is_crypto as _is_crypto
         analysts = config.get("analysts") or ["market", "social", "news", "fundamentals", "technical"]
+        if _is_crypto(config.get("ticker", "")):
+            analysts = [a for a in analysts if a != "fundamentals"]
         depth_params = _DEPTH_PARAMS.get(depth, _DEPTH_PARAMS["standard"])
         ta_provider = _PROVIDER_MAP.get(provider, provider)
 

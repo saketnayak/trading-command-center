@@ -14,6 +14,7 @@ import {
   getProviderModels,
 } from "@/lib/api";
 import type { Portfolio } from "@/lib/types";
+import { isCrypto } from "@/lib/asset";
 import { PortfolioSwitcher } from "@/components/portfolio/PortfolioSwitcher";
 import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
 import { UploadDrawer } from "@/components/portfolio/UploadDrawer";
@@ -205,11 +206,15 @@ export default function PortfolioPage() {
     enabled: selectedId != null,
   });
 
-  // Fetch fundamentals when holdings tab is active and we have a finnhub key
+  const hasHoldings = (current?.holdings?.length ?? 0) > 0;
+  const allCrypto = hasHoldings && (current?.holdings ?? []).every((h) => isCrypto(h.ticker));
+
+  // Fetch fundamentals when holdings tab is active.
+  // Crypto uses CoinGecko (no key needed); stocks need a Finnhub key.
   const { data: fundamentals } = useQuery({
     queryKey: ["portfolio-fundamentals", selectedId],
     queryFn: () => getPortfolioFundamentals(selectedId!),
-    enabled: selectedId != null && tab === "holdings" && current?.price_unavailable_reason !== "no_finnhub_key",
+    enabled: selectedId != null && tab === "holdings" && (allCrypto || current?.price_unavailable_reason !== "no_finnhub_key"),
     staleTime: 1000 * 60 * 30,
   });
 
@@ -252,7 +257,6 @@ export default function PortfolioPage() {
   });
 
   const selectedPortfolio = portfolios.find((p) => p.id === selectedId) ?? null;
-  const hasHoldings = (current?.holdings?.length ?? 0) > 0;
 
   async function handleExport() {
     if (!selectedId || !selectedPortfolio) return;
@@ -268,7 +272,7 @@ export default function PortfolioPage() {
   const TABS: Array<{ id: Tab; label: string; badge?: string }> = [
     { id: "holdings", label: "Holdings" },
     { id: "insights", label: "AI Insights", badge: "✦" },
-    { id: "earnings", label: "Earnings" },
+    ...(!allCrypto ? [{ id: "earnings" as Tab, label: "Earnings" }] : []),
     { id: "news", label: "News" },
   ];
 
@@ -292,6 +296,7 @@ export default function PortfolioPage() {
           <PortfolioHeader
             portfolio={selectedPortfolio}
             totals={current?.totals ?? null}
+            displayCurrency={current?.display_currency ?? "USD"}
             snapshotDate={current?.snapshot?.uploaded_at ?? null}
             broker={current?.snapshot?.broker ?? null}
             onUploadClick={() => setUploadOpen(true)}
@@ -348,6 +353,7 @@ export default function PortfolioPage() {
                   portfolioId={selectedId}
                   holdings={current.holdings}
                   priceUnavailableReason={current.price_unavailable_reason}
+                  displayCurrency={current.display_currency ?? "USD"}
                   fundamentals={fundamentals}
                 />
               </div>

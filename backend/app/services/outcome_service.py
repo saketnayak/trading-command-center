@@ -8,6 +8,8 @@ from app.models.outcome import RunOutcome
 from app.models.report import Report
 from app.models.run import Run
 from app.services.encryption import decrypt_key
+from app.utils.asset_type import is_crypto
+import app.services.crypto_data_service as _crypto
 
 
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
@@ -18,7 +20,13 @@ async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
     return decrypt_key(key_row.encrypted_key)
 
 
-async def _fetch_closing_price(symbol: str, target_date: date, api_key: str) -> Optional[float]:
+async def _fetch_closing_price(symbol: str, target_date: date, api_key: Optional[str]) -> Optional[float]:
+    if is_crypto(symbol):
+        return await _crypto.fetch_historical_price(symbol, target_date, finnhub_key=api_key)
+
+    if not api_key:
+        return None
+
     from datetime import datetime, timezone as tz
     # Fetch a 7-day window ending at target_date to catch weekends/holidays; take the last close.
     to_ts = int(datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=tz.utc).timestamp())
@@ -82,7 +90,8 @@ async def get_or_create_outcome(run_id: str, db: AsyncSession) -> RunOutcome:
 
     if needs_fetch:
         api_key = await _get_finnhub_key(db)
-        if api_key:
+        # Crypto uses CoinGecko (no key needed); stocks require a Finnhub key.
+        if api_key or is_crypto(run.ticker):
             for days in needs_fetch:
                 target = analysis_date + timedelta(days=days)
                 price = await _fetch_closing_price(run.ticker, target, api_key)

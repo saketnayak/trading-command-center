@@ -26,3 +26,4 @@ class UpdateMeRequest(BaseModel):
     name: str | None = None
     current_password: str | None = None
     new_password: str | None = None
+    preferred_currency: str | None = None

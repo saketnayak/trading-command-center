@@ -3,7 +3,7 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime, timezone, date
+from datetime import date
 from typing import Optional
 from uuid import UUID
 
@@ -18,6 +18,8 @@ from app.models.portfolio_insight import PortfolioInsight, InsightStatus, Insigh
 from app.models.run import Run, RunStatus
 from app.models.api_key import ApiKey
 from app.services.encryption import decrypt_key
+from app.utils.asset_type import is_crypto
+import app.services.crypto_data_service as _crypto
 
 logger = logging.getLogger(__name__)
 
@@ -33,21 +35,28 @@ async def _get_api_key(provider: str, db: AsyncSession) -> Optional[str]:
     return decrypt_key(row.encrypted_key)
 
 
-async def _fetch_sector(ticker: str, finnhub_key: str) -> str:
+async def _fetch_sector(ticker: str, finnhub_key: Optional[str]) -> str:
     now = time.time()
     if ticker in _sector_cache:
         sector, expiry = _sector_cache[ticker]
         if now < expiry:
             return sector
-    try:
-        url = f"https://finnhub.io/api/v1/stock/profile2?symbol={ticker}&token={finnhub_key}"
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            data = r.json()
-        sector = data.get("finnhubIndustry") or data.get("gics_sector") or "Unknown"
-    except Exception:
+
+    if is_crypto(ticker):
+        sector = await _crypto.fetch_category(ticker)
+    elif finnhub_key:
+        try:
+            url = f"https://finnhub.io/api/v1/stock/profile2?symbol={ticker}&token={finnhub_key}"
+            async with httpx.AsyncClient(timeout=8) as client:
+                r = await client.get(url)
+                r.raise_for_status()
+                data = r.json()
+            sector = data.get("finnhubIndustry") or data.get("gics_sector") or "Unknown"
+        except Exception:
+            sector = "Unknown"
+    else:
         sector = "Unknown"
+
     _sector_cache[ticker] = (sector, now + _SECTOR_TTL)
     return sector
 
@@ -176,10 +185,20 @@ def _build_prompt(
         else "N/A"
     )
 
+    has_crypto = any(is_crypto(h["ticker"]) for h in holdings)
+    has_stocks = any(not is_crypto(h["ticker"]) for h in holdings)
+    if has_crypto and has_stocks:
+        portfolio_type_note = "This is a MIXED portfolio containing both equities and crypto assets."
+    elif has_crypto:
+        portfolio_type_note = "This is a CRYPTO-ONLY portfolio. There are no earnings events, P/E ratios, or dividends. 'Sector' refers to crypto category (e.g. Layer 1, DeFi, NFT, Staking)."
+    else:
+        portfolio_type_note = "This is an EQUITY portfolio."
+
     return f"""You are a professional portfolio analyst AI. Analyze the following investment portfolio and provide structured daily insights.
 
 Date: {analysis_date}
 Portfolio: {portfolio_name}
+Portfolio type: {portfolio_type_note}
 Total market value: {value_str}
 Total unrealized P&L: {pnl_str}
 Number of holdings: {len(holdings)}
@@ -191,9 +210,9 @@ Your analysis should:
 1. Identify concentration risk (positions >20% of portfolio)
 2. Flag significant unrealized losses (>15% drawdown)
 3. Note stale or missing analysis (>7 days old)
-4. Evaluate sector diversification
+4. Evaluate diversification across sectors (equities) or crypto categories (crypto assets)
 5. Identify positions with recent buy/sell signals
-6. Consider overall market positioning
+6. Consider overall market positioning; for crypto note 24/7 trading and higher volatility
 
 Respond ONLY with a single valid JSON object matching this exact schema (no markdown, no explanation):
 {{
@@ -283,19 +302,12 @@ async def generate_portfolio_insight(insight_id: str) -> None:
             provider_for_key = llm_provider if llm_provider not in ("vllm",) else "openai"
             llm_key = await _get_api_key(provider_for_key, db)
 
-            # Fetch prices concurrently
-            from app.routers.portfolio import _fetch_price  # reuse cached helper
-            if finnhub_key:
-                prices = await asyncio.gather(*[_fetch_price(t, finnhub_key) for t in tickers])
-            else:
-                prices = [None] * len(tickers)
-            price_map: dict[str, Optional[float]] = dict(zip(tickers, prices))
+            # Fetch prices — crypto batched into one CoinGecko call, stocks via Finnhub.
+            from app.routers.portfolio import _fetch_prices_bulk
+            price_map: dict[str, Optional[float]] = await _fetch_prices_bulk(tickers, finnhub_key)
 
-            # Fetch sector info concurrently
-            if finnhub_key:
-                sectors = await asyncio.gather(*[_fetch_sector(t, finnhub_key) for t in tickers])
-            else:
-                sectors = ["Unknown"] * len(tickers)
+            # Fetch sector info concurrently — crypto uses CoinGecko, stocks use Finnhub.
+            sectors = await asyncio.gather(*[_fetch_sector(t, finnhub_key) for t in tickers])
             sector_map: dict[str, str] = dict(zip(tickers, sectors))
 
             # Fetch last run verdict per ticker
@@ -327,12 +339,12 @@ async def generate_portfolio_insight(insight_id: str) -> None:
             for h in holdings:
                 price = price_map[h.ticker]
                 market_value = h.shares * price if price is not None else None
-                pnl_pct = ((price / h.avg_cost - 1) * 100) if price and h.avg_cost else None
+                pnl_pct = ((price / h.avg_cost - 1) * 100) if price is not None and h.avg_cost is not None and h.avg_cost != 0 else None
 
                 if market_value is not None:
                     total_market_value += market_value
                     has_price = True
-                    if h.avg_cost:
+                    if h.avg_cost is not None:
                         total_cost += h.avg_cost * h.shares
 
                 verdict_info = last_verdicts.get(h.ticker)

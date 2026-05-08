@@ -8,6 +8,14 @@ from app.database import AsyncSessionLocal
 from app.models.watchlist import WatchlistItem, Watchlist
 from app.models.run import Run
 from app.services.job_manager import start_run
+from app.utils.asset_type import is_crypto
+
+
+def _crypto_safe_analysts(ticker: str, analysts: list[str]) -> list[str]:
+    """Remove fundamentals analyst for crypto tickers — it has no meaningful data."""
+    if is_crypto(ticker):
+        return [a for a in analysts if a != "fundamentals"]
+    return analysts
 
 _scheduler: AsyncScheduler | None = None
 
@@ -25,7 +33,7 @@ async def _fire_watchlist_item(item_id: str) -> None:
             llm_provider=item.llm_provider,
             llm_model=item.llm_model,
             depth=item.depth,
-            analysts=item.analysts,
+            analysts=_crypto_safe_analysts(item.ticker, item.analysts or ["market", "social", "news", "fundamentals", "technical"]),
             label=f"Scheduled: {item.ticker}",
         )
         db.add(run)
@@ -102,7 +110,7 @@ async def _fire_daily_portfolio_insights() -> None:
 
         tasks = []
         for portfolio in all_portfolios:
-            if not portfolio.snapshots:
+            if not portfolio.snapshots or not any(s.row_count > 0 for s in portfolio.snapshots):
                 continue
 
             # Skip if insight already generated in last 12 hours

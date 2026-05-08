@@ -118,4 +118,48 @@ if "create_technical_analyst" not in content:
 else:
     print("  · agents/__init__.py already patched")
 
+# ── 6. Patch trading_graph.py — add "technical" to tool_nodes ────────────────
+graph_path = os.path.join(pkg, "graph/trading_graph.py")
+with open(graph_path) as f:
+    content = f.read()
+
+if '"technical": ToolNode' not in content:
+    content = content.replace(
+        '"fundamentals": ToolNode([\n                get_fundamentals,\n                get_balance_sheet,\n                get_cashflow,\n                get_income_statement,\n            ]),\n        }',
+        '"fundamentals": ToolNode([\n                get_fundamentals,\n                get_balance_sheet,\n                get_cashflow,\n                get_income_statement,\n            ]),\n            "technical": ToolNode([get_stock_data, get_indicators]),\n        }',
+    )
+    with open(graph_path, "w") as f:
+        f.write(content)
+    print("  ✓ Patched trading_graph.py — added technical ToolNode")
+else:
+    print("  · trading_graph.py already patched")
+
+# ── 7. Patch technical_indicators_tools.py — fix list branch comma-splitting ──
+indicators_path = os.path.join(pkg, "agents/utils/technical_indicators_tools.py")
+with open(indicators_path) as f:
+    content = f.read()
+
+old_else = (
+    "    else:\n"
+    "        indicators = [ind.strip() for ind in indicator if ind and ind.strip()]"
+)
+new_else = (
+    "    else:\n"
+    "        indicators = []\n"
+    "        for _ind in indicator:\n"
+    "            if _ind and _ind.strip():\n"
+    "                indicators.extend([i.strip() for i in _ind.split(',') if i.strip()])"
+)
+
+if "indicators.extend" not in content:
+    new_content = content.replace(old_else, new_else)
+    if new_content == content:
+        print("  ✗ WARNING: technical_indicators_tools.py patch did not match — check library version")
+    else:
+        with open(indicators_path, "w") as f:
+            f.write(new_content)
+        print("  ✓ Patched technical_indicators_tools.py — fixed list branch comma-splitting")
+else:
+    print("  · technical_indicators_tools.py already patched")
+
 print("All patches applied successfully.")

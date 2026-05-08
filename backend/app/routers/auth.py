@@ -8,6 +8,7 @@ from app.services.auth import hash_password, verify_password, create_access_toke
 from app.services.email import send_invite_email
 from app.dependencies import get_current_user, require_admin
 from app.config import settings
+from app.services.fx_service import SUPPORTED_CURRENCIES
 
 router = APIRouter()
 
@@ -66,7 +67,13 @@ async def invite(req: InviteRequest, _admin: User = Depends(require_admin)):
 
 @router.get("/me")
 async def me(user: User = Depends(get_current_user)):
-    return {"id": str(user.id), "email": user.email, "name": user.name, "role": user.role}
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "preferred_currency": user.preferred_currency,
+    }
 
 
 @router.get("/smtp-status")
@@ -85,6 +92,11 @@ async def update_me(req: UpdateMeRequest, user: User = Depends(get_current_user)
         if not user.hashed_password or not verify_password(req.current_password, user.hashed_password):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Current password is incorrect")
         user.hashed_password = hash_password(req.new_password)
+    if req.preferred_currency is not None:
+        code = req.preferred_currency.upper()
+        if code not in SUPPORTED_CURRENCIES:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unsupported currency: {code}")
+        user.preferred_currency = code
     db.add(user)
     await db.commit()
     return {"message": "Profile updated"}

@@ -13,12 +13,15 @@ from app.dependencies import get_current_user
 router = APIRouter()
 
 
+_DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals", "technical"]
+
+
 class WatchlistItemCreate(BaseModel):
     ticker: str
     llm_provider: str
     llm_model: str
     depth: str = "standard"
-    analysts: list[str] = []
+    analysts: list[str] = _DEFAULT_ANALYSTS
     schedule_cron: str | None = None
 
 
@@ -183,6 +186,10 @@ async def trigger_watchlist_run(
 
     from app.models.run import Run
     from app.services.job_manager import start_run
+    from app.utils.asset_type import is_crypto as _is_crypto
+    analysts = item.analysts or _DEFAULT_ANALYSTS
+    if _is_crypto(item.ticker):
+        analysts = [a for a in analysts if a != "fundamentals"]
     run = Run(
         created_by=user.id,
         ticker=item.ticker,
@@ -190,7 +197,7 @@ async def trigger_watchlist_run(
         llm_provider=item.llm_provider,
         llm_model=item.llm_model,
         depth=item.depth,
-        analysts=item.analysts,
+        analysts=analysts,
         label=f"Watchlist: {item.ticker}",
     )
     db.add(run)

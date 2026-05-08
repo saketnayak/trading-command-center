@@ -3,12 +3,15 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { addHolding, updateHolding, deleteHolding, addWatchlistItem, getWatchlist, getProviderModels } from "@/lib/api";
+import { isCrypto } from "@/lib/asset";
+import { fmtMoney, fmtPnl } from "@/lib/currency";
 import type { PortfolioHolding, FundamentalsData } from "@/lib/types";
 
 interface HoldingsTableProps {
   portfolioId: string;
   holdings: PortfolioHolding[];
   priceUnavailableReason: string | null;
+  displayCurrency: string;
   fundamentals?: Record<string, FundamentalsData>;
 }
 
@@ -26,18 +29,6 @@ interface WatchDraft {
 
 const PROVIDERS = ["openai", "anthropic", "google", "groq", "ollama", "vllm"];
 const DEPTHS = ["quick", "standard", "deep"] as const;
-
-function fmtMoney(n: number | null): string {
-  if (n == null) return "—";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n);
-}
-
-function fmtPnl(pnl: number | null, pct: number | null): string {
-  if (pnl == null) return "—";
-  const sign = pnl >= 0 ? "+" : "";
-  const pctStr = pct != null ? ` (${pnl >= 0 ? "+" : ""}${pct.toFixed(2)}%)` : "";
-  return `${sign}${fmtMoney(pnl)}${pctStr}`;
-}
 
 function fmtNum(n: number | null, decimals = 2, suffix = ""): string {
   if (n == null) return "—";
@@ -117,7 +108,9 @@ function WatchButton({ ticker }: { ticker: string }) {
         llm_provider: draft.llm_provider,
         llm_model: draft.llm_model || (models[0] ?? ""),
         depth: draft.depth,
-        analysts: [],
+        analysts: isCrypto(ticker)
+          ? ["market", "social", "news", "technical"]
+          : ["market", "social", "news", "fundamentals", "technical"],
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });
@@ -129,7 +122,7 @@ function WatchButton({ ticker }: { ticker: string }) {
 
   if (watched || success) {
     return (
-      <span className="text-xs text-slate-500 cursor-default" title="Already on watchlist">
+      <span className="text-xs text-yellow-400 cursor-default" title="Already on watchlist">
         ★ Watching
       </span>
     );
@@ -185,15 +178,25 @@ function WatchButton({ ticker }: { ticker: string }) {
 }
 
 function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: number }) {
-  const metrics: Array<{ label: string; value: string }> = [
-    { label: "P/E", value: fmtNum(data.pe_ratio) },
-    { label: "Beta", value: fmtNum(data.beta) },
-    { label: "52w High", value: data.week52_high != null ? `$${data.week52_high.toFixed(2)}` : "—" },
-    { label: "52w Low", value: data.week52_low != null ? `$${data.week52_low.toFixed(2)}` : "—" },
-    { label: "Div Yield", value: fmtNum(data.dividend_yield, 2, "%") },
-    { label: "EPS (TTM)", value: data.eps_ttm != null ? `$${data.eps_ttm.toFixed(2)}` : "—" },
-    { label: "Mkt Cap", value: fmtLargeNum(data.market_cap) },
-  ];
+  const metrics: Array<{ label: string; value: string }> = data.asset_type === "crypto"
+    ? [
+        { label: "Mkt Cap", value: fmtLargeNum(data.market_cap ?? null) },
+        { label: "Vol 24h", value: fmtLargeNum(data.volume_24h ?? null) },
+        { label: "Circ Supply", value: data.circulating_supply != null ? `${(data.circulating_supply / 1e6).toFixed(2)}M` : "—" },
+        { label: "ATH", value: data.all_time_high != null ? `$${data.all_time_high.toLocaleString()}` : "—" },
+        { label: "24h %", value: fmtNum(data.price_change_24h_pct ?? null, 2, "%") },
+        { label: "7d %", value: fmtNum(data.price_change_7d_pct ?? null, 2, "%") },
+        { label: "Category", value: data.category ?? "—" },
+      ]
+    : [
+        { label: "P/E", value: fmtNum(data.pe_ratio ?? null) },
+        { label: "Beta", value: fmtNum(data.beta ?? null) },
+        { label: "52w High", value: data.week52_high != null ? `$${data.week52_high.toFixed(2)}` : "—" },
+        { label: "52w Low", value: data.week52_low != null ? `$${data.week52_low.toFixed(2)}` : "—" },
+        { label: "Div Yield", value: fmtNum(data.dividend_yield ?? null, 2, "%") },
+        { label: "EPS (TTM)", value: data.eps_ttm != null ? `$${data.eps_ttm.toFixed(2)}` : "—" },
+        { label: "Mkt Cap", value: fmtLargeNum(data.market_cap ?? null) },
+      ];
 
   return (
     <tr className="border-t border-slate-700/50 bg-slate-800/20">
@@ -211,7 +214,7 @@ function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: n
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, fundamentals }: HoldingsTableProps) {
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "" });
@@ -398,19 +401,19 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                             className="w-24 text-right"
                           />
                         ) : (
-                          <span className="text-slate-400">{fmtMoney(h.avg_cost)}</span>
+                          <span className="text-slate-400">{fmtMoney(h.avg_cost, displayCurrency)}</span>
                         )}
                       </td>
 
                       {/* Current Price (read-only) */}
-                      <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{fmtMoney(h.current_price)}</td>
+                      <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{fmtMoney(h.current_price, displayCurrency)}</td>
 
                       {/* Market Value (read-only) */}
-                      <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{fmtMoney(h.market_value)}</td>
+                      <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{fmtMoney(h.market_value, displayCurrency)}</td>
 
                       {/* Unrealized P&L (read-only) */}
                       <td className={`px-4 py-2 text-right tabular-nums ${pnlColor}`}>
-                        {fmtPnl(pnl, h.unrealized_pnl_pct)}
+                        {fmtPnl(pnl, h.unrealized_pnl_pct, displayCurrency)}
                       </td>
 
                       {/* Last Analysis */}

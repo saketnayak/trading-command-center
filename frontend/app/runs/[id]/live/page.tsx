@@ -56,10 +56,10 @@ export default function LiveRunPage() {
     run?.status === "aborted";
 
   return (
-    <div className="min-h-screen bg-navy-900">
+    <div className="h-screen flex flex-col bg-navy-900">
       <TopNav />
-      <div className="flex gap-4 p-6 max-w-7xl mx-auto">
-        <div className="w-64 flex-shrink-0 space-y-4">
+      <div className="flex gap-4 p-6 max-w-7xl mx-auto w-full flex-1 overflow-hidden">
+        <div className="w-64 flex-shrink-0 flex flex-col gap-4 overflow-y-auto">
           <AgentSidebar run={run} onAbort={handleAbort} />
           {run && <PipelinePanel analysts={run.analysts} events={events} />}
           {isDone && (
@@ -71,7 +71,7 @@ export default function LiveRunPage() {
             </Link>
           )}
         </div>
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
           <div className="flex items-center justify-between mb-3">
             <h1 className="text-slate-200 text-sm font-semibold">Live Event Feed</h1>
             <span className="text-slate-500 text-xs">{events.length} events</span>

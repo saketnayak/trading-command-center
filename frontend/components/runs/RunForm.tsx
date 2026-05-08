@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createRun, getProviderModels } from "@/lib/api";
+import { isCrypto } from "@/lib/asset";
 
 const ANALYSTS = ["market", "social", "news", "fundamentals", "technical"];
 const LOCAL_PROVIDERS = ["ollama", "vllm"];
@@ -15,12 +16,18 @@ const PLACEHOLDERS: Record<string, string> = {
 };
 
 const POPULAR_TICKERS = [
+  // Stocks
   "AAPL","MSFT","GOOGL","AMZN","NVDA","META","TSLA","BRK.B","JPM","V",
   "UNH","XOM","LLY","JNJ","MA","PG","MRK","HD","AVGO","CVX",
   "PEP","ABBV","KO","COST","WMT","BAC","MCD","ACN","CRM","TMO",
   "NFLX","AMD","ADBE","ORCL","QCOM","TXN","DHR","AMGN","NEE","PM",
   "INTC","RTX","HON","IBM","GE","BA","CAT","SBUX","NOW","PYPL",
   "COIN","PLTR","SNOW","UBER","ABNB","SHOP","SQ","ROKU","ZM","DDOG",
+  // Crypto (BTC-USD format)
+  "BTC-USD","ETH-USD","SOL-USD","BNB-USD","XRP-USD","ADA-USD",
+  "DOGE-USD","AVAX-USD","DOT-USD","LINK-USD","MATIC-USD","UNI-USD",
+  "NEAR-USD","APT-USD","ARB-USD","OP-USD","SUI-USD","TON-USD",
+  "AAVE-USD","MKR-USD","PEPE-USD","WIF-USD",
 ];
 
 export interface RunFormInitialValues {
@@ -80,11 +87,21 @@ export function RunForm({ onSuccess, initialValues }: Props) {
     onSuccess: (run) => onSuccess(run.id),
   });
 
+  const cryptoTicker = isCrypto(ticker);
+
   function toggleAnalyst(name: string) {
+    if (name === "fundamentals" && cryptoTicker) return; // disabled for crypto
     setAnalysts((prev) =>
       prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]
     );
   }
+
+  // Auto-remove fundamentals when user types a crypto ticker
+  useEffect(() => {
+    if (cryptoTicker) {
+      setAnalysts((prev) => prev.filter((a) => a !== "fundamentals"));
+    }
+  }, [cryptoTicker]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();

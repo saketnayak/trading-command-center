@@ -22,6 +22,9 @@ from app.models.run import Run, RunStatus
 from app.models.api_key import ApiKey
 from app.services.encryption import decrypt_key
 from app.services.portfolio_parser import parse_portfolio_csv
+from app.utils.asset_type import is_crypto
+import app.services.crypto_data_service as _crypto
+import app.services.fx_service as fx
 
 router = APIRouter()
 
@@ -96,6 +99,7 @@ class Totals(BaseModel):
 class CurrentResponse(BaseModel):
     snapshot: Optional[PortfolioSnapshotResponse]
     price_unavailable_reason: Optional[str]
+    display_currency: str = "USD"
     totals: Totals
     holdings: list[HoldingResponse]
 
@@ -110,24 +114,77 @@ async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
     return decrypt_key(key_row.encrypted_key)
 
 
-async def _fetch_price(ticker: str, api_key: str) -> Optional[float]:
+async def _fetch_price(ticker: str, api_key: Optional[str]) -> Optional[float]:
+    """Single-ticker price fetch, used by insight runner and individual holding edit.
+    For bulk portfolio pricing use _fetch_prices_bulk."""
     now = time.time()
     if ticker in _price_cache:
         price, expiry = _price_cache[ticker]
         if now < expiry:
             return price
-    url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={api_key}"
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            data = r.json()
-        c = data.get("c")
-        price = float(c) if c is not None and c != 0 else None
-    except Exception:
-        price = None
+
+    if is_crypto(ticker):
+        price = await _crypto.fetch_price(ticker, finnhub_key=api_key)
+    else:
+        if not api_key:
+            return None
+        url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={api_key}"
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                r = await client.get(url)
+                r.raise_for_status()
+                data = r.json()
+            c = data.get("c")
+            price = float(c) if c is not None and c != 0 else None
+        except Exception:
+            price = None
+
     _price_cache[ticker] = (price, now + _CACHE_TTL)
     return price
+
+
+async def _fetch_prices_bulk(
+    tickers: list[str],
+    api_key: Optional[str],
+) -> dict[str, Optional[float]]:
+    """Fetch prices for many tickers efficiently.
+    Crypto tickers are batched into a single CoinGecko call to avoid rate limits.
+    Stock tickers are fetched concurrently via Finnhub.
+    Portfolio-level 1h cache is checked/updated for all tickers.
+    """
+    now = time.time()
+    result: dict[str, Optional[float]] = {}
+    uncached_crypto: list[str] = []
+    uncached_stock: list[str] = []
+
+    for ticker in tickers:
+        if ticker in _price_cache:
+            price, expiry = _price_cache[ticker]
+            if now < expiry:
+                result[ticker] = price
+                continue
+        if is_crypto(ticker):
+            uncached_crypto.append(ticker)
+        else:
+            uncached_stock.append(ticker)
+
+    # Batch all crypto in a single CoinGecko /simple/price call
+    if uncached_crypto:
+        crypto_prices = await _crypto.fetch_prices_batch(uncached_crypto, finnhub_key=api_key)
+        for ticker, price in crypto_prices.items():
+            result[ticker] = price
+            _price_cache[ticker] = (price, now + _CACHE_TTL)
+
+    # Fetch stocks concurrently via Finnhub
+    if uncached_stock and api_key:
+        stock_prices = await asyncio.gather(*[_fetch_price(t, api_key) for t in uncached_stock])
+        for ticker, price in zip(uncached_stock, stock_prices):
+            result[ticker] = price
+    elif uncached_stock:
+        for ticker in uncached_stock:
+            result[ticker] = None
+
+    return result
 
 
 # ── Portfolio CRUD ────────────────────────────────────────────────────────────
@@ -256,11 +313,14 @@ async def get_current_holdings(
 
     av_key = await _get_finnhub_key(db)
     price_unavailable_reason: Optional[str] = None
-    if not av_key:
+    # Only block pricing if there are stock tickers and no Finnhub key.
+    # Crypto tickers use CoinGecko (no key needed), so they are always fetched.
+    tickers = [h.ticker for h in snapshot.holdings]
+    has_stock = any(not is_crypto(t) for t in tickers)
+    if not av_key and has_stock:
         price_unavailable_reason = "no_finnhub_key"
 
     # Fetch last run verdict per ticker (most recent completed run for this user)
-    tickers = [h.ticker for h in snapshot.holdings]
     last_runs: dict[str, LastRun] = {}
     if tickers:
         for ticker in tickers:
@@ -278,58 +338,80 @@ async def get_current_holdings(
                     analysis_date=str(run.analysis_date),
                 )
 
-    # Fetch all prices concurrently — cache hits are instant, misses run in parallel
-    tickers = [h.ticker for h in snapshot.holdings]
-    if av_key:
-        prices = await asyncio.gather(*[_fetch_price(t, av_key) for t in tickers])
+    # Fetch all prices — crypto batched into one CoinGecko call, stocks via Finnhub
+    price_map = await _fetch_prices_bulk(tickers, av_key)
+
+    pref_currency = user.preferred_currency.upper()
+
+    # Gather rates needed: user's display currency + any non-USD holding cost-basis currencies
+    unique_holding_currencies = {
+        (h.currency or "USD").upper()
+        for h in snapshot.holdings
+        if (h.currency or "USD").upper() != "USD"
+    }
+    currencies_to_fetch = list((unique_holding_currencies | {pref_currency}) - {"USD"})
+    if currencies_to_fetch:
+        rate_values = await asyncio.gather(*[fx.get_rate(c) for c in currencies_to_fetch])
+        rates: dict[str, float] = dict(zip(currencies_to_fetch, rate_values))
     else:
-        prices = [None] * len(tickers)
-    price_map: dict[str, Optional[float]] = dict(zip(tickers, prices))
+        rates = {}
+    rates["USD"] = 1.0
+    pref_rate = rates.get(pref_currency, 1.0)
 
     enriched: list[HoldingResponse] = []
-    total_market_value: float = 0.0
-    total_cost: float = 0.0
+    total_market_value_usd: float = 0.0
+    total_cost_usd: float = 0.0
     has_price = False
 
     for h in snapshot.holdings:
-        price = price_map[h.ticker]
-        market_value: Optional[float] = h.shares * price if price is not None else None
-        unrealized_pnl: Optional[float] = None
-        unrealized_pnl_pct: Optional[float] = None
-        if price is not None and h.avg_cost is not None:
-            unrealized_pnl = (price - h.avg_cost) * h.shares
-            unrealized_pnl_pct = (price / h.avg_cost - 1) * 100
+        price_usd = price_map[h.ticker]
+        holding_currency = (h.currency or "USD").upper()
+        holding_rate = rates.get(holding_currency, 1.0)
 
-        if market_value is not None:
-            total_market_value += market_value
+        # Convert avg_cost from holding's cost-basis currency to USD
+        avg_cost_usd: Optional[float] = None
+        if h.avg_cost is not None:
+            avg_cost_usd = h.avg_cost / holding_rate if holding_rate else h.avg_cost
+
+        # Compute P&L in USD
+        market_value_usd: Optional[float] = h.shares * price_usd if price_usd is not None else None
+        pnl_usd: Optional[float] = None
+        pnl_pct: Optional[float] = None
+        if price_usd is not None and avg_cost_usd is not None and avg_cost_usd != 0:
+            pnl_usd = (price_usd - avg_cost_usd) * h.shares
+            pnl_pct = (price_usd / avg_cost_usd - 1) * 100
+
+        if market_value_usd is not None:
+            total_market_value_usd += market_value_usd
             has_price = True
-            if h.avg_cost is not None:
-                total_cost += h.avg_cost * h.shares
+            if avg_cost_usd is not None:
+                total_cost_usd += avg_cost_usd * h.shares
 
         enriched.append(HoldingResponse(
             id=h.id,
             ticker=h.ticker,
             shares=h.shares,
-            avg_cost=h.avg_cost,
-            currency=h.currency,
-            current_price=price,
-            market_value=market_value,
-            unrealized_pnl=unrealized_pnl,
-            unrealized_pnl_pct=unrealized_pnl_pct,
+            avg_cost=fx.apply(avg_cost_usd, pref_rate),
+            currency=pref_currency,
+            current_price=fx.apply(price_usd, pref_rate),
+            market_value=fx.apply(market_value_usd, pref_rate),
+            unrealized_pnl=fx.apply(pnl_usd, pref_rate),
+            unrealized_pnl_pct=pnl_pct,
             last_run=last_runs.get(h.ticker),
         ))
 
-    totals_pnl = (total_market_value - total_cost) if has_price and total_cost else None
-    totals_pct = ((total_market_value / total_cost - 1) * 100) if has_price and total_cost else None
+    totals_pnl_usd = (total_market_value_usd - total_cost_usd) if has_price and total_cost_usd else None
+    totals_pct = ((total_market_value_usd / total_cost_usd - 1) * 100) if has_price and total_cost_usd else None
     totals = Totals(
-        market_value=total_market_value if has_price else None,
-        unrealized_pnl=totals_pnl,
+        market_value=(total_market_value_usd * pref_rate) if has_price else None,
+        unrealized_pnl=fx.apply(totals_pnl_usd, pref_rate),
         unrealized_pnl_pct=totals_pct,
     )
 
     return CurrentResponse(
         snapshot=snapshot,
         price_unavailable_reason=price_unavailable_reason,
+        display_currency=pref_currency,
         totals=totals,
         holdings=enriched,
     )
@@ -360,18 +442,29 @@ async def export_portfolio(
         raise HTTPException(status_code=404, detail="No snapshots found for this portfolio")
 
     av_key = await _get_finnhub_key(db)
+    pref_currency = user.preferred_currency.upper()
+    pref_rate = await fx.get_rate(pref_currency)
+    c = pref_currency
+
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["Ticker", "Shares", "Avg Cost", "Current Price", "Market Value",
-                     "Unrealized P&L ($)", "Unrealized P&L (%)", "Last Analysis Verdict", "Last Analysis Date"])
+    writer.writerow([
+        "Ticker", "Shares", f"Avg Cost ({c})", f"Current Price ({c})", f"Market Value ({c})",
+        f"Unrealized P&L ({c})", "Unrealized P&L (%)", "Last Analysis Verdict", "Last Analysis Date",
+    ])
 
     for h in snapshot.holdings:
-        price: Optional[float] = None
-        if av_key:
-            price = await _fetch_price(h.ticker, av_key)
-        market_value = round(h.shares * price, 2) if price is not None else ""
-        pnl = round((price - h.avg_cost) * h.shares, 2) if price is not None and h.avg_cost is not None else ""
-        pnl_pct = round((price / h.avg_cost - 1) * 100, 2) if price is not None and h.avg_cost is not None else ""
+        price_usd: Optional[float] = None
+        if av_key or is_crypto(h.ticker):
+            price_usd = await _fetch_price(h.ticker, av_key)
+        holding_rate = await fx.get_rate((h.currency or "USD").upper())
+        avg_cost_usd = (h.avg_cost / holding_rate) if h.avg_cost is not None and holding_rate else h.avg_cost
+        avg_cost_display = round(avg_cost_usd * pref_rate, 2) if avg_cost_usd is not None else ""
+        price = round(price_usd * pref_rate, 2) if price_usd is not None else None
+        market_value = round(h.shares * price_usd * pref_rate, 2) if price_usd is not None else ""
+        pnl_usd = ((price_usd - avg_cost_usd) * h.shares) if price_usd is not None and avg_cost_usd is not None else None
+        pnl = round(pnl_usd * pref_rate, 2) if pnl_usd is not None else ""
+        pnl_pct = round((price_usd / avg_cost_usd - 1) * 100, 2) if price_usd is not None and avg_cost_usd is not None and avg_cost_usd != 0 else ""
 
         run_result = await db.execute(
             select(Run)
@@ -384,7 +477,7 @@ async def export_portfolio(
         writer.writerow([
             h.ticker,
             h.shares,
-            h.avg_cost if h.avg_cost is not None else "",
+            avg_cost_display,
             round(price, 2) if price is not None else "",
             market_value,
             pnl,
@@ -751,6 +844,8 @@ _EARNINGS_TTL = 21600  # 6 hours
 
 
 async def _fetch_earnings(ticker: str, api_key: str, days_ahead: int) -> list[dict]:
+    if is_crypto(ticker):
+        return []  # Crypto has no earnings calendar
     cache_key = f"{ticker}:{days_ahead}"
     now = time.time()
     if cache_key in _earnings_cache:
@@ -827,29 +922,38 @@ _fundamentals_cache: dict[str, tuple[dict, float]] = {}
 _FUNDAMENTALS_TTL = 21600  # 6 hours
 
 
-async def _fetch_fundamentals(ticker: str, api_key: str) -> dict:
+async def _fetch_fundamentals(ticker: str, api_key: Optional[str]) -> dict:
     now = time.time()
     if ticker in _fundamentals_cache:
         data, expiry = _fundamentals_cache[ticker]
         if now < expiry:
             return data
-    try:
-        url = f"https://finnhub.io/api/v1/stock/metric?symbol={ticker}&metric=all&token={api_key}"
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            m = r.json().get("metric", {})
-        data = {
-            "pe_ratio": m.get("peAnnual") or m.get("peTTM"),
-            "beta": m.get("beta"),
-            "week52_high": m.get("52WeekHigh"),
-            "week52_low": m.get("52WeekLow"),
-            "dividend_yield": m.get("dividendYieldIndicatedAnnual"),
-            "eps_ttm": m.get("epsBasicExclExtraItemsTTM"),
-            "market_cap": m.get("marketCapitalization"),
-        }
-    except Exception:
-        data = {}
+
+    if is_crypto(ticker):
+        data = await _crypto.fetch_metrics(ticker)
+        data["asset_type"] = "crypto"
+    elif api_key:
+        try:
+            url = f"https://finnhub.io/api/v1/stock/metric?symbol={ticker}&metric=all&token={api_key}"
+            async with httpx.AsyncClient(timeout=8) as client:
+                r = await client.get(url)
+                r.raise_for_status()
+                m = r.json().get("metric", {})
+            data = {
+                "asset_type": "stock",
+                "pe_ratio": m.get("peAnnual") or m.get("peTTM"),
+                "beta": m.get("beta"),
+                "week52_high": m.get("52WeekHigh"),
+                "week52_low": m.get("52WeekLow"),
+                "dividend_yield": m.get("dividendYieldIndicatedAnnual"),
+                "eps_ttm": m.get("epsBasicExclExtraItemsTTM"),
+                "market_cap": m.get("marketCapitalization"),
+            }
+        except Exception:
+            data = {"asset_type": "stock"}
+    else:
+        return {}
+
     _fundamentals_cache[ticker] = (data, now + _FUNDAMENTALS_TTL)
     return data
 
@@ -874,10 +978,12 @@ async def get_portfolio_fundamentals(
         return {"price_unavailable_reason": None, "data": {}}
 
     av_key = await _get_finnhub_key(db)
-    if not av_key:
+    tickers = [h.ticker for h in snapshot.holdings]
+    # Crypto metrics come from CoinGecko (no key needed); stocks need Finnhub key.
+    has_stock = any(not is_crypto(t) for t in tickers)
+    if has_stock and not av_key:
         return {"price_unavailable_reason": "no_finnhub_key", "data": {}}
 
-    tickers = [h.ticker for h in snapshot.holdings]
     results = await asyncio.gather(*[_fetch_fundamentals(t, av_key) for t in tickers])
     return {"price_unavailable_reason": None, "data": dict(zip(tickers, results))}
 

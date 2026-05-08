@@ -139,7 +139,13 @@ export async function getSmtpStatus(): Promise<{ configured: boolean; from_addre
   return r.json();
 }
 
-export async function updateProfile(data: { name?: string; current_password?: string; new_password?: string }): Promise<void> {
+export async function getMe(): Promise<User> {
+  const r = await fetchWithAuth("/auth/me");
+  if (!r.ok) throw new Error("Failed to fetch profile");
+  return r.json();
+}
+
+export async function updateProfile(data: { name?: string; current_password?: string; new_password?: string; preferred_currency?: string }): Promise<void> {
   const r = await fetchWithAuth("/auth/me", { method: "PATCH", body: JSON.stringify(data) });
   if (!r.ok) {
     const body = await r.json().catch(() => null);

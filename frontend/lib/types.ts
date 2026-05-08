@@ -3,6 +3,7 @@ export interface User {
   email: string;
   name: string;
   role: "admin" | "member";
+  preferred_currency: string;
 }
 
 export interface Run {
@@ -194,6 +195,7 @@ export interface PortfolioTotals {
 export interface PortfolioCurrentResponse {
   snapshot: PortfolioSnapshot | null;
   price_unavailable_reason: string | null;
+  display_currency: string;
   totals: PortfolioTotals;
   holdings: PortfolioHolding[];
 }
@@ -252,13 +254,22 @@ export interface EarningsEvent {
 }
 
 export interface FundamentalsData {
-  pe_ratio: number | null;
-  beta: number | null;
-  week52_high: number | null;
-  week52_low: number | null;
-  dividend_yield: number | null;
-  eps_ttm: number | null;
-  market_cap: number | null;
+  asset_type?: "stock" | "crypto";
+  // Stock fields
+  pe_ratio?: number | null;
+  beta?: number | null;
+  week52_high?: number | null;
+  week52_low?: number | null;
+  dividend_yield?: number | null;
+  eps_ttm?: number | null;
+  market_cap?: number | null;
+  // Crypto fields
+  volume_24h?: number | null;
+  circulating_supply?: number | null;
+  all_time_high?: number | null;
+  price_change_24h_pct?: number | null;
+  price_change_7d_pct?: number | null;
+  category?: string | null;
 }
 
 export interface NewsArticle {

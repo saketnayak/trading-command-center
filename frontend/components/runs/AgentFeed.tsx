@@ -23,7 +23,7 @@ export function AgentFeed({ events }: AgentFeedProps) {
   }, [events]);
 
   return (
-    <div className="overflow-y-auto max-h-[60vh] bg-navy-900 rounded border border-slate-800 p-3 space-y-1">
+    <div className="flex-1 overflow-y-auto bg-navy-900 rounded border border-slate-800 p-3 space-y-1">
       {events.map((event, i) => (
         <div key={i} className="flex gap-2">
           <span className={`text-xs font-mono w-28 flex-shrink-0 ${agentNameColor[event.type]}`}>

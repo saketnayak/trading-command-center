@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getApiKeys, getUsers, inviteUser, updateProfile, getSmtpStatus } from "@/lib/api";
+import { getApiKeys, getUsers, inviteUser, updateProfile, getSmtpStatus, getMe } from "@/lib/api";
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { TopNav } from "@/components/layout/TopNav";
 import { ApiKeyRow } from "@/components/settings/ApiKeyRow";
 import { ServerUrlRow } from "@/components/settings/ServerUrlRow";
@@ -79,21 +80,31 @@ export default function SettingsPage() {
   const [inviteError, setInviteError] = useState("");
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
+  const { data: me } = useQuery({ queryKey: ["me"], queryFn: getMe });
+
   const [profileName, setProfileName] = useState((session?.user as { name?: string })?.name ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [preferredCurrency, setPreferredCurrency] = useState("USD");
   const [profileStatus, setProfileStatus] = useState<"idle" | "success" | "error">("idle");
   const [profileError, setProfileError] = useState("");
+
+  // Sync preferred_currency from server once loaded
+  useEffect(() => {
+    if (me?.preferred_currency) setPreferredCurrency(me.preferred_currency);
+  }, [me?.preferred_currency]);
 
   const profileMutation = useMutation({
     mutationFn: () => updateProfile({
       ...(profileName.trim() ? { name: profileName.trim() } : {}),
       ...(currentPassword && newPassword ? { current_password: currentPassword, new_password: newPassword } : {}),
+      preferred_currency: preferredCurrency,
     }),
     onSuccess: () => {
       setCurrentPassword("");
       setNewPassword("");
       setProfileStatus("success");
+      queryClient.invalidateQueries({ queryKey: ["me"] });
     },
     onError: (err: Error) => {
       setProfileStatus("error");
@@ -155,6 +166,19 @@ export default function SettingsPage() {
                   className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-200 w-64 focus:outline-none focus:border-blue-500"
                 />
               </div>
+            </div>
+            <Divider />
+            <div className="flex items-center gap-4">
+              <label className="text-slate-400 text-xs w-32 shrink-0">Display Currency</label>
+              <select
+                value={preferredCurrency}
+                onChange={(e) => { setPreferredCurrency(e.target.value); setProfileStatus("idle"); }}
+                className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-200 w-32 focus:outline-none focus:border-blue-500"
+              >
+                {SUPPORTED_CURRENCIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
             <div className="flex items-center gap-3 pt-1">
               <button

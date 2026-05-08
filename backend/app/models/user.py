@@ -16,4 +16,5 @@ class User(Base):
     name: Mapped[str] = mapped_column(String)
     role: Mapped[UserRole] = mapped_column(SAEnum(UserRole), default=UserRole.member)
     google_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    preferred_currency: Mapped[str] = mapped_column(String(8), server_default="USD")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

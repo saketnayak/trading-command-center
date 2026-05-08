@@ -246,10 +246,10 @@ async def test_snapshot_delete_rolls_back_to_previous():
 
 
 @pytest.mark.asyncio
-async def test_get_current_no_av_key():
-    """Without AV key, current_price is null and price_unavailable_reason is 'no_av_key'."""
+async def test_get_current_no_finnhub_key():
+    """Without Finnhub key, current_price is null and price_unavailable_reason is 'no_finnhub_key'."""
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        token = await _register_and_login(client, "noavkey@example.com")
+        token = await _register_and_login(client, "nofinnhubkey@example.com")
         portfolio_id = await _create_portfolio(client, token)
 
         with open(FIXTURES_DIR / "generic_positions.csv", "rb") as f:
@@ -263,7 +263,7 @@ async def test_get_current_no_av_key():
         r_curr = await client.get(f"/portfolio/{portfolio_id}/current", headers=_auth(token))
         assert r_curr.status_code == 200
         body = r_curr.json()
-        assert body["price_unavailable_reason"] == "no_av_key"
+        assert body["price_unavailable_reason"] == "no_finnhub_key"
         for holding in body["holdings"]:
             assert holding["current_price"] is None
 

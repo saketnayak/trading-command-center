@@ -1,17 +1,14 @@
+import { fmtMoney } from "@/lib/currency";
 import type { Portfolio, PortfolioTotals } from "@/lib/types";
 
 interface PortfolioHeaderProps {
   portfolio: Portfolio;
   totals: PortfolioTotals | null;
+  displayCurrency: string;
   snapshotDate: string | null;
   broker: string | null;
   onUploadClick: () => void;
   onExportClick: () => void;
-}
-
-function fmt(n: number | null | undefined, prefix = ""): string {
-  if (n == null) return "—";
-  return `${prefix}${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function fmtPct(n: number | null | undefined): string {
@@ -22,6 +19,7 @@ function fmtPct(n: number | null | undefined): string {
 export function PortfolioHeader({
   portfolio,
   totals,
+  displayCurrency,
   snapshotDate,
   broker,
   onUploadClick,
@@ -69,13 +67,13 @@ export function PortfolioHeader({
         <div className="flex items-center gap-4 shrink-0">
           <div className="text-right">
             <div className="text-slate-200 text-sm font-semibold tabular-nums">
-              {fmt(totals!.market_value, "$")}
+              {fmtMoney(totals!.market_value, displayCurrency)}
             </div>
             <div className="text-xs text-slate-500">Market Value</div>
           </div>
           <div className={`text-right ${pnlColor}`}>
             <div className="text-sm font-semibold tabular-nums">
-              {fmt(pnl, pnl != null && pnl >= 0 ? "+$" : "$")}
+              {pnl != null && pnl >= 0 ? "+" : ""}{fmtMoney(pnl, displayCurrency)}
               {" "}
               <span className="text-xs font-normal">({fmtPct(pnlPct)})</span>
             </div>
