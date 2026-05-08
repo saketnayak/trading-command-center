@@ -29,6 +29,12 @@ AgentFloor wraps TradingAgents in a production-quality web application so that m
 | **Outcome tracking** | After each run, prices are fetched at +7d/+14d/+30d/+90d via Finnhub; a performance page shows accuracy stats across all runs |
 | **Portfolio tracker** | Upload a broker CSV to track holdings with live prices, unrealized P&L, and last analysis verdict per ticker; edit rows inline (add/modify/delete) or export to CSV |
 | **AI Portfolio Insights** | One-click AI briefing for your entire portfolio: health score (1–10), stance (bullish/bearish/neutral/mixed), prioritised action items per holding (BUY MORE / TRIM / EXIT / WATCH / REANALYZE), risk alerts (concentration, drawdown, stale analysis, sector overweight), sector exposure chart, and strengths/weaknesses. Also fires automatically every weekday morning via APScheduler. |
+| **Portfolio Stats Bar** | At-a-glance summary above the holdings table: best/worst performer, buy/sell signal counts, stale-holding count, and a one-click "Analyze All Stale" shortcut |
+| **Analyze All Stale** | Batch-queue analysis runs for every holding whose last analysis exceeds a configurable staleness threshold (default 7 days); shows queued vs. skipped tickers |
+| **Add to Watchlist** | Per-holding "Watch" button in the holdings table — inline provider/model/depth picker adds the ticker to your watchlist; shows "★ Watching" once tracked |
+| **Earnings Calendar** | Dedicated tab showing upcoming earnings dates for all holdings (60-day window via Finnhub); flags stale tickers, color-codes urgency by days-away, shows EPS estimate vs. actual beat/miss |
+| **Key Fundamentals** | Expandable row (▸) per holding revealing P/E, Beta, 52-week High/Low, Dividend Yield, EPS (TTM), and Market Cap sourced from Finnhub |
+| **News Feed** | Dedicated tab with a merged, time-sorted company news feed for all holdings (last 7 days via Finnhub); ticker color badges, thumbnails, source, and relative timestamps |
 | **Multiple LLM providers** | OpenAI, Anthropic, Google, Groq, and more — configurable per run; Ollama/vLLM for local inference |
 | **Secure API key storage** | Provider keys stored encrypted at rest |
 | **One-command deploy** | Docker Compose stack: Postgres + FastAPI + Next.js + Nginx |
@@ -200,6 +206,12 @@ Watchlist runs follow the same lifecycle from step 1 onward — the scheduler si
 3. The parsed JSON response (health score, action items, risk alerts, sector analysis, strengths/weaknesses) is persisted back to the `portfolio_insights` row (`status=completed`)
 4. The frontend polls `GET /portfolio/{id}/insights/latest` every 2 s while `status` is `pending`/`running`, then renders the full insight view on completion
 
+**Other portfolio data flows (all require Finnhub key):**
+- **Earnings** — `GET /portfolio/{id}/earnings` calls Finnhub `/calendar/earnings` for each holding concurrently; 6-hour in-process cache per ticker; rendered in the Earnings tab sorted by date
+- **Fundamentals** — `GET /portfolio/{id}/fundamentals` calls Finnhub `/stock/metric?metric=all`; 6-hour cache; surfaced as an expandable row (▸) per holding in the Holdings tab
+- **News** — `GET /portfolio/{id}/news` calls Finnhub `/company-news` for each ticker; 1-hour cache; merged and sorted newest-first in the News tab
+- **Batch analyze** — `POST /portfolio/{id}/runs/batch` inspects each holding's last analysis date, skips recently-analyzed tickers, and queues a `Run` for every stale/unanalyzed holding using the supplied LLM config
+
 ---
 
 ## Project structure
@@ -227,7 +239,8 @@ frontend/
     runs/                  # list, new, [id]/live, [id] (results)
     │                      #   compare (side-by-side), performance (outcome stats)
     watchlist/             # ticker watchlist + visual schedule builder
-    portfolio/             # portfolio manager (CSV upload, live prices, inline editing)
+    portfolio/             # portfolio manager (4 tabs: Holdings, AI Insights,
+    │                      #   Earnings, News; stats bar; batch analyze modal)
     settings/
   components/
     runs/                  # RunTable, RunForm, RunFilters, StatsBar,
@@ -235,7 +248,9 @@ frontend/
     │                      #   DownloadMenu, ComparisonPanel, OutcomeCard,
     │                      #   PipelinePanel, AgentFeed, AgentSidebar
     portfolio/             # PortfolioSwitcher, PortfolioHeader, UploadDrawer,
-    │                      #   HoldingsTable, InsightsDashboard
+    │                      #   HoldingsTable (inline edit + watchlist + fundamentals),
+    │                      #   InsightsDashboard, PortfolioStatsBar,
+    │                      #   EarningsPanel, NewsPanel
     layout/                # TopNav
     ui/                    # Markdown renderer, shared primitives
   lib/
