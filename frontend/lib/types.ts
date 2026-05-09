@@ -171,6 +171,46 @@ export interface PortfolioHoldingLastRun {
   run_id: string;
   verdict: string;
   analysis_date: string;
+  suggested_entry: string | null;
+  suggested_stop: string | null;
+  suggested_target: string | null;
+}
+
+export interface TickerChart {
+  t: number[];
+  c: number[];
+  h?: number[];
+  l?: number[];
+}
+
+export interface TickerSnapshot {
+  ticker: string;
+  asset_type: "stock" | "crypto";
+  name: string | null;
+  description: string | null;
+  sector: string | null;
+  website: string | null;
+  logo: string | null;
+  exchange: string | null;
+  country: string | null;
+  change_1d_pct: number | null;
+  change_1w_pct: number | null;
+  change_1m_pct: number | null;
+  fundamentals: Record<string, number | string | null>;
+  chart: TickerChart;
+  news: Array<{
+    headline: string;
+    url: string;
+    datetime: number | null;
+    source: string;
+    image: string;
+  }>;
+  next_earnings: {
+    date: string | null;
+    eps_estimate: number | null;
+    eps_actual: number | null;
+    hour: string | null;
+  } | null;
 }
 
 export interface PortfolioHolding {

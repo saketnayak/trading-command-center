@@ -13,6 +13,7 @@ interface HoldingsTableProps {
   priceUnavailableReason: string | null;
   displayCurrency: string;
   fundamentals?: Record<string, FundamentalsData>;
+  onTickerClick?: (holding: PortfolioHolding) => void;
 }
 
 interface DraftRow {
@@ -214,7 +215,7 @@ function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: n
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals }: HoldingsTableProps) {
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals, onTickerClick }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "" });
@@ -367,6 +368,13 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             onKeyDown={handleEditKey}
                             className="w-24 uppercase"
                           />
+                        ) : onTickerClick ? (
+                          <button
+                            onClick={() => onTickerClick(h)}
+                            className="font-mono text-purple-400 hover:text-purple-300 hover:underline transition-colors"
+                          >
+                            {h.ticker}
+                          </button>
                         ) : h.last_run ? (
                           <Link href={`/runs/${h.last_run.run_id}`} className="font-mono text-purple-400 hover:underline">
                             {h.ticker}

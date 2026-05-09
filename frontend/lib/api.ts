@@ -1,5 +1,5 @@
 import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -136,6 +136,12 @@ export async function getRunStats(): Promise<RunStats> {
 export async function getSmtpStatus(): Promise<{ configured: boolean; from_address: string | null }> {
   const r = await fetchWithAuth("/auth/smtp-status");
   if (!r.ok) throw new Error("Failed to fetch SMTP status");
+  return r.json();
+}
+
+export async function getTickerSnapshot(ticker: string): Promise<TickerSnapshot> {
+  const r = await fetchWithAuth(`/ticker/${encodeURIComponent(ticker)}/snapshot`);
+  if (!r.ok) throw new Error("Failed to fetch ticker snapshot");
   return r.json();
 }
 

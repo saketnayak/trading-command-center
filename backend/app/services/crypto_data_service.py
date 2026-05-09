@@ -82,6 +82,11 @@ def extract_symbol(ticker: str) -> str:
     return ticker.split("-")[0].upper()
 
 
+async def coingecko_id(symbol: str) -> Optional[str]:
+    """Public wrapper — resolve a crypto symbol to its CoinGecko ID."""
+    return await _coingecko_id(symbol)
+
+
 async def _coingecko_id(symbol: str) -> Optional[str]:
     """Resolve a crypto symbol to its CoinGecko ID, with caching."""
     now = time.time()
@@ -324,7 +329,12 @@ async def fetch_metrics(ticker: str) -> dict:
             r.raise_for_status()
             raw = r.json()
         md = raw.get("market_data", {})
+        raw_desc = (raw.get("description") or {}).get("en", "") or ""
+        import re as _re, html as _html
+        clean_desc = _html.unescape(_re.sub(r"<[^>]+>", " ", raw_desc)).strip()
         data = {
+            "name": raw.get("name"),
+            "description": clean_desc[:400] if clean_desc else None,
             "market_cap": md.get("market_cap", {}).get("usd"),
             "volume_24h": md.get("total_volume", {}).get("usd"),
             "circulating_supply": md.get("circulating_supply"),

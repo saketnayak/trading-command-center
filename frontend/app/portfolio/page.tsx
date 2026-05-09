@@ -13,7 +13,7 @@ import {
   batchAnalyzePortfolio,
   getProviderModels,
 } from "@/lib/api";
-import type { Portfolio } from "@/lib/types";
+import type { Portfolio, PortfolioHolding } from "@/lib/types";
 import { isCrypto } from "@/lib/asset";
 import { PortfolioSwitcher } from "@/components/portfolio/PortfolioSwitcher";
 import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
@@ -23,6 +23,7 @@ import { InsightsDashboard } from "@/components/portfolio/InsightsDashboard";
 import { PortfolioStatsBar } from "@/components/portfolio/PortfolioStatsBar";
 import { EarningsPanel } from "@/components/portfolio/EarningsPanel";
 import { NewsPanel } from "@/components/portfolio/NewsPanel";
+import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 
 type Tab = "holdings" | "insights" | "earnings" | "news";
 
@@ -194,6 +195,7 @@ export default function PortfolioPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("holdings");
   const [batchOpen, setBatchOpen] = useState(false);
+  const [drawerHolding, setDrawerHolding] = useState<PortfolioHolding | null>(null);
 
   const { data: portfolios = [], isLoading: loadingPortfolios } = useQuery({
     queryKey: ["portfolios"],
@@ -355,6 +357,7 @@ export default function PortfolioPage() {
                   priceUnavailableReason={current.price_unavailable_reason}
                   displayCurrency={current.display_currency ?? "USD"}
                   fundamentals={fundamentals}
+                  onTickerClick={setDrawerHolding}
                 />
               </div>
             )}
@@ -390,6 +393,12 @@ export default function PortfolioPage() {
           onClose={() => setBatchOpen(false)}
         />
       )}
+
+      <TickerDrawer
+        holding={drawerHolding}
+        displayCurrency={current?.display_currency ?? "USD"}
+        onClose={() => setDrawerHolding(null)}
+      />
     </div>
   );
 }

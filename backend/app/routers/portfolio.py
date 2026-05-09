@@ -61,6 +61,9 @@ class LastRun(BaseModel):
     run_id: UUID
     verdict: str
     analysis_date: str
+    suggested_entry: Optional[str] = None
+    suggested_stop: Optional[str] = None
+    suggested_target: Optional[str] = None
 
 
 class HoldingResponse(BaseModel):
@@ -336,6 +339,9 @@ async def get_current_holdings(
                     run_id=run.id,
                     verdict=run.verdict.value,
                     analysis_date=str(run.analysis_date),
+                    suggested_entry=run.suggested_entry,
+                    suggested_stop=run.suggested_stop,
+                    suggested_target=run.suggested_target,
                 )
 
     # Fetch all prices — crypto batched into one CoinGecko call, stocks via Finnhub
