@@ -1,6 +1,5 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
-import GoogleProvider from "next-auth/providers/google";
 
 const API = process.env.INTERNAL_API_URL ?? "http://localhost:8000";
 
@@ -27,14 +26,6 @@ export const authOptions: NextAuthOptions = {
         return { ...user, accessToken: access_token };
       },
     }),
-    ...(process.env.GOOGLE_CLIENT_ID
-      ? [
-          GoogleProvider({
-            clientId: process.env.GOOGLE_CLIENT_ID!,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-          }),
-        ]
-      : []),
   ],
   callbacks: {
     async jwt({ token, user }) {

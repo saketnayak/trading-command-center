@@ -9,7 +9,7 @@ class RunOutcome(Base):
     __tablename__ = "run_outcomes"
     __table_args__ = (UniqueConstraint("run_id"),)
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("runs.id"))
+    run_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("runs.id", ondelete="CASCADE"))
     ticker: Mapped[str] = mapped_column(String(16))
     verdict: Mapped[str] = mapped_column(String)
     analysis_date: Mapped[str] = mapped_column(String)  # YYYY-MM-DD string

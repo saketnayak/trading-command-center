@@ -19,7 +19,7 @@ class RunVerdict(str, enum.Enum):
 class Run(Base):
     __tablename__ = "runs"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     ticker: Mapped[str] = mapped_column(String(16))
     analysis_date: Mapped[date] = mapped_column(Date)
     llm_provider: Mapped[str] = mapped_column(String)

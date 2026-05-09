@@ -2,6 +2,7 @@ import asyncio
 from uuid import UUID
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect, Query
+from app.services.auth import decode_access_token
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
@@ -286,6 +287,7 @@ async def archive_run(run_id: UUID, db: AsyncSession = Depends(get_db), user: Us
 @router.delete("/runs/{run_id}/delete", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_run(run_id: UUID, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     from app.models.agent_event import AgentEvent
+    from app.models.outcome import RunOutcome
     from app.models.report import Report
     from sqlalchemy import delete as sql_delete
 
@@ -297,6 +299,7 @@ async def delete_run(run_id: UUID, db: AsyncSession = Depends(get_db), user: Use
     if run.status.value == "running":
         raise HTTPException(status.HTTP_409_CONFLICT, "Cannot delete a running run — abort it first")
     await db.execute(sql_delete(AgentEvent).where(AgentEvent.run_id == run_id))
+    await db.execute(sql_delete(RunOutcome).where(RunOutcome.run_id == run_id))
     await db.execute(sql_delete(Report).where(Report.run_id == run_id))
     await db.delete(run)
     await db.commit()
@@ -332,6 +335,7 @@ async def bulk_delete_runs(
     user: User = Depends(get_current_user),
 ):
     from app.models.agent_event import AgentEvent
+    from app.models.outcome import RunOutcome
     from app.models.report import Report as ReportModel
     from sqlalchemy import delete as sql_delete
 
@@ -347,6 +351,7 @@ async def bulk_delete_runs(
             skipped_running.append(str(run_id))
             continue
         await db.execute(sql_delete(AgentEvent).where(AgentEvent.run_id == run_id))
+        await db.execute(sql_delete(RunOutcome).where(RunOutcome.run_id == run_id))
         await db.execute(sql_delete(ReportModel).where(ReportModel.run_id == run_id))
         await db.delete(run)
         deleted.append(str(run_id))
@@ -387,7 +392,12 @@ async def get_run_events(run_id: UUID, db: AsyncSession = Depends(get_db), _user
 
 
 @router.websocket("/ws/runs/{run_id}")
-async def run_websocket(run_id: str, ws: WebSocket):
+async def run_websocket(run_id: str, ws: WebSocket, token: str = Query(...)):
+    try:
+        decode_access_token(token)
+    except Exception:
+        await ws.close(code=4001)
+        return
     await ws_manager.connect(run_id, ws)
     try:
         while True:

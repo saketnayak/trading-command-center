@@ -8,7 +8,7 @@ from app.database import Base
 class Watchlist(Base):
     __tablename__ = "watchlists"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String, default="My Watchlist")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
