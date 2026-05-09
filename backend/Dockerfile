@@ -12,4 +12,5 @@ RUN python /tmp/tradingagents_patches/apply_patches.py
 
 COPY . .
 
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn main:app --host 0.0.0.0 --port 8000"]
+RUN chmod +x start.sh
+CMD ["./start.sh"]

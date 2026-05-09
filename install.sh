@@ -92,11 +92,26 @@ done
 ALIAS_BLOCK='
 # AgentFloor management alias — added by installer
 agentfloor() {
+  local DC="docker compose --env-file $HOME/.agentfloor/.env -f $HOME/.agentfloor/docker-compose.yml"
   case "$1" in
-    update)  docker compose --env-file "$HOME/.agentfloor/.env" -f "$HOME/.agentfloor/docker-compose.yml" pull \
-               && docker compose --env-file "$HOME/.agentfloor/.env" -f "$HOME/.agentfloor/docker-compose.yml" up -d ;;
-    logs)    docker compose --env-file "$HOME/.agentfloor/.env" -f "$HOME/.agentfloor/docker-compose.yml" logs -f ;;
-    *)       docker compose --env-file "$HOME/.agentfloor/.env" -f "$HOME/.agentfloor/docker-compose.yml" "$@" ;;
+    update)
+      # Pull latest images and restart app containers; db is left untouched.
+      $DC pull backend frontend nginx \
+        && $DC up -d --no-deps backend frontend nginx ;;
+    restart)
+      # Restart only app containers — never touches db so data is always safe.
+      $DC restart backend frontend nginx ;;
+    stop)
+      # Stop all containers (db data is preserved in the named volume).
+      $DC stop ;;
+    start)
+      $DC up -d ;;
+    logs)
+      $DC logs -f "${2:-}" ;;
+    status)
+      $DC ps ;;
+    *)
+      $DC "$@" ;;
   esac
 }'
 
@@ -113,7 +128,9 @@ echo -e "${BOLD}  AgentFloor is running!${RESET}"
 echo -e "  Open ${CYAN}http://localhost${RESET} and register your admin account."
 echo ""
 echo -e "  ${BOLD}Useful commands (restart your shell first):${RESET}"
+echo -e "    agentfloor restart   restart app (db untouched, data safe)"
 echo -e "    agentfloor update    pull the latest version"
-echo -e "    agentfloor logs      stream logs"
-echo -e "    agentfloor stop      shut down"
+echo -e "    agentfloor logs      stream all logs"
+echo -e "    agentfloor stop      shut down (data preserved)"
+echo -e "    agentfloor status    show container status"
 echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
