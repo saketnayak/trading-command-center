@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { addHolding, updateHolding, deleteHolding, addWatchlistItem, getWatchlist, getProviderModels } from "@/lib/api";
@@ -30,6 +30,43 @@ interface WatchDraft {
 
 const PROVIDERS = ["openai", "anthropic", "google", "groq", "ollama", "vllm"];
 const DEPTHS = ["quick", "standard", "deep"] as const;
+
+type SortKey = "ticker" | "shares" | "avg_cost" | "current_price" | "market_value" | "unrealized_pnl" | "last_analysis";
+type SortDir = "asc" | "desc";
+
+function SortableHeader({
+  label,
+  colKey,
+  sortKey,
+  sortDir,
+  onSort,
+  align = "right",
+}: {
+  label: string;
+  colKey: SortKey;
+  sortKey: SortKey | null;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
+  align?: "left" | "right";
+}) {
+  const active = sortKey === colKey;
+  const arrow = active ? (sortDir === "asc" ? " ↑" : " ↓") : "";
+  return (
+    <th
+      className={`px-4 py-3 text-${align} cursor-pointer select-none group whitespace-nowrap`}
+      onClick={() => onSort(colKey)}
+    >
+      <span className={active ? "text-blue-400" : "group-hover:text-slate-200 transition-colors"}>
+        {label}
+        {active ? (
+          <span className="text-blue-400">{arrow}</span>
+        ) : (
+          <span className="text-slate-600 group-hover:text-slate-400 ml-0.5">↕</span>
+        )}
+      </span>
+    </th>
+  );
+}
 
 function fmtNum(n: number | null, decimals = 2, suffix = ""): string {
   if (n == null) return "—";
@@ -222,7 +259,41 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   const [addingNew, setAddingNew] = useState(false);
   const [newDraft, setNewDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "" });
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const newTickerRef = useRef<HTMLInputElement>(null);
+
+  function handleSort(key: SortKey) {
+    if (sortKey === key) {
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortKey(null); setSortDir("asc"); }
+    } else {
+      setSortKey(key);
+      setSortDir(key === "ticker" ? "asc" : "desc");
+    }
+  }
+
+  const sortedHoldings = useMemo(() => {
+    if (!sortKey) return holdings;
+    return [...holdings].sort((a, b) => {
+      let av: number | string | null;
+      let bv: number | string | null;
+      if (sortKey === "ticker") { av = a.ticker; bv = b.ticker; }
+      else if (sortKey === "last_analysis") {
+        av = a.last_run?.analysis_date ?? null;
+        bv = b.last_run?.analysis_date ?? null;
+      }
+      else { av = a[sortKey] as number | null; bv = b[sortKey] as number | null; }
+
+      // nulls always last
+      if (av == null && bv == null) return 0;
+      if (av == null) return 1;
+      if (bv == null) return -1;
+
+      const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [holdings, sortKey, sortDir]);
 
   useEffect(() => {
     if (addingNew) newTickerRef.current?.focus();
@@ -313,25 +384,25 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           <thead className="sticky top-0 bg-navy-700 text-slate-400 text-xs uppercase tracking-wider">
             <tr>
               {hasFundamentals && <th className="w-6 px-2 py-3" />}
-              <th className="text-left px-4 py-3">Ticker</th>
-              <th className="text-right px-4 py-3">Shares</th>
-              <th className="text-right px-4 py-3">Avg Cost</th>
-              <th className="text-right px-4 py-3">Current Price</th>
-              <th className="text-right px-4 py-3">Market Value</th>
-              <th className="text-right px-4 py-3">Unrealized P&amp;L</th>
-              <th className="text-left px-4 py-3">Last Analysis</th>
+              <SortableHeader label="Ticker"         colKey="ticker"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="left" />
+              <SortableHeader label="Shares"         colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Avg Cost"       colKey="avg_cost"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Current Price"  colKey="current_price"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Market Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Unrealized P&L" colKey="unrealized_pnl" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Last Analysis"  colKey="last_analysis"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="left" />
               <th className="text-left px-4 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {holdings.length === 0 && !addingNew ? (
+            {sortedHoldings.length === 0 && !addingNew ? (
               <tr>
                 <td colSpan={colSpan} className="text-center text-slate-500 px-4 py-8">
                   No holdings. Add a row below or upload a CSV.
                 </td>
               </tr>
             ) : (
-              holdings.map((h) => {
+              sortedHoldings.map((h) => {
                 const isEditing = editingId === h.id;
                 const isExpanded = expandedIds.has(h.id);
                 const fundData = fundamentals?.[h.ticker] ?? null;
