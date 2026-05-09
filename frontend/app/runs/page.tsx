@@ -31,16 +31,13 @@ export default function RunsPage() {
     queryFn: () =>
       getRuns({
         ...(filters.ticker ? { ticker: filters.ticker } : {}),
+        ...(filters.status ? { status: filters.status } : {}),
         ...(filters.verdict ? { verdict: filters.verdict } : {}),
         archived: tab === "archived",
       }),
   });
 
-  const runs: Run[] = data
-    ? filters.status
-      ? data.filter((r) => r.status === filters.status)
-      : data
-    : [];
+  const runs: Run[] = data ?? [];
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: ["runs"] });

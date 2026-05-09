@@ -16,9 +16,10 @@ async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Resp
   });
 }
 
-export async function getRuns(params?: { ticker?: string; verdict?: string; archived?: boolean; limit?: number; offset?: number }): Promise<Run[]> {
+export async function getRuns(params?: { ticker?: string; status?: string; verdict?: string; archived?: boolean; limit?: number; offset?: number }): Promise<Run[]> {
   const p: Record<string, string> = {};
   if (params?.ticker) p.ticker = params.ticker;
+  if (params?.status) p.status = params.status;
   if (params?.verdict) p.verdict = params.verdict;
   if (params?.archived) p.archived = "true";
   if (params?.limit != null) p.limit = String(params.limit);

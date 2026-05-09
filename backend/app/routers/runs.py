@@ -74,10 +74,11 @@ def _run_to_response(run: Run) -> RunResponse:
 @router.get("/runs", response_model=list[RunResponse])
 async def list_runs(
     ticker: str | None = Query(None),
+    status: str | None = Query(None),
     verdict: str | None = Query(None),
     user_id: UUID | None = Query(None),
     archived: bool = Query(False),
-    limit: int = Query(50, ge=1, le=200),
+    limit: int = Query(200, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
@@ -86,6 +87,8 @@ async def list_runs(
     q = q.where(Run.archived == archived)
     if ticker:
         q = q.where(Run.ticker.ilike(ticker))
+    if status:
+        q = q.where(Run.status == status)
     if verdict:
         q = q.where(Run.verdict == verdict)
     if user_id:
