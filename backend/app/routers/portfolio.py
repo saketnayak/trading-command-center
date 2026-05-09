@@ -783,7 +783,7 @@ async def batch_analyze_holdings(
     user: User = Depends(get_current_user),
 ):
     from app.models.run import Run, RunStatus
-    from app.services.job_manager import start_run
+    from app.services.job_manager import start_runs_batch
 
     await _verify_portfolio_access(portfolio_id, user.id, db)
 
@@ -832,8 +832,8 @@ async def batch_analyze_holdings(
 
     await db.commit()
 
-    for item in queued:
-        await start_run(item["run_id"], {
+    await start_runs_batch([
+        (item["run_id"], {
             "ticker": item["ticker"],
             "analysis_date": str(date.today()),
             "llm_provider": body.llm_provider,
@@ -841,6 +841,8 @@ async def batch_analyze_holdings(
             "depth": body.depth,
             "analysts": body.analysts,
         })
+        for item in queued
+    ])
 
     return BatchAnalyzeResult(queued=queued, skipped=skipped)
 
