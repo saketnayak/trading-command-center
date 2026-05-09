@@ -8,11 +8,12 @@ interface ApiKeyRowProps {
   label?: string;
   description?: string;
   placeholder?: string;
+  docsUrl?: string;
   isSet: boolean;
   onSaved: () => void;
 }
 
-export function ApiKeyRow({ provider, label, description, placeholder, isSet, onSaved }: ApiKeyRowProps) {
+export function ApiKeyRow({ provider, label, description, placeholder, docsUrl, isSet, onSaved }: ApiKeyRowProps) {
   const [value, setValue] = useState("");
   const [savedResult, setSavedResult] = useState<"valid" | "invalid" | null>(null);
 
@@ -31,7 +32,23 @@ export function ApiKeyRow({ provider, label, description, placeholder, isSet, on
   return (
     <div className="flex items-start gap-4 px-4 py-3">
       <div className="w-36 shrink-0">
-        <div className="text-slate-200 text-sm">{displayName}</div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-slate-200 text-sm">{displayName}</span>
+          {docsUrl && (
+            <a
+              href={docsUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="Get API key"
+              className="text-slate-500 hover:text-blue-400 transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                <path d="M6.22 8.72a.75.75 0 0 0 1.06 1.06l5.22-5.22v1.69a.75.75 0 0 0 1.5 0v-3.5a.75.75 0 0 0-.75-.75h-3.5a.75.75 0 0 0 0 1.5h1.69L6.22 8.72Z" />
+                <path d="M3.5 6.75c0-.69.56-1.25 1.25-1.25H7A.75.75 0 0 0 7 4H4.75A2.75 2.75 0 0 0 2 6.75v4.5A2.75 2.75 0 0 0 4.75 14h4.5A2.75 2.75 0 0 0 12 11.25V9a.75.75 0 0 0-1.5 0v2.25c0 .69-.56 1.25-1.25 1.25h-4.5c-.69 0-1.25-.56-1.25-1.25v-4.5Z" />
+              </svg>
+            </a>
+          )}
+        </div>
         {description && <div className="text-slate-500 text-xs mt-0.5">{description}</div>}
       </div>
       <span className={`text-xs w-28 shrink-0 mt-0.5 ${isSet ? "text-green-400" : "text-slate-500"}`}>

@@ -9,11 +9,11 @@ import { ApiKeyRow } from "@/components/settings/ApiKeyRow";
 import { ServerUrlRow } from "@/components/settings/ServerUrlRow";
 import { TeamMemberRow } from "@/components/settings/TeamMemberRow";
 
-const CLOUD_PROVIDERS: { provider: string; label: string; placeholder: string }[] = [
-  { provider: "openai",    label: "OpenAI",    placeholder: "sk-…" },
-  { provider: "anthropic", label: "Anthropic", placeholder: "sk-ant-…" },
-  { provider: "google",    label: "Google",    placeholder: "AIza…" },
-  { provider: "groq",      label: "Groq",      placeholder: "gsk_…" },
+const CLOUD_PROVIDERS: { provider: string; label: string; placeholder: string; docsUrl: string }[] = [
+  { provider: "openai",    label: "OpenAI",    placeholder: "sk-…",     docsUrl: "https://platform.openai.com/api-keys" },
+  { provider: "anthropic", label: "Anthropic", placeholder: "sk-ant-…", docsUrl: "https://console.anthropic.com/settings/keys" },
+  { provider: "google",    label: "Google",    placeholder: "AIza…",    docsUrl: "https://aistudio.google.com/app/apikey" },
+  { provider: "groq",      label: "Groq",      placeholder: "gsk_…",    docsUrl: "https://console.groq.com/keys" },
 ];
 
 const LOCAL_PROVIDERS: { provider: "ollama" | "vllm"; label: string }[] = [
@@ -198,13 +198,14 @@ export default function SettingsPage() {
         {isAdmin && (
           <SectionCard title="LLM Providers" description="API keys and server URLs used when running analyses.">
             <SubGroupLabel label="Cloud APIs" />
-            {CLOUD_PROVIDERS.map(({ provider, label, placeholder }, i) => (
+            {CLOUD_PROVIDERS.map(({ provider, label, placeholder, docsUrl }, i) => (
               <div key={provider}>
                 {i > 0 && <Divider />}
                 <ApiKeyRow
                   provider={provider}
                   label={label}
                   placeholder={placeholder}
+                  docsUrl={docsUrl}
                   isSet={apiKeys.find((k) => k.provider === provider)?.is_valid ?? false}
                   onSaved={refetchKeys}
                 />
@@ -236,6 +237,7 @@ export default function SettingsPage() {
               label="Finnhub"
               description="Live portfolio prices + outcome tracking (+7/14/30/90d)"
               placeholder="Your Finnhub API key"
+              docsUrl="https://finnhub.io/dashboard"
               isSet={apiKeys.find((k) => k.provider === "finnhub")?.is_valid ?? false}
               onSaved={refetchKeys}
             />
