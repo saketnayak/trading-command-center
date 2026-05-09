@@ -54,12 +54,16 @@ Then open **http://localhost** and register your admin account.
 **Manage the running stack:**
 
 ```bash
+agentfloor restart   # restart app containers (db untouched, data safe)
 agentfloor update    # pull the latest version
 agentfloor logs      # stream logs
-agentfloor stop      # shut down
+agentfloor stop      # shut down (data preserved)
+agentfloor start     # start again after stop
 ```
 
 > **Windows:** see `install.ps1` in the repo root for the PowerShell equivalent.
+
+> **⚠ Data warning:** All your runs, portfolios, and API keys are stored in a Docker named volume (`pgdata`). The commands above are all safe — none of them delete that volume. The one command that **will permanently erase all data** is `docker compose down -v` (the `-v` flag removes volumes). Avoid running it unless you intend a full reset.
 
 ---
 
