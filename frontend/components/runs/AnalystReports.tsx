@@ -25,7 +25,10 @@ export function AnalystReports({ report, analysts }: Props) {
   }
 
   const activeAnalyst = activeTab || analysts[0] || "";
-  const content = report.raw_report?.[`${activeAnalyst}_report`] ?? report.raw_report?.[activeAnalyst];
+  // TradingAgents writes "sentiment_report" for the social analyst; all others follow the {name}_report pattern.
+  const RAW_KEY: Record<string, string> = { social: "sentiment_report" };
+  const rawKey = RAW_KEY[activeAnalyst] ?? `${activeAnalyst}_report`;
+  const content = report.raw_report?.[rawKey] ?? report.raw_report?.[activeAnalyst];
   const display =
     content === undefined || content === null
       ? null
