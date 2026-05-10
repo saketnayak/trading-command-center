@@ -366,6 +366,7 @@ export default function PortfolioPage() {
               <InsightsDashboard
                 portfolioId={selectedId}
                 hasHoldings={hasHoldings}
+                portfolioName={selectedPortfolio?.name}
               />
             )}
 

@@ -310,9 +310,18 @@ function GenerateForm({
   );
 }
 
+// ── PDF export helper ─────────────────────────────────────────────────────────
+
+function triggerDownload(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Main Insight View ─────────────────────────────────────────────────────────
 
-function InsightView({ insight }: { insight: PortfolioInsight }) {
+function InsightView({ insight, portfolioName }: { insight: PortfolioInsight; portfolioName?: string }) {
   if (insight.status === "pending" || insight.status === "running") {
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
@@ -338,6 +347,27 @@ function InsightView({ insight }: { insight: PortfolioInsight }) {
     );
   }
 
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function handleExportPdf() {
+    setPdfLoading(true);
+    try {
+      const [{ pdf }, { InsightDocument }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/lib/export/InsightPdf"),
+      ]);
+      const blob = await pdf(
+        <InsightDocument insight={insight} portfolioName={portfolioName} />
+      ).toBlob();
+      const date = new Date(insight.generated_at).toISOString().slice(0, 10);
+      triggerDownload(blob, `${portfolioName ?? "portfolio"}-insights-${date}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   return (
     <div className="space-y-5">
       {/* Header: score + stance + summary */}
@@ -353,6 +383,27 @@ function InsightView({ insight }: { insight: PortfolioInsight }) {
             <span className="text-slate-600 text-xs">{fmtDate(insight.generated_at)}</span>
             <span className="text-slate-600 text-xs">·</span>
             <span className="text-slate-600 text-xs capitalize">{insight.trigger}</span>
+            <div className="flex-1" />
+            <button
+              onClick={handleExportPdf}
+              disabled={pdfLoading}
+              className="text-xs text-slate-400 hover:text-slate-200 border border-slate-700 rounded px-2.5 py-1 disabled:opacity-40 flex items-center gap-1.5 transition-colors"
+            >
+              {pdfLoading ? (
+                <>
+                  <span className="inline-block w-3 h-3 border border-slate-400 border-t-transparent rounded-full animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3">
+                    <path d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z" />
+                    <path d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z" />
+                  </svg>
+                  Export PDF
+                </>
+              )}
+            </button>
           </div>
           <p className="text-slate-300 text-sm leading-relaxed">{insight.summary}</p>
         </div>
@@ -436,9 +487,10 @@ function InsightView({ insight }: { insight: PortfolioInsight }) {
 interface InsightsDashboardProps {
   portfolioId: string;
   hasHoldings: boolean;
+  portfolioName?: string;
 }
 
-export function InsightsDashboard({ portfolioId, hasHoldings }: InsightsDashboardProps) {
+export function InsightsDashboard({ portfolioId, hasHoldings, portfolioName }: InsightsDashboardProps) {
   const qc = useQueryClient();
   const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null);
   const [showGenerate, setShowGenerate] = useState(false);
@@ -555,7 +607,7 @@ export function InsightsDashboard({ portfolioId, hasHoldings }: InsightsDashboar
         )}
 
         {selectedInsight && !showGenerate && (
-          <InsightView insight={selectedInsight} />
+          <InsightView insight={selectedInsight} portfolioName={portfolioName} />
         )}
       </div>
     </div>
