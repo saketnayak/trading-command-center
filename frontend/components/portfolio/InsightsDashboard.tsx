@@ -322,6 +322,27 @@ function triggerDownload(blob: Blob, filename: string) {
 // ── Main Insight View ─────────────────────────────────────────────────────────
 
 function InsightView({ insight, portfolioName }: { insight: PortfolioInsight; portfolioName?: string }) {
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function handleExportPdf() {
+    setPdfLoading(true);
+    try {
+      const [{ pdf }, { InsightDocument }] = await Promise.all([
+        import("@react-pdf/renderer"),
+        import("@/lib/export/InsightPdf"),
+      ]);
+      const blob = await pdf(
+        <InsightDocument insight={insight} portfolioName={portfolioName} />
+      ).toBlob();
+      const date = new Date(insight.generated_at).toISOString().slice(0, 10);
+      triggerDownload(blob, `${portfolioName ?? "portfolio"}-insights-${date}.pdf`);
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   if (insight.status === "pending" || insight.status === "running") {
     return (
       <div className="flex flex-col items-center gap-4 py-16 text-center">
@@ -345,27 +366,6 @@ function InsightView({ insight, portfolioName }: { insight: PortfolioInsight; po
         <p className="text-xs text-red-400">{insight.error ?? "Unknown error"}</p>
       </div>
     );
-  }
-
-  const [pdfLoading, setPdfLoading] = useState(false);
-
-  async function handleExportPdf() {
-    setPdfLoading(true);
-    try {
-      const [{ pdf }, { InsightDocument }] = await Promise.all([
-        import("@react-pdf/renderer"),
-        import("@/lib/export/InsightPdf"),
-      ]);
-      const blob = await pdf(
-        <InsightDocument insight={insight} portfolioName={portfolioName} />
-      ).toBlob();
-      const date = new Date(insight.generated_at).toISOString().slice(0, 10);
-      triggerDownload(blob, `${portfolioName ?? "portfolio"}-insights-${date}.pdf`);
-    } catch (err) {
-      console.error("PDF generation failed:", err);
-    } finally {
-      setPdfLoading(false);
-    }
   }
 
   return (
