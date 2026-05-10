@@ -28,8 +28,8 @@ const SEVERITY_LABEL: Record<string, string> = {
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: HEADER_HEIGHT + 20,
-    paddingBottom: FOOTER_HEIGHT + 20,
+    paddingTop: HEADER_HEIGHT + 16,
+    paddingBottom: FOOTER_HEIGHT + 16,
     paddingHorizontal: 40,
     fontFamily: "Helvetica",
     backgroundColor: "#ffffff",
@@ -66,84 +66,84 @@ const styles = StyleSheet.create({
   pageNum:    { fontSize: 7, color: "#94a3b8" },
 
   // Cover
-  coverLabel: { fontSize: 10, color: "#94a3b8", marginBottom: 6 },
-  coverTitle: { fontSize: 28, fontFamily: "Helvetica-Bold", color: "#1e1b4b", marginBottom: 4 },
-  coverSub:   { fontSize: 10, color: "#64748b", marginBottom: 20, paddingBottom: 20, borderBottomWidth: 0.5, borderBottomColor: "#e2e8f0" },
+  coverLabel: { fontSize: 10, color: "#94a3b8", marginBottom: 4 },
+  coverTitle: { fontSize: 26, fontFamily: "Helvetica-Bold", color: "#1e1b4b", marginBottom: 3 },
+  coverSub:   { fontSize: 10, color: "#64748b", marginBottom: 12, paddingBottom: 12, borderBottomWidth: 0.5, borderBottomColor: "#e2e8f0" },
 
   stanceBadge: {
-    paddingVertical: 6, paddingHorizontal: 14,
-    borderRadius: 4, alignSelf: "flex-start", marginBottom: 16,
+    paddingVertical: 4, paddingHorizontal: 12,
+    borderRadius: 4, alignSelf: "flex-start", marginBottom: 8,
   },
-  stanceText: { fontSize: 13, fontFamily: "Helvetica-Bold", color: "#ffffff" },
+  stanceText: { fontSize: 12, fontFamily: "Helvetica-Bold", color: "#ffffff" },
 
   // Health score box
-  scoreRow:   { flexDirection: "row", alignItems: "center", gap: 20, marginBottom: 20 },
+  scoreRow:   { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 12 },
   scoreBox:   {
     borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 6,
-    paddingVertical: 12, paddingHorizontal: 20,
+    paddingVertical: 8, paddingHorizontal: 16,
     backgroundColor: "#f8fafc", alignItems: "center",
   },
-  scoreNum:   { fontSize: 32, fontFamily: "Helvetica-Bold", color: "#1e1b4b" },
-  scoreDen:   { fontSize: 10, color: "#94a3b8" },
-  scoreLabel: { fontSize: 8, color: "#94a3b8", letterSpacing: 1, marginTop: 2 },
+  scoreNum:   { fontSize: 26, fontFamily: "Helvetica-Bold", color: "#1e1b4b" },
+  scoreDen:   { fontSize: 9, color: "#94a3b8" },
+  scoreLabel: { fontSize: 7, color: "#94a3b8", letterSpacing: 1, marginTop: 2 },
   summaryBox: {
     flex: 1, borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 6,
-    padding: 12, backgroundColor: "#f8fafc",
+    padding: 10, backgroundColor: "#f8fafc",
   },
-  summaryText: { fontSize: 10, color: "#1e293b", lineHeight: 1.6 },
+  summaryText: { fontSize: 9.5, color: "#1e293b", lineHeight: 1.5 },
 
   // Meta
   metaStrip: {
     flexDirection: "row", borderWidth: 1, borderColor: "#e2e8f0",
-    borderRadius: 4, overflow: "hidden", alignSelf: "flex-start",
+    borderRadius: 4, overflow: "hidden", alignSelf: "flex-start", marginBottom: 14,
   },
-  metaCell:     { paddingVertical: 6, paddingHorizontal: 12, borderRightWidth: 1, borderRightColor: "#e2e8f0", backgroundColor: "#f8fafc" },
-  metaCellLast: { paddingVertical: 6, paddingHorizontal: 12, backgroundColor: "#f8fafc" },
+  metaCell:     { paddingVertical: 5, paddingHorizontal: 10, borderRightWidth: 1, borderRightColor: "#e2e8f0", backgroundColor: "#f8fafc" },
+  metaCellLast: { paddingVertical: 5, paddingHorizontal: 10, backgroundColor: "#f8fafc" },
   metaLabel:    { fontSize: 7, color: "#94a3b8", letterSpacing: 1, marginBottom: 2 },
   metaValue:    { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#1e293b" },
 
   // Section title
-  sectionRow:    { flexDirection: "row", alignItems: "stretch", marginBottom: 12, marginTop: 4 },
+  sectionRow:    { flexDirection: "row", alignItems: "stretch", marginBottom: 6, marginTop: 10 },
   accentBar:     { width: 4, borderRadius: 2, marginRight: 10 },
-  sectionTitle:  { fontSize: 14, fontFamily: "Helvetica-Bold", color: "#1e1b4b", paddingTop: 1 },
+  sectionTitle:  { fontSize: 13, fontFamily: "Helvetica-Bold", color: "#1e1b4b", paddingTop: 1 },
 
   // Action items
   actionItem: {
-    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
     borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 4,
-    padding: 8, marginBottom: 6, backgroundColor: "#f8fafc",
+    padding: 6, marginBottom: 4, backgroundColor: "#f8fafc",
   },
-  actionBadge: { paddingVertical: 2, paddingHorizontal: 6, borderRadius: 3 },
-  actionBadgeText: { fontSize: 8, fontFamily: "Helvetica-Bold", color: "#ffffff" },
-  actionTicker: { fontSize: 10, fontFamily: "Helvetica-Bold", color: "#1e293b", marginBottom: 2 },
-  actionRationale: { fontSize: 9, color: "#64748b", lineHeight: 1.5 },
+  actionBadge: { paddingVertical: 2, paddingHorizontal: 5, borderRadius: 3 },
+  actionBadgeText: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#ffffff" },
+  actionTicker: { fontSize: 9.5, fontFamily: "Helvetica-Bold", color: "#1e293b", marginBottom: 1 },
+  actionRationale: { fontSize: 8.5, color: "#64748b", lineHeight: 1.4 },
   priorityDot: { width: 6, height: 6, borderRadius: 3, marginTop: 3 },
 
   // Risk alerts
   riskItem: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    flexDirection: "row", alignItems: "flex-start", gap: 7,
     borderWidth: 1, borderColor: "#e2e8f0", borderRadius: 4,
-    padding: 8, marginBottom: 6, backgroundColor: "#fefce8",
+    padding: 6, marginBottom: 4, backgroundColor: "#fefce8",
   },
-  riskBadge: { paddingVertical: 2, paddingHorizontal: 5, borderRadius: 3 },
-  riskBadgeText: { fontSize: 7, fontFamily: "Helvetica-Bold", color: "#ffffff" },
-  riskDesc:    { fontSize: 9, color: "#1e293b", lineHeight: 1.5, marginBottom: 3 },
-  riskTickers: { flexDirection: "row", flexWrap: "wrap", gap: 4 },
-  riskTicker:  { fontSize: 8, color: "#475569", backgroundColor: "#e2e8f0", paddingVertical: 1, paddingHorizontal: 4, borderRadius: 2 },
+  riskBadge: { paddingVertical: 2, paddingHorizontal: 4, borderRadius: 3 },
+  riskBadgeText: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: "#ffffff" },
+  riskDesc:    { fontSize: 8.5, color: "#1e293b", lineHeight: 1.4, marginBottom: 3 },
+  riskTickers: { flexDirection: "row", flexWrap: "wrap", gap: 3 },
+  riskTicker:  { fontSize: 7.5, color: "#475569", backgroundColor: "#e2e8f0", paddingVertical: 1, paddingHorizontal: 3, borderRadius: 2 },
 
   // Sector
-  sectorRow:  { flexDirection: "row", alignItems: "center", marginBottom: 5 },
-  sectorName: { width: 120, fontSize: 9, color: "#475569", textAlign: "right" },
-  sectorBar:  { height: 10, backgroundColor: "#6366f1", borderRadius: 2, marginHorizontal: 8 },
-  sectorPct:  { fontSize: 9, color: "#64748b" },
+  sectorRow:  { flexDirection: "row", alignItems: "center", marginBottom: 3 },
+  sectorName: { width: 130, fontSize: 8.5, color: "#475569", textAlign: "right" },
+  sectorBar:  { height: 9, backgroundColor: "#6366f1", borderRadius: 2, marginHorizontal: 7 },
+  sectorPct:  { fontSize: 8.5, color: "#64748b" },
 
   // Strengths / Weaknesses
-  swRow:   { flexDirection: "row", gap: 12, marginTop: 4 },
-  swBox:   { flex: 1, borderWidth: 1, borderRadius: 4, padding: 10 },
-  swTitle: { fontSize: 9, fontFamily: "Helvetica-Bold", letterSpacing: 1, marginBottom: 6 },
-  swItem:  { flexDirection: "row", gap: 5, marginBottom: 4 },
-  swBullet:{ fontSize: 9, color: "#64748b" },
-  swText:  { fontSize: 9, color: "#1e293b", lineHeight: 1.5, flex: 1 },
+  swRow:   { flexDirection: "row", gap: 10, marginTop: 4 },
+  swBox:   { flex: 1, borderWidth: 1, borderRadius: 4, padding: 8 },
+  swTitle: { fontSize: 8.5, fontFamily: "Helvetica-Bold", letterSpacing: 1, marginBottom: 5 },
+  swItem:  { flexDirection: "row", gap: 4, marginBottom: 3 },
+  swBullet:{ fontSize: 8.5, color: "#64748b" },
+  swText:  { fontSize: 8.5, color: "#1e293b", lineHeight: 1.4, flex: 1 },
 });
 
 function PageHeader({ date }: { date: string }) {
@@ -247,9 +247,9 @@ export function InsightDocument({ insight, portfolioName }: { insight: Portfolio
           ))}
         </View>
 
-        {/* Action Items */}
+        {/* Action Items — flows directly after cover, no forced page break */}
         {(insight.action_items?.length ?? 0) > 0 && (
-          <View break>
+          <View>
             <SectionTitle title="Action Items" accent="#7c3aed" />
             {insight.action_items!.map((item, i) => (
               <View key={i} style={styles.actionItem}>
@@ -268,7 +268,7 @@ export function InsightDocument({ insight, portfolioName }: { insight: Portfolio
 
         {/* Risk Alerts */}
         {(insight.risk_alerts?.length ?? 0) > 0 && (
-          <View break>
+          <View>
             <SectionTitle title="Risk Alerts" accent="#dc2626" />
             {insight.risk_alerts!.map((alert, i) => (
               <View key={i} style={styles.riskItem}>
@@ -292,7 +292,7 @@ export function InsightDocument({ insight, portfolioName }: { insight: Portfolio
 
         {/* Sector Exposure */}
         {sectors.length > 0 && (
-          <View break>
+          <View>
             <SectionTitle title="Sector Exposure" accent="#0891b2" />
             {sectors.map(([sector, pct]) => (
               <View key={sector} style={styles.sectorRow}>
@@ -306,7 +306,7 @@ export function InsightDocument({ insight, portfolioName }: { insight: Portfolio
 
         {/* Strengths & Weaknesses */}
         {((insight.strengths?.length ?? 0) > 0 || (insight.weaknesses?.length ?? 0) > 0) && (
-          <View break>
+          <View>
             <SectionTitle title="Strengths &amp; Weaknesses" accent="#16a34a" />
             <View style={styles.swRow}>
               {(insight.strengths?.length ?? 0) > 0 && (
