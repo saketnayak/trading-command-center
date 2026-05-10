@@ -139,11 +139,22 @@ async def _fetch_price(ticker: str, api_key: Optional[str]) -> Optional[float]:
                 r.raise_for_status()
                 data = r.json()
             c = data.get("c")
-            price = float(c) if c is not None and c != 0 else None
+            pc = data.get("pc")
+            # c == 0 means market is closed / data unavailable; fall back to
+            # previous close (pc) so prices still show on weekends/after-hours.
+            if c is not None and c != 0:
+                price = float(c)
+            elif pc is not None and pc != 0:
+                price = float(pc)
+            else:
+                price = None
         except Exception:
             price = None
 
-    _price_cache[ticker] = (price, now + _CACHE_TTL)
+    # Don't cache None for the full hour — retry after 2 minutes so a transient
+    # failure or a market-close race doesn't lock out prices for the whole TTL.
+    ttl = _CACHE_TTL if price is not None else 120
+    _price_cache[ticker] = (price, now + ttl)
     return price
 
 

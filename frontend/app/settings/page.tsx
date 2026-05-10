@@ -105,6 +105,7 @@ export default function SettingsPage() {
       setNewPassword("");
       setProfileStatus("success");
       queryClient.invalidateQueries({ queryKey: ["me"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-current"] });
     },
     onError: (err: Error) => {
       setProfileStatus("error");
