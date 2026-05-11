@@ -121,10 +121,18 @@ function agentfloor {
     $dc = "$env:USERPROFILE\.agentfloor\docker-compose.yml"
     switch ($Command) {
         "update" {
-            docker compose --env-file $ef -f $dc pull
-            docker compose --env-file $ef -f $dc up -d
+            # Pull latest images and restart app containers; db is left untouched.
+            docker compose --env-file $ef -f $dc pull backend frontend nginx
+            docker compose --env-file $ef -f $dc up -d --no-deps backend frontend nginx
         }
+        "restart" {
+            # Restart only app containers — never touches db so data is always safe.
+            docker compose --env-file $ef -f $dc restart backend frontend nginx
+        }
+        "start"  { docker compose --env-file $ef -f $dc up -d }
+        "stop"   { docker compose --env-file $ef -f $dc stop }
         "logs"   { docker compose --env-file $ef -f $dc logs -f }
+        "status" { docker compose --env-file $ef -f $dc ps }
         default  { docker compose --env-file $ef -f $dc $Command @Rest }
     }
 }
@@ -141,7 +149,9 @@ Write-Host "  AgentFloor is running!" -ForegroundColor White
 Write-Host "  Open http://localhost and register your admin account." -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  Useful commands (restart PowerShell first):" -ForegroundColor White
+Write-Host "    agentfloor restart   restart app (db untouched, data safe)"
 Write-Host "    agentfloor update    pull the latest version"
-Write-Host "    agentfloor logs      stream logs"
-Write-Host "    agentfloor stop      shut down"
+Write-Host "    agentfloor logs      stream all logs"
+Write-Host "    agentfloor stop      shut down (data preserved)"
+Write-Host "    agentfloor status    show container status"
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
