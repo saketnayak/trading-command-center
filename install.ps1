@@ -14,7 +14,7 @@ function Write-Info    { param($m) Write-Host "[agentfloor] $m" -ForegroundColor
 function Write-Success { param($m) Write-Host "[agentfloor] $m" -ForegroundColor Green }
 function Write-Fatal   { param($m) Write-Host "[agentfloor] ERROR: $m" -ForegroundColor Red; exit 1 }
 
-# ── 1/7  check docker ──────────────────────────────────────────────────────
+# -- 1/7  check docker --------------------------------------------------------
 Write-Info "[1/7] Checking Docker..."
 try { $null = docker version 2>&1 } catch { Write-Fatal "Docker not found. Install Docker Desktop from https://docker.com then re-run." }
 try { $null = docker compose version 2>&1 } catch { Write-Fatal "Docker Compose plugin not found. Install Docker Desktop." }
@@ -22,11 +22,11 @@ $dockerVer = (docker version --format '{{.Server.Version}}' 2>$null) -replace '\
 if ([int]$dockerVer -lt 24) { Write-Fatal "Docker >= 24 required (found $dockerVer). Please upgrade Docker Desktop." }
 Write-Success "Docker OK"
 
-# ── 2/7  install directory ─────────────────────────────────────────────────
+# -- 2/7  install directory ---------------------------------------------------
 Write-Info "[2/7] Creating install directory at $InstallDir..."
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-# ── 3/7  download files ────────────────────────────────────────────────────
+# -- 3/7  download files ------------------------------------------------------
 Write-Info "[3/7] Downloading configuration files..."
 Invoke-WebRequest "$RepoRaw/docker-compose.prod.yml" -OutFile "$InstallDir\docker-compose.yml" -UseBasicParsing
 Invoke-WebRequest "$RepoRaw/nginx.conf"              -OutFile "$InstallDir\nginx.conf"         -UseBasicParsing
@@ -37,7 +37,7 @@ if ($Version -ne "latest") {
     Write-Info "Pinned to version $Version"
 }
 
-# ── helper: generate 32 random bytes as lowercase hex ─────────────────────
+# -- helper: generate 32 random bytes as lowercase hex ------------------------
 function New-HexSecret {
     $rng = New-Object System.Security.Cryptography.RNGCryptoServiceProvider
     $bytes = New-Object byte[] 32
@@ -45,13 +45,13 @@ function New-HexSecret {
     return ([System.BitConverter]::ToString($bytes) -replace "-", "").ToLower()
 }
 
-# ── 4/7  generate or reuse secrets ────────────────────────────────────────
+# -- 4/7  generate or reuse secrets -------------------------------------------
 Write-Info "[4/7] Generating secrets..."
 $EnvFile = "$InstallDir\.env"
 $GenerateEnv = $false
 
 if (Test-Path $EnvFile) {
-    Write-Info ".env already exists — keeping existing secrets."
+    Write-Info ".env already exists - keeping existing secrets."
     Get-Content $EnvFile | ForEach-Object {
         if ($_ -match "^([^#][^=]+)=(.*)$") { [System.Environment]::SetEnvironmentVariable($Matches[1], $Matches[2]) }
     }
@@ -62,7 +62,7 @@ if (Test-Path $EnvFile) {
     $GenerateEnv    = $true
 }
 
-# ── 5/7  prompt for optional values ───────────────────────────────────────
+# -- 5/7  prompt for optional values ------------------------------------------
 if ($GenerateEnv) {
     $nonInteractiveFlag = [Environment]::GetCommandLineArgs() | Where-Object { $_ -match '-NonInteractive' }
     $hasTerminal = [Environment]::UserInteractive -and (-not [Console]::IsInputRedirected) -and (-not $nonInteractiveFlag)
@@ -73,10 +73,10 @@ if ($GenerateEnv) {
     } else {
         $OpenAiKey   = ""
         $NextAuthUrl = "http://localhost"
-        Write-Info "Non-interactive session — using default URL http://localhost (edit $EnvFile to change)"
+        Write-Info "Non-interactive session - using default URL http://localhost (edit $EnvFile to change)"
     }
 
-# ── 6/7  write .env ───────────────────────────────────────────────────────
+# -- 6/7  write .env ----------------------------------------------------------
     Write-Info "[6/7] Writing $EnvFile..."
     @"
 JWT_SECRET=$JwtSecret
@@ -105,7 +105,7 @@ GOOGLE_CLIENT_SECRET=
     Write-Info "[6/7] Using existing .env."
 }
 
-# ── 7/7  start the stack ───────────────────────────────────────────────────
+# -- 7/7  start the stack -----------------------------------------------------
 Write-Info "[7/7] Starting AgentFloor..."
 docker compose --env-file $EnvFile -f "$InstallDir\docker-compose.yml" up -d
 
@@ -120,14 +120,14 @@ while ($true) {
     if ($Elapsed -ge $Timeout) { Write-Fatal "Timed out. Check logs with: docker compose --env-file $EnvFile -f $InstallDir\docker-compose.yml logs" }
 }
 
-# ── install agentfloor function into PowerShell profile ───────────────────
+# -- install agentfloor function into PowerShell profile ----------------------
 $ProfileDir = Split-Path $PROFILE
 if (-not (Test-Path $ProfileDir)) { New-Item -ItemType Directory -Force -Path $ProfileDir | Out-Null }
 if (-not (Test-Path $PROFILE))    { New-Item -ItemType File      -Force -Path $PROFILE    | Out-Null }
 
 $AliasBlock = @'
 
-# AgentFloor management function — added by installer
+# AgentFloor management function - added by installer
 function agentfloor {
     param([string]$Command, [Parameter(ValueFromRemainingArguments=$true)][string[]]$Rest)
     $ef = "$env:USERPROFILE\.agentfloor\.env"
@@ -139,7 +139,7 @@ function agentfloor {
             docker compose --env-file $ef -f $dc up -d --no-deps backend frontend nginx
         }
         "restart" {
-            # Restart only app containers — never touches db so data is always safe.
+            # Restart only app containers - never touches db so data is always safe.
             docker compose --env-file $ef -f $dc restart backend frontend nginx
         }
         "start"  { docker compose --env-file $ef -f $dc up -d }
@@ -155,9 +155,9 @@ if (-not (Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue | Select-Strin
     Add-Content $PROFILE $AliasBlock
 }
 
-# ── success banner ─────────────────────────────────────────────────────────
+# -- success banner -----------------------------------------------------------
 Write-Host ""
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+Write-Host "==================================================" -ForegroundColor Green
 Write-Host "  AgentFloor is running!" -ForegroundColor White
 Write-Host "  Open http://localhost and register your admin account." -ForegroundColor Cyan
 Write-Host ""
@@ -167,6 +167,6 @@ Write-Host "    agentfloor update    pull the latest version"
 Write-Host "    agentfloor logs      stream all logs"
 Write-Host "    agentfloor stop      shut down (data preserved)"
 Write-Host "    agentfloor status    show container status"
-Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Green
+Write-Host "==================================================" -ForegroundColor Green
 Write-Host "  Log saved to: $LogFile"
 Stop-Transcript | Out-Null
