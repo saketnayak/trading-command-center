@@ -1,5 +1,6 @@
 import base64
-from cryptography.fernet import Fernet
+from typing import Optional
+from cryptography.fernet import Fernet, InvalidToken
 from app.config import settings
 
 
@@ -12,5 +13,9 @@ def encrypt_key(plaintext: str) -> str:
     return _fernet().encrypt(plaintext.encode()).decode()
 
 
-def decrypt_key(ciphertext: str) -> str:
-    return _fernet().decrypt(ciphertext.encode()).decode()
+def decrypt_key(ciphertext: str) -> Optional[str]:
+    """Returns None if the ciphertext was encrypted with a different key."""
+    try:
+        return _fernet().decrypt(ciphertext.encode()).decode()
+    except InvalidToken:
+        return None

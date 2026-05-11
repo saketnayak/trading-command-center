@@ -24,7 +24,7 @@ async def list_api_keys(db: AsyncSession = Depends(get_db), _admin: User = Depen
         provider=k.provider,
         is_valid=k.is_valid,
         validated_at=k.validated_at,
-        masked_key=_mask(decrypt_key(k.encrypted_key)),
+        masked_key=_mask(plain) if (plain := decrypt_key(k.encrypted_key)) else None,
     ) for k in keys]
 
 
