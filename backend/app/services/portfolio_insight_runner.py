@@ -72,6 +72,8 @@ async def _call_llm(provider: str, model: str, api_key: Optional[str], prompt: s
     }
 
     if provider == "openai":
+        if not api_key:
+            raise ValueError("OpenAI API key is not configured. Add it in Settings → API Keys.")
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=90) as client:
             r = await client.post(
@@ -82,6 +84,8 @@ async def _call_llm(provider: str, model: str, api_key: Optional[str], prompt: s
             return r.json()["choices"][0]["message"]["content"]
 
     if provider == "groq":
+        if not api_key:
+            raise ValueError("Groq API key is not configured. Add it in Settings → API Keys.")
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         async with httpx.AsyncClient(timeout=90) as client:
             r = await client.post(
@@ -107,6 +111,8 @@ async def _call_llm(provider: str, model: str, api_key: Optional[str], prompt: s
             return r.json()["choices"][0]["message"]["content"]
 
     if provider == "anthropic":
+        if not api_key:
+            raise ValueError("Anthropic API key is not configured. Add it in Settings → API Keys.")
         url = "https://api.anthropic.com/v1/messages"
         headers = {
             "x-api-key": api_key,
@@ -138,6 +144,8 @@ async def _call_llm(provider: str, model: str, api_key: Optional[str], prompt: s
             return r.json()["choices"][0]["message"]["content"]
 
     if provider == "google":
+        if not api_key:
+            raise ValueError("Google API key is not configured. Add it in Settings → API Keys.")
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/"
             f"{model}:generateContent?key={api_key}"
