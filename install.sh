@@ -50,11 +50,21 @@ fi
 
 # ── 5/7  prompt for optional values ───────────────────────────────────────
 if [ "${GENERATE_ENV:-0}" = "1" ]; then
-  echo ""
-  read -rp "Enter your OpenAI API key       (press Enter to skip): " OPENAI_API_KEY
-  read -rp "Public URL of this install      (default: http://localhost): " NEXTAUTH_URL
-  NEXTAUTH_URL="${NEXTAUTH_URL:-http://localhost}"
-  echo ""
+  if [ -t 0 ]; then
+    # stdin is a terminal — safe to prompt interactively
+    echo ""
+    read -rp "Enter your OpenAI API key       (press Enter to skip): " OPENAI_API_KEY
+    read -rp "Public URL of this install      (default: http://localhost): " NEXTAUTH_URL
+    NEXTAUTH_URL="${NEXTAUTH_URL:-http://localhost}"
+    echo ""
+  else
+    # stdin is a pipe (e.g. curl | bash) — reading would consume script bytes
+    OPENAI_API_KEY=""
+    NEXTAUTH_URL="http://localhost"
+    info "Non-interactive session — using defaults (NEXTAUTH_URL=http://localhost)."
+    info "Edit $INSTALL_DIR/.env to set NEXTAUTH_URL to your server's public address."
+    echo ""
+  fi
 
 # ── 6/7  write .env ───────────────────────────────────────────────────────
   info "[6/7] Writing $INSTALL_DIR/.env..."
