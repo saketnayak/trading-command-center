@@ -133,6 +133,24 @@ export default function SettingsPage() {
   const [restoreFile, setRestoreFile] = useState<File | null>(null);
   const [restoreModalOpen, setRestoreModalOpen] = useState(false);
   const [restoreConfirmText, setRestoreConfirmText] = useState("");
+  const [restoreElapsed, setRestoreElapsed] = useState(0);
+
+  const restoreMutation = useMutation({
+    mutationFn: () => restoreDbBackup(restoreFile!),
+    onSuccess: () => {
+      setRestoreModalOpen(false);
+      setRestoreFile(null);
+      setRestoreConfirmText("");
+    },
+  });
+
+  // Tick elapsed seconds while restore is in progress
+  useEffect(() => {
+    if (!restoreMutation.isPending) { setRestoreElapsed(0); return; }
+    setRestoreElapsed(0);
+    const id = setInterval(() => setRestoreElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, [restoreMutation.isPending]);
 
   async function handleDownloadBackup() {
     setBackupLoading(true);
@@ -151,15 +169,6 @@ export default function SettingsPage() {
       setBackupLoading(false);
     }
   }
-
-  const restoreMutation = useMutation({
-    mutationFn: () => restoreDbBackup(restoreFile!),
-    onSuccess: () => {
-      setRestoreModalOpen(false);
-      setRestoreFile(null);
-      setRestoreConfirmText("");
-    },
-  });
 
   return (
     <>
@@ -465,56 +474,112 @@ SMTP_FROM=noreply@yourdomain.com`}
       </main>
 
       {/* Restore confirmation modal */}
-      {restoreModalOpen && restoreFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-navy-800 border border-slate-700 rounded-xl shadow-xl w-full max-w-md mx-4 p-6 space-y-4">
-            <div className="flex items-center gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-red-400 shrink-0">
-                <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
-              </svg>
-              <h2 className="text-base font-semibold text-white">Restore Database</h2>
-            </div>
-            <p className="text-sm text-slate-300">
-              This will <span className="text-red-400 font-medium">replace all current data</span> with the contents of:
-            </p>
-            <p className="text-xs text-slate-400 font-mono bg-slate-800 rounded px-3 py-2">{restoreFile.name}</p>
-            <p className="text-xs text-slate-500">
-              All runs, portfolios, watchlists, API keys, and user data will be overwritten. This cannot be undone.
-            </p>
-            <div className="space-y-1">
-              <label className="text-xs text-slate-400">Type <span className="font-mono text-slate-200">RESTORE</span> to confirm</label>
-              <input
-                type="text"
-                value={restoreConfirmText}
-                onChange={(e) => setRestoreConfirmText(e.target.value)}
-                placeholder="RESTORE"
-                className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-red-500 font-mono"
-              />
-            </div>
-            {restoreMutation.isError && (
-              <p className="text-xs text-red-400">{(restoreMutation.error as Error).message}</p>
-            )}
-            {restoreMutation.isSuccess && (
-              <p className="text-xs text-green-400">Restore completed successfully.</p>
-            )}
-            <div className="flex gap-2 justify-end pt-1">
-              <button
-                onClick={() => { setRestoreModalOpen(false); setRestoreConfirmText(""); restoreMutation.reset(); }}
-                className="px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => restoreMutation.mutate()}
-                disabled={restoreConfirmText !== "RESTORE" || restoreMutation.isPending}
-                className="px-4 py-1.5 text-sm bg-red-700 hover:bg-red-600 text-white rounded disabled:opacity-40 transition-colors"
-              >
-                {restoreMutation.isPending ? "Restoring…" : "Restore Database"}
-              </button>
+      {restoreModalOpen && restoreFile && (() => {
+        // Estimate restore time: ~5 MB/s effective rate for pg_restore
+        const estimatedSecs = Math.max(10, Math.round(restoreFile.size / (5 * 1024 * 1024)));
+        // Fake progress: grows fast then slows, caps at 95% until done
+        const progress = restoreMutation.isSuccess
+          ? 100
+          : restoreMutation.isPending
+            ? Math.min(95, Math.round(100 * (1 - Math.exp(-restoreElapsed / (estimatedSecs * 0.7)))))
+            : 0;
+        const remaining = Math.max(0, estimatedSecs - restoreElapsed);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-navy-800 border border-slate-700 rounded-xl shadow-xl w-full max-w-md mx-4 p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-red-400 shrink-0">
+                  <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495ZM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5Zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clipRule="evenodd" />
+                </svg>
+                <h2 className="text-base font-semibold text-white">Restore Database</h2>
+              </div>
+
+              {restoreMutation.isPending ? (
+                /* ── In-progress view ── */
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm text-slate-300">
+                    <span className="inline-block w-4 h-4 border-2 border-slate-400 border-t-white rounded-full animate-spin shrink-0" />
+                    Restoring database…
+                  </div>
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="h-full bg-red-500 rounded-full transition-all duration-1000 ease-out"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-500">
+                    <span>{restoreElapsed}s elapsed</span>
+                    <span>
+                      {remaining > 0
+                        ? `~${remaining}s remaining`
+                        : "finishing up…"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {restoreElapsed < 3
+                      ? "Uploading backup file…"
+                      : restoreElapsed < 8
+                        ? "Dropping existing tables…"
+                        : "Importing data…"}
+                  </p>
+                </div>
+              ) : (
+                /* ── Confirmation view ── */
+                <>
+                  <p className="text-sm text-slate-300">
+                    This will <span className="text-red-400 font-medium">replace all current data</span> with the contents of:
+                  </p>
+                  <p className="text-xs text-slate-400 font-mono bg-slate-800 rounded px-3 py-2">{restoreFile.name}</p>
+                  <p className="text-xs text-slate-500">
+                    All runs, portfolios, watchlists, API keys, and user data will be overwritten. This cannot be undone.
+                  </p>
+                  <div className="space-y-1">
+                    <label className="text-xs text-slate-400">Type <span className="font-mono text-slate-200">RESTORE</span> to confirm</label>
+                    <input
+                      type="text"
+                      value={restoreConfirmText}
+                      onChange={(e) => setRestoreConfirmText(e.target.value)}
+                      placeholder="RESTORE"
+                      className="w-full bg-slate-800 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:outline-none focus:border-red-500 font-mono"
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    Est. restore time: ~{estimatedSecs}s
+                    {restoreFile.size > 0 && ` (${(restoreFile.size / (1024 * 1024)).toFixed(1)} MB)`}
+                  </p>
+                </>
+              )}
+
+              {restoreMutation.isError && (
+                <p className="text-xs text-red-400">{(restoreMutation.error as Error).message}</p>
+              )}
+              {restoreMutation.isSuccess && (
+                <p className="text-xs text-green-400">Restore completed successfully.</p>
+              )}
+
+              <div className="flex gap-2 justify-end pt-1">
+                <button
+                  onClick={() => { setRestoreModalOpen(false); setRestoreConfirmText(""); restoreMutation.reset(); }}
+                  disabled={restoreMutation.isPending}
+                  className="px-3 py-1.5 text-sm text-slate-400 hover:text-slate-200 disabled:opacity-30"
+                >
+                  Cancel
+                </button>
+                {!restoreMutation.isPending && (
+                  <button
+                    onClick={() => restoreMutation.mutate()}
+                    disabled={restoreConfirmText !== "RESTORE"}
+                    className="px-4 py-1.5 text-sm bg-red-700 hover:bg-red-600 text-white rounded disabled:opacity-40 transition-colors"
+                  >
+                    Restore Database
+                  </button>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </>
   );
 }
