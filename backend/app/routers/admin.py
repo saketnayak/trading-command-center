@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from fastapi.responses import Response
 from app.config import settings
+from app.database import engine
 from app.dependencies import require_admin
 from app.models.user import User
 
@@ -47,6 +48,9 @@ async def restore_backup(
     data = await file.read()
     if not data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded file is empty.")
+
+    # Close pooled connections so pg_restore --clean can DROP tables without lock contention.
+    await engine.dispose()
 
     db_url = _sync_db_url()
     proc = await asyncio.create_subprocess_exec(
