@@ -73,7 +73,7 @@ if "should_continue_technical" not in content:
 else:
     print("  · conditional_logic.py already patched")
 
-# ── 4. Patch graph/setup.py — add technical to analyst_creators ───────────────
+# ── 4. Patch graph/setup.py — add technical to SUPPORTED_ANALYSTS and analyst_creators ───────────────
 setup_path = os.path.join(pkg, "graph/setup.py")
 with open(setup_path) as f:
     content = f.read()
@@ -93,7 +93,21 @@ if '"technical": create_technical_analyst' not in content:
         f.write(content)
     print("  ✓ Patched setup.py — added technical to analyst_creators")
 else:
-    print("  · setup.py already patched")
+    print("  · setup.py analyst_creators already patched")
+
+# SUPPORTED_ANALYSTS is a separate tuple constant used by validate_selected_analysts;
+# it must be patched independently of analyst_creators.
+with open(setup_path) as f:
+    content = f.read()
+_old_supported = 'SUPPORTED_ANALYSTS = ("market", "social", "news", "fundamentals")'
+_new_supported = 'SUPPORTED_ANALYSTS = ("market", "social", "news", "fundamentals", "technical")'
+if _old_supported in content:
+    content = content.replace(_old_supported, _new_supported)
+    with open(setup_path, "w") as f:
+        f.write(content)
+    print("  ✓ Patched setup.py — added technical to SUPPORTED_ANALYSTS")
+else:
+    print("  · setup.py SUPPORTED_ANALYSTS already patched")
 
 # ── 5. Patch agents/__init__.py — export create_technical_analyst ─────────────
 init_path = os.path.join(pkg, "agents/__init__.py")
