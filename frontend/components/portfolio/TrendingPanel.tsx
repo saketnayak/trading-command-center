@@ -25,16 +25,6 @@ function fmtMarketCap(n: number | null): string {
   return `$${n.toFixed(0)}M`;
 }
 
-function pctColor(n: number | null): string {
-  if (n == null) return "text-slate-400";
-  return n >= 0 ? "text-green-400" : "text-red-400";
-}
-
-function pctBg(n: number | null): string {
-  if (n == null) return "bg-slate-800";
-  return n >= 0 ? "bg-green-500/10" : "bg-red-500/10";
-}
-
 function makeFakeHolding(ticker: string): PortfolioHolding {
   return {
     id: `market-${ticker}`,
@@ -268,7 +258,7 @@ const NO_KEY_MSG = (
 export function TrendingPanel() {
   const [drawerTicker, setDrawerTicker] = useState<string | null>(null);
 
-  const { data: trending = [], isLoading: loadingTrending, isError: errTrending } = useQuery({
+  const { data: trending = [], isLoading: loadingTrending } = useQuery({
     queryKey: ["market-trending"],
     queryFn: getMarketTrending,
     staleTime: 1000 * 60 * 30,
