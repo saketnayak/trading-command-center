@@ -10,6 +10,7 @@ interface TickerDrawerProps {
   holding: PortfolioHolding | null;
   displayCurrency: string;
   onClose: () => void;
+  hidePosition?: boolean;
 }
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
@@ -93,7 +94,7 @@ function Divider() {
 
 // ── Drawer content ────────────────────────────────────────────────────────────
 
-function DrawerContent({ holding, displayCurrency }: { holding: PortfolioHolding; displayCurrency: string }) {
+function DrawerContent({ holding, displayCurrency, hidePosition }: { holding: PortfolioHolding; displayCurrency: string; hidePosition?: boolean }) {
   const [chartDays, setChartDays] = useState<7 | 30 | 90>(30);
 
   const { data: snap, isLoading, isError } = useQuery({
@@ -143,24 +144,28 @@ function DrawerContent({ holding, displayCurrency }: { holding: PortfolioHolding
         </div>
       )}
 
-      <Divider />
+      {!hidePosition && (
+        <>
+          <Divider />
 
-      {/* Your position */}
-      <Section title="Your Position">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-          <StatCell label="Shares" value={holding.shares.toLocaleString("en-US")} />
-          <StatCell label={`Avg Cost (${displayCurrency})`} value={holding.avg_cost != null ? fmtMoney(holding.avg_cost, displayCurrency) : null} />
-          <StatCell label={`Market Value (${displayCurrency})`} value={holding.market_value != null ? fmtMoney(holding.market_value, displayCurrency) : null} />
-          <StatCell
-            label={`Unrealized P&L (${displayCurrency})`}
-            value={
-              holding.unrealized_pnl != null
-                ? `${holding.unrealized_pnl >= 0 ? "+" : ""}${fmtMoney(holding.unrealized_pnl, displayCurrency)}${holding.unrealized_pnl_pct != null ? ` (${holding.unrealized_pnl >= 0 ? "+" : ""}${holding.unrealized_pnl_pct.toFixed(2)}%)` : ""}`
-                : null
-            }
-          />
-        </div>
-      </Section>
+          {/* Your position */}
+          <Section title="Your Position">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+              <StatCell label="Shares" value={holding.shares.toLocaleString("en-US")} />
+              <StatCell label={`Avg Cost (${displayCurrency})`} value={holding.avg_cost != null ? fmtMoney(holding.avg_cost, displayCurrency) : null} />
+              <StatCell label={`Market Value (${displayCurrency})`} value={holding.market_value != null ? fmtMoney(holding.market_value, displayCurrency) : null} />
+              <StatCell
+                label={`Unrealized P&L (${displayCurrency})`}
+                value={
+                  holding.unrealized_pnl != null
+                    ? `${holding.unrealized_pnl >= 0 ? "+" : ""}${fmtMoney(holding.unrealized_pnl, displayCurrency)}${holding.unrealized_pnl_pct != null ? ` (${holding.unrealized_pnl >= 0 ? "+" : ""}${holding.unrealized_pnl_pct.toFixed(2)}%)` : ""}`
+                    : null
+                }
+              />
+            </div>
+          </Section>
+        </>
+      )}
 
       <Divider />
 
@@ -346,7 +351,7 @@ function timeAgo(unixSecs: number): string {
 
 // ── Drawer shell ──────────────────────────────────────────────────────────────
 
-export function TickerDrawer({ holding, displayCurrency, onClose }: TickerDrawerProps) {
+export function TickerDrawer({ holding, displayCurrency, onClose, hidePosition }: TickerDrawerProps) {
   // Close on Esc
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -385,7 +390,7 @@ export function TickerDrawer({ holding, displayCurrency, onClose }: TickerDrawer
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {holding && (
-            <DrawerContent holding={holding} displayCurrency={displayCurrency} />
+            <DrawerContent holding={holding} displayCurrency={displayCurrency} hidePosition={hidePosition} />
           )}
         </div>
       </div>

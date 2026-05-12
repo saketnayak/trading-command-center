@@ -23,9 +23,10 @@ import { InsightsDashboard } from "@/components/portfolio/InsightsDashboard";
 import { PortfolioStatsBar } from "@/components/portfolio/PortfolioStatsBar";
 import { EarningsPanel } from "@/components/portfolio/EarningsPanel";
 import { NewsPanel } from "@/components/portfolio/NewsPanel";
+import { TrendingPanel } from "@/components/portfolio/TrendingPanel";
 import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 
-type Tab = "holdings" | "insights" | "earnings" | "news";
+type Tab = "holdings" | "insights" | "earnings" | "news" | "trending";
 
 const PROVIDERS = ["openai", "anthropic", "google", "groq", "ollama", "vllm"];
 const DEPTHS = ["quick", "standard", "deep"] as const;
@@ -276,6 +277,7 @@ export default function PortfolioPage() {
     { id: "insights", label: "AI Insights", badge: "✦" },
     ...(!allCrypto ? [{ id: "earnings" as Tab, label: "Earnings" }] : []),
     { id: "news", label: "News" },
+    { id: "trending", label: "Market", badge: "↑" },
   ];
 
   return (
@@ -319,30 +321,47 @@ export default function PortfolioPage() {
           </p>
         )}
 
-        {selectedId && loadingCurrent && (
+        {selectedId && loadingCurrent && tab !== "trending" && (
           <div className="text-slate-400 text-sm">Loading portfolio…</div>
         )}
 
-        {selectedId && !loadingCurrent && current && (
-          <>
-            {/* Tab bar */}
-            <div className="flex gap-1 border-b border-slate-800">
-              {TABS.map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
-                    tab === t.id
-                      ? "border-purple-500 text-white"
-                      : "border-transparent text-slate-400 hover:text-slate-200"
-                  }`}
-                >
-                  <span>{t.label}</span>
-                  {t.badge && <span className="text-purple-400 text-xs">{t.badge}</span>}
-                </button>
-              ))}
-            </div>
+        {/* Tab bar — Market tab is always accessible; portfolio tabs require a loaded portfolio */}
+        {!loadingPortfolios && (
+          <div className="flex gap-1 border-b border-slate-800">
+            {selectedId && current && TABS.filter((t) => t.id !== "trending").map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
+                  tab === t.id
+                    ? "border-purple-500 text-white"
+                    : "border-transparent text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                <span>{t.label}</span>
+                {t.badge && <span className="text-purple-400 text-xs">{t.badge}</span>}
+              </button>
+            ))}
+            <button
+              onClick={() => setTab("trending")}
+              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
+                tab === "trending"
+                  ? "border-purple-500 text-white"
+                  : "border-transparent text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <span>Market</span>
+              <span className="text-purple-400 text-xs">↑</span>
+            </button>
+          </div>
+        )}
 
+        {/* Market panel — available regardless of portfolio selection */}
+        {tab === "trending" && <TrendingPanel />}
+
+        {/* Portfolio tab panels — require a loaded portfolio */}
+        {selectedId && !loadingCurrent && current && tab !== "trending" && (
+          <>
             {tab === "holdings" && (
               <div className="space-y-3">
                 {hasHoldings && (

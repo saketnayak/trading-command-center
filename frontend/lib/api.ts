@@ -1,5 +1,5 @@
 import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -416,5 +416,23 @@ export async function restoreDbBackup(file: File): Promise<{ message: string; wa
     const body = await r.json().catch(() => null);
     throw new Error(body?.detail ?? "Restore failed");
   }
+  return r.json();
+}
+
+export async function getMarketTrending(): Promise<MarketTicker[]> {
+  const r = await fetchWithAuth("/market/trending");
+  if (!r.ok) throw new Error("Failed to fetch trending tickers");
+  return r.json();
+}
+
+export async function getMarketMovers(): Promise<MoversResponse> {
+  const r = await fetchWithAuth("/market/movers");
+  if (!r.ok) throw new Error("Failed to fetch market movers");
+  return r.json();
+}
+
+export async function getMarketSectors(): Promise<SectorData[]> {
+  const r = await fetchWithAuth("/market/sectors");
+  if (!r.ok) throw new Error("Failed to fetch sector data");
   return r.json();
 }

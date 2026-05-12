@@ -327,3 +327,29 @@ export interface BatchRunResult {
   skipped: string[];
   message: string;
 }
+
+export interface MarketTicker {
+  ticker: string;
+  name: string | null;
+  sector: string | null;
+  logo: string | null;
+  price: number | null;
+  change_pct: number | null;
+  change: number | null;
+  high: number | null;
+  low: number | null;
+  prev_close: number | null;
+  market_cap: number | null;
+}
+
+export interface MoversResponse {
+  gainers: MarketTicker[];
+  losers: MarketTicker[];
+}
+
+export interface SectorData {
+  sector: string;
+  ticker: string;
+  price: number | null;
+  change_pct: number | null;
+}
