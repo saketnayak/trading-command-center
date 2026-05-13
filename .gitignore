@@ -29,3 +29,5 @@ docs/superpowers/
 
 # TradingAgents output cache
 backend/results/
+
+logs/
