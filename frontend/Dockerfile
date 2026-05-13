@@ -1,3 +1,6 @@
+# Build on host platform (amd64) for speed — avoids 30-60 min QEMU arm64 emulation penalty.
+# Safe as long as no dependency has native runtime binaries (e.g. sharp, canvas).
+# If a native runtime dep is added, switch to per-platform native runners instead.
 FROM --platform=$BUILDPLATFORM node:20-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json* ./
