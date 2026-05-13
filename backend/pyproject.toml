@@ -1,7 +1,7 @@
 [project]
 name = "agentfloor-backend"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
@@ -19,7 +19,6 @@ dependencies = [
     "email-validator>=2.0",
     "langchain-core>=0.3",
     "langchain-openai>=1.0",
-    "tradingagents>=0.3",
     "apscheduler>=4.0.0a5",
 ]
 
@@ -41,3 +40,6 @@ packages = ["app"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
+
+[tool.uv.sources]
+tradingagents = { path = "../../TradingAgents", editable = true }
