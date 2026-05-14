@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { addHolding, updateHolding, deleteHolding } from "@/lib/api";
+import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type LatestRunEntry } from "@/lib/api";
 import { fmtMoney, fmtPnl } from "@/lib/currency";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 import type { PortfolioHolding, FundamentalsData } from "@/lib/types";
@@ -279,6 +279,14 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
     if (e.key === "Escape") { setAddingNew(false); setNewDraft({ ticker: "", shares: "", avg_cost: "" }); }
   }
 
+  const tickers = holdings.map((h) => h.ticker);
+  const { data: latestRuns = {} } = useQuery({
+    queryKey: ["latest-runs-by-ticker", tickers],
+    queryFn: () => getLatestRunsByTicker(tickers),
+    enabled: tickers.length > 0,
+    staleTime: 60_000,
+  });
+
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
   const colSpan = 9; // total columns
 
@@ -442,19 +450,37 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       </td>
 
                       {/* Last Analysis */}
-                      <td className="px-4 py-2">
-                        {h.last_run ? (
-                          <div className="flex items-center gap-2">
-                            <span className={`rounded px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
-                              {(h.last_run.verdict ?? "").toUpperCase()}
-                            </span>
-                            <Link href={`/runs/${h.last_run.run_id}`} className="text-xs text-slate-400 hover:text-slate-200">
-                              {daysAgo(h.last_run.analysis_date)}d ago →
-                            </Link>
-                          </div>
-                        ) : (
-                          <span className="text-slate-500 text-xs">Not analyzed</span>
-                        )}
+                      <td className="px-3 py-2 text-right">
+                        {(() => {
+                          const entry: LatestRunEntry | null | undefined = latestRuns[h.ticker];
+                          if (!entry) {
+                            return <span className="text-xs text-slate-600 italic">Never analyzed</span>;
+                          }
+                          const days = daysAgo(entry.completed_at);
+                          const stale = days > 14;
+                          const verdictColors: Record<string, string> = {
+                            buy: "bg-emerald-700 text-emerald-100",
+                            sell: "bg-red-700 text-red-100",
+                            hold: "bg-amber-700 text-amber-100",
+                          };
+                          return (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${verdictColors[entry.verdict] ?? "bg-slate-700 text-slate-200"}`}>
+                                {entry.verdict.toUpperCase()}
+                              </span>
+                              <span className={`text-xs ${stale ? "text-amber-400" : "text-slate-500"}`}>
+                                {days === 0 ? "today" : `${days}d ago`}{stale ? " ⚠" : ""}
+                              </span>
+                              <a
+                                href={`/runs/${entry.run_id}`}
+                                className="text-xs text-blue-400 hover:text-blue-300"
+                                title="View run"
+                              >
+                                ↗
+                              </a>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Actions */}

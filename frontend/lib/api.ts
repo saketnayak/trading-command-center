@@ -419,6 +419,23 @@ export async function restoreDbBackup(file: File): Promise<{ message: string; wa
   return r.json();
 }
 
+export interface LatestRunEntry {
+  run_id: string;
+  verdict: "buy" | "sell" | "hold";
+  completed_at: string;
+}
+
+export async function getLatestRunsByTicker(
+  tickers: string[]
+): Promise<Record<string, LatestRunEntry | null>> {
+  if (tickers.length === 0) return {};
+  const r = await fetchWithAuth(
+    `/runs/latest-by-ticker?tickers=${tickers.map(encodeURIComponent).join(",")}`
+  );
+  if (!r.ok) throw new Error("Failed to fetch latest runs by ticker");
+  return r.json();
+}
+
 export async function getMarketTrending(): Promise<MarketTicker[]> {
   const r = await fetchWithAuth("/market/trending");
   if (!r.ok) throw new Error("Failed to fetch trending tickers");
