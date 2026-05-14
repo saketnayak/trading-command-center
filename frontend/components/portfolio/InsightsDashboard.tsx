@@ -2,7 +2,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { generateInsight, getLatestInsight, listInsights, getProviderModels } from "@/lib/api";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 import type { PortfolioInsight, InsightActionItem, InsightRiskAlert } from "@/lib/types";

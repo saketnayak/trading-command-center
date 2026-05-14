@@ -72,11 +72,6 @@ function fmtLargeNum(n: number | null): string {
   return `$${n.toFixed(0)}`;
 }
 
-const verdictBadge: Record<string, string> = {
-  buy: "bg-green-500/20 text-green-300 border border-green-500/30",
-  sell: "bg-red-500/20 text-red-300 border border-red-500/30",
-  hold: "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30",
-};
 
 function daysAgo(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
@@ -341,8 +336,6 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                 const fundData = fundamentals?.[h.ticker] ?? null;
                 const pnl = h.unrealized_pnl;
                 const pnlColor = pnl == null ? "text-slate-500" : pnl >= 0 ? "text-green-400" : "text-red-400";
-                const verdictKey = h.last_run?.verdict?.toLowerCase() ?? "";
-                const badgeClass = verdictBadge[verdictKey] ?? "bg-slate-700 text-slate-300 border border-slate-600";
                 const rowEntry = latestRuns[h.ticker] ?? null;
                 const rowTint = rowEntry != null && daysAgo(rowEntry.completed_at) <= 14
                   ? rowEntry.verdict === "buy" ? "bg-emerald-900/20"
