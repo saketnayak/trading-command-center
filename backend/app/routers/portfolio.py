@@ -1217,6 +1217,7 @@ async def discover_stocks(
                 llm_model = {"openai": "gpt-4o-mini", "anthropic": "claude-haiku-4-5-20251001", "google": "gemini-2.5-flash"}[prov]
                 break
     if not llm_provider:
+        _discover_in_flight.discard(cache_key)
         raise HTTPException(status_code=422, detail="No LLM provider key configured. Add one in Settings.")
 
     api_key_row = (await db.execute(select(ApiKey).where(ApiKey.provider == llm_provider))).scalar_one_or_none()
@@ -1229,6 +1230,7 @@ async def discover_stocks(
     try:
         snap = await _get_latest_snapshot(portfolio_id, user.id, db)
     except HTTPException:
+        _discover_in_flight.discard(cache_key)
         raise HTTPException(status_code=404, detail="No portfolio snapshot found.")
     holdings = (await db.execute(
         select(PortfolioHolding).where(PortfolioHolding.snapshot_id == snap.id)
