@@ -453,3 +453,44 @@ export async function getMarketSectors(): Promise<SectorData[]> {
   if (!r.ok) throw new Error("Failed to fetch sector data");
   return r.json();
 }
+
+export interface SectorGap {
+  sector: string;
+  your_weight: number;
+  sp500_weight: number;
+  delta: number;
+}
+
+export interface StockRecommendation {
+  ticker: string;
+  tag: "Gap Fill" | "Trending" | "Mover";
+  sector: string;
+  reason: string;
+}
+
+export interface DiscoverResponse {
+  recommendations: StockRecommendation[];
+  cached: boolean;
+}
+
+export async function getSectorGaps(portfolioId: string): Promise<SectorGap[]> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/sector-gaps`);
+  if (!r.ok) throw new Error("Failed to fetch sector gaps");
+  return r.json();
+}
+
+export async function discoverStocks(
+  portfolioId: string,
+  llmProvider?: string,
+  llmModel?: string
+): Promise<DiscoverResponse> {
+  const body: Record<string, string> = {};
+  if (llmProvider) body.llm_provider = llmProvider;
+  if (llmModel) body.llm_model = llmModel;
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/discover`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error("Failed to discover stocks");
+  return r.json();
+}
