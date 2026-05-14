@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type LatestRunEntry } from "@/lib/api";
@@ -278,7 +278,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   });
 
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
-  const colSpan = 9; // total columns
+  const colSpan = hasFundamentals ? 9 : 8;
 
   return (
     <div className="space-y-3">
@@ -344,15 +344,15 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                 const verdictKey = h.last_run?.verdict?.toLowerCase() ?? "";
                 const badgeClass = verdictBadge[verdictKey] ?? "bg-slate-700 text-slate-300 border border-slate-600";
                 const rowEntry = latestRuns[h.ticker] ?? null;
-                const rowTint = rowEntry && daysAgo(rowEntry.completed_at) <= 14
+                const rowTint = rowEntry != null && daysAgo(rowEntry.completed_at) <= 14
                   ? rowEntry.verdict === "buy" ? "bg-emerald-900/20"
                   : rowEntry.verdict === "sell" ? "bg-red-900/20"
                   : ""
                   : "";
 
                 return (
-                  <>
-                    <tr key={h.id} className={`border-t border-slate-800 hover:bg-slate-800/30 ${rowTint}`}>
+                  <React.Fragment key={h.id}>
+                    <tr className={`border-t border-slate-800 hover:bg-slate-800/30 ${rowTint}`}>
                       {/* Expand toggle */}
                       {hasFundamentals && (
                         <td className="px-2 py-2">
@@ -516,7 +516,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                     {isExpanded && fundData && (
                       <FundamentalsRow key={`${h.id}-fund`} data={fundData} colSpan={colSpan} />
                     )}
-                  </>
+                  </React.Fragment>
                 );
               })
             )}
