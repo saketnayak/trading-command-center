@@ -1,10 +1,10 @@
 "use client";
-import { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { addHolding, updateHolding, deleteHolding, addWatchlistItem, getWatchlist, getProviderModels } from "@/lib/api";
-import { isCrypto } from "@/lib/asset";
+import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type LatestRunEntry } from "@/lib/api";
 import { fmtMoney, fmtPnl } from "@/lib/currency";
+import { WatchButton } from "@/components/portfolio/WatchButton";
 import type { PortfolioHolding, FundamentalsData } from "@/lib/types";
 
 interface HoldingsTableProps {
@@ -22,16 +22,7 @@ interface DraftRow {
   avg_cost: string;
 }
 
-interface WatchDraft {
-  llm_provider: string;
-  llm_model: string;
-  depth: string;
-}
-
-const PROVIDERS = ["openai", "anthropic", "google", "groq", "ollama", "vllm"];
-const DEPTHS = ["quick", "standard", "deep"] as const;
-
-type SortKey = "ticker" | "shares" | "avg_cost" | "current_price" | "market_value" | "unrealized_pnl" | "last_analysis";
+type SortKey = "ticker" | "shares" | "avg_cost" | "current_price" | "market_value" | "unrealized_pnl";
 type SortDir = "asc" | "desc";
 
 function SortableHeader({
@@ -81,11 +72,6 @@ function fmtLargeNum(n: number | null): string {
   return `$${n.toFixed(0)}`;
 }
 
-const verdictBadge: Record<string, string> = {
-  buy: "bg-green-500/20 text-green-300 border border-green-500/30",
-  sell: "bg-red-500/20 text-red-300 border border-red-500/30",
-  hold: "bg-yellow-500/20 text-yellow-300 border border-yellow-500/30",
-};
 
 function daysAgo(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
@@ -115,103 +101,6 @@ function EditInput({
       placeholder={placeholder}
       className={`bg-slate-800 border border-slate-600 rounded px-2 py-1 text-xs text-slate-200 focus:outline-none focus:border-blue-500 ${className ?? ""}`}
     />
-  );
-}
-
-function WatchButton({ ticker }: { ticker: string }) {
-  const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<WatchDraft>({ llm_provider: "openai", llm_model: "", depth: "standard" });
-  const [success, setSuccess] = useState(false);
-
-  const { data: watchlist } = useQuery({ queryKey: ["watchlist"], queryFn: getWatchlist });
-  const watched = watchlist?.items.some((i) => i.ticker.toUpperCase() === ticker.toUpperCase()) ?? false;
-
-  const { data: models = [] } = useQuery({
-    queryKey: ["provider-models", draft.llm_provider],
-    queryFn: () => getProviderModels(draft.llm_provider),
-    enabled: open,
-  });
-
-  useEffect(() => {
-    if (models.length > 0 && !draft.llm_model) {
-      setDraft((d) => ({ ...d, llm_model: models[0] }));
-    }
-  }, [models, draft.llm_model]);
-
-  const addMutation = useMutation({
-    mutationFn: () =>
-      addWatchlistItem({
-        ticker,
-        llm_provider: draft.llm_provider,
-        llm_model: draft.llm_model || (models[0] ?? ""),
-        depth: draft.depth,
-        analysts: isCrypto(ticker)
-          ? ["market", "social", "news", "technical"]
-          : ["market", "social", "news", "fundamentals", "technical"],
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["watchlist"] });
-      setOpen(false);
-      setSuccess(true);
-      setTimeout(() => setSuccess(false), 3000);
-    },
-  });
-
-  if (watched || success) {
-    return (
-      <span className="text-xs text-yellow-400 cursor-default" title="Already on watchlist">
-        ★ Watching
-      </span>
-    );
-  }
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="text-xs text-slate-400 hover:text-yellow-400 transition-colors"
-        title="Add to watchlist"
-      >
-        Watch
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-1.5 flex-wrap">
-      <select
-        value={draft.llm_provider}
-        onChange={(e) => setDraft((d) => ({ ...d, llm_provider: e.target.value, llm_model: "" }))}
-        className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-200 focus:outline-none"
-      >
-        {PROVIDERS.map((p) => (
-          <option key={p} value={p}>{p}</option>
-        ))}
-      </select>
-      <select
-        value={draft.llm_model}
-        onChange={(e) => setDraft((d) => ({ ...d, llm_model: e.target.value }))}
-        className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-200 focus:outline-none max-w-[140px]"
-      >
-        {models.map((m) => <option key={m} value={m}>{m}</option>)}
-      </select>
-      <select
-        value={draft.depth}
-        onChange={(e) => setDraft((d) => ({ ...d, depth: e.target.value }))}
-        className="bg-slate-800 border border-slate-600 rounded px-1.5 py-0.5 text-xs text-slate-200 focus:outline-none"
-      >
-        {DEPTHS.map((d) => <option key={d} value={d}>{d}</option>)}
-      </select>
-      <button
-        onClick={() => addMutation.mutate()}
-        disabled={addMutation.isPending}
-        className="text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
-      >
-        {addMutation.isPending ? "Adding…" : "Add"}
-      </button>
-      <button onClick={() => setOpen(false)} className="text-xs text-slate-500 hover:text-slate-300">✕</button>
-    </div>
   );
 }
 
@@ -262,7 +151,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filterTicker, setFilterTicker] = useState("");
-  const [filterVerdict, setFilterVerdict] = useState("");
+  const [filterSignal, setFilterSignal] = useState("");
   const newTickerRef = useRef<HTMLInputElement>(null);
 
   function handleSort(key: SortKey) {
@@ -275,7 +164,15 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
     }
   }
 
-  const isFiltered = filterTicker !== "" || filterVerdict !== "";
+  const tickers = holdings.map((h) => h.ticker);
+  const { data: latestRuns = {} } = useQuery({
+    queryKey: ["latest-runs-by-ticker", tickers],
+    queryFn: () => getLatestRunsByTicker(tickers),
+    enabled: tickers.length > 0,
+    staleTime: 60_000,
+  });
+
+  const isFiltered = filterTicker !== "" || filterSignal !== "";
 
   const filteredHoldings = useMemo(() => {
     let result = holdings;
@@ -283,13 +180,13 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
       const q = filterTicker.toUpperCase();
       result = result.filter((h) => h.ticker.toUpperCase().includes(q));
     }
-    if (filterVerdict === "none") {
-      result = result.filter((h) => h.last_run === null);
-    } else if (filterVerdict) {
-      result = result.filter((h) => h.last_run?.verdict?.toLowerCase() === filterVerdict);
+    if (filterSignal === "none") {
+      result = result.filter((h) => !latestRuns[h.ticker]);
+    } else if (filterSignal) {
+      result = result.filter((h) => latestRuns[h.ticker]?.verdict?.toLowerCase() === filterSignal);
     }
     return result;
-  }, [holdings, filterTicker, filterVerdict]);
+  }, [holdings, filterTicker, filterSignal, latestRuns]);
 
   const sortedHoldings = useMemo(() => {
     if (!sortKey) return filteredHoldings;
@@ -297,10 +194,6 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
       let av: number | string | null;
       let bv: number | string | null;
       if (sortKey === "ticker") { av = a.ticker; bv = b.ticker; }
-      else if (sortKey === "last_analysis") {
-        av = a.last_run?.analysis_date ?? null;
-        bv = b.last_run?.analysis_date ?? null;
-      }
       else { av = a[sortKey] as number | null; bv = b[sortKey] as number | null; }
 
       // nulls always last
@@ -386,7 +279,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   }
 
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
-  const colSpan = 9; // total columns
+  const colSpan = hasFundamentals ? 9 : 8;
 
   return (
     <div className="space-y-3">
@@ -406,8 +299,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-200 w-40 focus:outline-none focus:border-blue-500 placeholder-slate-500"
         />
         <select
-          value={filterVerdict}
-          onChange={(e) => setFilterVerdict(e.target.value)}
+          value={filterSignal}
+          onChange={(e) => setFilterSignal(e.target.value)}
           className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
         >
           <option value="">All signals</option>
@@ -422,7 +315,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
               {filteredHoldings.length} of {holdings.length}
             </span>
             <button
-              onClick={() => { setFilterTicker(""); setFilterVerdict(""); }}
+              onClick={() => { setFilterTicker(""); setFilterSignal(""); }}
               className="text-xs text-slate-500 hover:text-slate-300 underline"
             >
               Clear
@@ -442,7 +335,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
               <SortableHeader label="Current Price"  colKey="current_price"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Market Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Unrealized P&L" colKey="unrealized_pnl" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <SortableHeader label="Last Analysis"  colKey="last_analysis"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="left" />
+              <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Last Analysis</th>
               <th className="text-left px-4 py-3">Actions</th>
             </tr>
           </thead>
@@ -460,12 +353,16 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                 const fundData = fundamentals?.[h.ticker] ?? null;
                 const pnl = h.unrealized_pnl;
                 const pnlColor = pnl == null ? "text-slate-500" : pnl >= 0 ? "text-green-400" : "text-red-400";
-                const verdictKey = h.last_run?.verdict?.toLowerCase() ?? "";
-                const badgeClass = verdictBadge[verdictKey] ?? "bg-slate-700 text-slate-300 border border-slate-600";
+                const rowEntry = latestRuns[h.ticker] ?? null;
+                const rowTint = rowEntry != null && daysAgo(rowEntry.completed_at) <= 14
+                  ? rowEntry.verdict === "buy" ? "bg-emerald-900/20"
+                  : rowEntry.verdict === "sell" ? "bg-red-900/20"
+                  : ""
+                  : "";
 
                 return (
-                  <>
-                    <tr key={h.id} className="border-t border-slate-800 hover:bg-slate-800/30">
+                  <React.Fragment key={h.id}>
+                    <tr className={`border-t border-slate-800 hover:bg-slate-800/30 ${rowTint}`}>
                       {/* Expand toggle */}
                       {hasFundamentals && (
                         <td className="px-2 py-2">
@@ -548,19 +445,37 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       </td>
 
                       {/* Last Analysis */}
-                      <td className="px-4 py-2">
-                        {h.last_run ? (
-                          <div className="flex items-center gap-2">
-                            <span className={`rounded px-2 py-0.5 text-xs font-medium ${badgeClass}`}>
-                              {(h.last_run.verdict ?? "").toUpperCase()}
-                            </span>
-                            <Link href={`/runs/${h.last_run.run_id}`} className="text-xs text-slate-400 hover:text-slate-200">
-                              {daysAgo(h.last_run.analysis_date)}d ago →
-                            </Link>
-                          </div>
-                        ) : (
-                          <span className="text-slate-500 text-xs">Not analyzed</span>
-                        )}
+                      <td className="px-3 py-2 text-right">
+                        {(() => {
+                          const entry: LatestRunEntry | null | undefined = latestRuns[h.ticker];
+                          if (!entry) {
+                            return <span className="text-xs text-slate-600 italic">Never analyzed</span>;
+                          }
+                          const days = daysAgo(entry.completed_at);
+                          const stale = days > 14;
+                          const verdictColors: Record<string, string> = {
+                            buy: "bg-emerald-700 text-emerald-100",
+                            sell: "bg-red-700 text-red-100",
+                            hold: "bg-amber-700 text-amber-100",
+                          };
+                          return (
+                            <div className="flex items-center justify-end gap-1.5">
+                              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${verdictColors[entry.verdict] ?? "bg-slate-700 text-slate-200"}`}>
+                                {entry.verdict.toUpperCase()}
+                              </span>
+                              <span className={`text-xs ${stale ? "text-amber-400" : "text-slate-500"}`}>
+                                {days === 0 ? "today" : `${days}d ago`}{stale ? " ⚠" : ""}
+                              </span>
+                              <Link
+                                href={`/runs/${entry.run_id}`}
+                                className="text-xs text-blue-400 hover:text-blue-300"
+                                title="View run"
+                              >
+                                ↗
+                              </Link>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Actions */}
@@ -611,7 +526,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                     {isExpanded && fundData && (
                       <FundamentalsRow key={`${h.id}-fund`} data={fundData} colSpan={colSpan} />
                     )}
-                  </>
+                  </React.Fragment>
                 );
               })
             )}

@@ -5,7 +5,7 @@ import time
 from uuid import UUID
 from datetime import datetime, timezone, date, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -1086,3 +1086,226 @@ async def get_portfolio_news(
 
     all_articles.sort(key=lambda x: x.get("datetime") or 0, reverse=True)
     return {"price_unavailable_reason": None, "articles": all_articles[:limit]}
+
+
+# ── Sector gaps ───────────────────────────────────────────────────────────────
+
+_profile_cache: dict[str, tuple[dict, float]] = {}
+_PROFILE_TTL = 86400  # 24 hours
+
+
+async def _fetch_profile(ticker: str, api_key: str) -> dict:
+    now = time.time()
+    if ticker in _profile_cache:
+        data, expiry = _profile_cache[ticker]
+        if now < expiry:
+            return data
+    try:
+        url = f"https://finnhub.io/api/v1/stock/profile2?symbol={ticker}&token={api_key}"
+        async with httpx.AsyncClient(timeout=8) as client:
+            r = await client.get(url)
+            r.raise_for_status()
+            data = r.json()
+    except Exception:
+        data = {}
+    _profile_cache[ticker] = (data, now + _PROFILE_TTL)
+    return data
+
+
+@router.get("/portfolio/{portfolio_id}/sector-gaps")
+async def get_sector_gaps(
+    portfolio_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[dict]:
+    from app.services.sp500_sectors import SP500_SECTOR_WEIGHTS
+
+    finnhub_key = await _get_finnhub_key(db)
+    if not finnhub_key:
+        return []
+
+    try:
+        snap = await _get_latest_snapshot(portfolio_id, user.id, db)
+    except HTTPException:
+        return []
+
+    holdings = (await db.execute(
+        select(PortfolioHolding).where(PortfolioHolding.snapshot_id == snap.id)
+    )).scalars().all()
+
+    if not holdings:
+        return []
+
+    tickers = [h.ticker for h in holdings]
+    prices_map, profiles = await asyncio.gather(
+        _fetch_prices_bulk(tickers, finnhub_key),
+        asyncio.gather(*[_fetch_profile(t, finnhub_key) for t in tickers]),
+    )
+
+    sector_values: dict[str, float] = {}
+    total_value = 0.0
+    for holding, profile in zip(holdings, profiles):
+        price = prices_map.get(holding.ticker)
+        if price is None:
+            continue
+        market_value = price * holding.shares
+        sector = profile.get("finnhubIndustry") or "Unknown"
+        if sector == "Unknown":
+            continue
+        sector_values[sector] = sector_values.get(sector, 0.0) + market_value
+        total_value += market_value
+
+    if total_value == 0:
+        return []
+
+    all_sectors = set(list(sector_values.keys()) + list(SP500_SECTOR_WEIGHTS.keys()))
+    result = []
+    for sector in all_sectors:
+        your_weight = sector_values.get(sector, 0.0) / total_value
+        sp500_weight = SP500_SECTOR_WEIGHTS.get(sector, 0.0)
+        result.append({
+            "sector": sector,
+            "your_weight": round(your_weight, 4),
+            "sp500_weight": round(sp500_weight, 4),
+            "delta": round(your_weight - sp500_weight, 4),
+        })
+    return sorted(result, key=lambda x: x["delta"])
+
+
+# ── Stock discovery ───────────────────────────────────────────────────────────
+
+_discover_cache: dict[str, tuple[list, float]] = {}
+_DISCOVER_TTL = 1800  # 30 minutes
+_discover_in_flight: set[str] = set()
+
+
+@router.post("/portfolio/{portfolio_id}/discover")
+async def discover_stocks(
+    portfolio_id: UUID,
+    body: dict = Body(default={}),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    from app.services.sp500_sectors import SECTOR_LEADERS
+    import app.routers.market as _market_module
+    from app.services.portfolio_insight_runner import _call_llm
+
+    cache_key = str(portfolio_id)
+    now = time.time()
+    if cache_key in _discover_cache:
+        cached, expiry = _discover_cache[cache_key]
+        if now < expiry:
+            return {"recommendations": cached, "cached": True}
+
+    # Return last cached result if a request is already in-flight for this portfolio
+    if cache_key in _discover_in_flight:
+        cached_entry = _discover_cache.get(cache_key)
+        if cached_entry:
+            return {"recommendations": cached_entry[0], "cached": True}
+        return {"recommendations": [], "cached": False}
+
+    _discover_in_flight.add(cache_key)
+
+    # Determine LLM provider/model
+    llm_provider = body.get("llm_provider")
+    llm_model = body.get("llm_model")
+    if not llm_provider:
+        for prov in ["openai", "anthropic", "google"]:
+            row = (await db.execute(select(ApiKey).where(ApiKey.provider == prov))).scalar_one_or_none()
+            if row and row.is_valid:
+                llm_provider = prov
+                llm_model = {"openai": "gpt-4o-mini", "anthropic": "claude-haiku-4-5-20251001", "google": "gemini-2.5-flash"}[prov]
+                break
+    if not llm_provider:
+        _discover_in_flight.discard(cache_key)
+        raise HTTPException(status_code=422, detail="No LLM provider key configured. Add one in Settings.")
+
+    api_key_row = (await db.execute(select(ApiKey).where(ApiKey.provider == llm_provider))).scalar_one_or_none()
+    if not api_key_row:
+        _discover_in_flight.discard(cache_key)
+        raise HTTPException(status_code=422, detail="LLM provider key not found.")
+    api_key = decrypt_key(api_key_row.encrypted_key)
+
+    # Get current portfolio tickers to exclude
+    try:
+        snap = await _get_latest_snapshot(portfolio_id, user.id, db)
+    except HTTPException:
+        _discover_in_flight.discard(cache_key)
+        raise HTTPException(status_code=404, detail="No portfolio snapshot found.")
+    holdings = (await db.execute(
+        select(PortfolioHolding).where(PortfolioHolding.snapshot_id == snap.id)
+    )).scalars().all()
+    held_tickers = {h.ticker.upper() for h in holdings}
+
+    # Fetch sector gaps
+    gaps = await get_sector_gaps(portfolio_id, db, user)
+
+    # Read trending tickers from shared market cache
+    trending_tickers, _trending_expiry = _market_module._trending_cache
+    trending_candidates = [
+        {"ticker": t, "tag": "Trending", "sector": ""}
+        for t in trending_tickers if t.upper() not in held_tickers
+    ][:5]
+
+    # Read movers from shared quote cache — tickers with |change_pct| >= 3%
+    mover_candidates = []
+    for ticker in _market_module.MARKET_UNIVERSE:
+        if ticker in held_tickers:
+            continue
+        cached_quote = _market_module._quote_cache.get(ticker)
+        if cached_quote:
+            quote_data, q_expiry = cached_quote
+            if time.time() < q_expiry:
+                pct = quote_data.get("change_pct") or 0
+                if abs(pct) >= 3.0:
+                    mover_candidates.append({"ticker": ticker, "tag": "Mover", "sector": "", "_pct": pct})
+    mover_candidates.sort(key=lambda x: abs(x["_pct"]), reverse=True)
+    mover_candidates = [{"ticker": m["ticker"], "tag": m["tag"], "sector": m["sector"]} for m in mover_candidates[:4]]
+
+    # Assemble gap fill candidates from underweight sectors
+    underweight = [g["sector"] for g in gaps if g["delta"] < -0.05]
+    gap_candidates = []
+    for sector in underweight:
+        for t in SECTOR_LEADERS.get(sector, []):
+            if t not in held_tickers:
+                gap_candidates.append({"ticker": t, "tag": "Gap Fill", "sector": sector})
+
+    candidates = (gap_candidates + trending_candidates + mover_candidates)[:12]
+
+    if not candidates:
+        return {"recommendations": [], "cached": False}
+
+    # Build prompt
+    held_summary = ", ".join(list(held_tickers)[:15])
+    underweight_summary = ", ".join(underweight[:5]) if underweight else "none"
+    candidate_lines = "\n".join(
+        f"- {c['ticker']} ({c['tag']}, {c['sector']})" for c in candidates
+    )
+    prompt = f"""You are a portfolio research assistant. The user holds: {held_summary}.
+Their portfolio is underweight vs S&P 500 in these sectors: {underweight_summary}.
+
+Below are candidate stocks to consider. For each, write one concise sentence (max 20 words) explaining why it is relevant given the portfolio context.
+Return a JSON array: [{{"ticker": "XYZ", "tag": "Gap Fill", "sector": "Healthcare", "reason": "..."}}]
+Only include candidates you have a meaningful reason for. Return at most 8.
+
+Candidates:
+{candidate_lines}"""
+
+    try:
+        raw = await _call_llm(llm_provider, llm_model, api_key, prompt)
+        import json as _json
+        # Strip markdown fences if present
+        cleaned = raw.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+        recommendations = _json.loads(cleaned)
+        if not isinstance(recommendations, list):
+            recommendations = []
+    except Exception:
+        recommendations = [
+            {"ticker": c["ticker"], "tag": c["tag"], "sector": c["sector"], "reason": ""}
+            for c in candidates[:6]
+        ]
+    finally:
+        _discover_in_flight.discard(cache_key)
+
+    _discover_cache[cache_key] = (recommendations, now + _DISCOVER_TTL)
+    return {"recommendations": recommendations, "cached": False}

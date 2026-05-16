@@ -230,6 +230,37 @@ async def compare_runs(
     return {"a": run_a, "b": run_b}
 
 
+@router.get("/runs/latest-by-ticker")
+async def get_latest_runs_by_ticker(
+    tickers: str = Query(..., description="Comma-separated list of tickers"),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict[str, dict | None]:
+    ticker_list = [t.strip().upper() for t in tickers.split(",") if t.strip()]
+    result: dict[str, dict | None] = {}
+    for ticker in ticker_list:
+        row = (await db.execute(
+            select(Run)
+            .where(
+                Run.ticker == ticker,
+                Run.created_by == user.id,
+                Run.status == RunStatus.completed,
+            )
+            .order_by(Run.completed_at.desc())
+            .limit(1)
+        )).scalar_one_or_none()
+        result[ticker] = (
+            {
+                "run_id": str(row.id),
+                "verdict": row.verdict,
+                "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+            }
+            if row
+            else None
+        )
+    return result
+
+
 class RunUpdateRequest(BaseModel):
     label: str | None = None
 

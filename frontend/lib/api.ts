@@ -419,6 +419,23 @@ export async function restoreDbBackup(file: File): Promise<{ message: string; wa
   return r.json();
 }
 
+export interface LatestRunEntry {
+  run_id: string;
+  verdict: "buy" | "sell" | "hold";
+  completed_at: string;
+}
+
+export async function getLatestRunsByTicker(
+  tickers: string[]
+): Promise<Record<string, LatestRunEntry | null>> {
+  if (tickers.length === 0) return {};
+  const r = await fetchWithAuth(
+    `/runs/latest-by-ticker?tickers=${tickers.map(encodeURIComponent).join(",")}`
+  );
+  if (!r.ok) throw new Error("Failed to fetch latest runs by ticker");
+  return r.json();
+}
+
 export async function getMarketTrending(): Promise<MarketTicker[]> {
   const r = await fetchWithAuth("/market/trending");
   if (!r.ok) throw new Error("Failed to fetch trending tickers");
@@ -434,5 +451,46 @@ export async function getMarketMovers(): Promise<MoversResponse> {
 export async function getMarketSectors(): Promise<SectorData[]> {
   const r = await fetchWithAuth("/market/sectors");
   if (!r.ok) throw new Error("Failed to fetch sector data");
+  return r.json();
+}
+
+export interface SectorGap {
+  sector: string;
+  your_weight: number;
+  sp500_weight: number;
+  delta: number;
+}
+
+export interface StockRecommendation {
+  ticker: string;
+  tag: "Gap Fill" | "Trending" | "Mover";
+  sector: string;
+  reason: string;
+}
+
+export interface DiscoverResponse {
+  recommendations: StockRecommendation[];
+  cached: boolean;
+}
+
+export async function getSectorGaps(portfolioId: string): Promise<SectorGap[]> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/sector-gaps`);
+  if (!r.ok) throw new Error("Failed to fetch sector gaps");
+  return r.json();
+}
+
+export async function discoverStocks(
+  portfolioId: string,
+  llmProvider?: string,
+  llmModel?: string
+): Promise<DiscoverResponse> {
+  const body: Record<string, string> = {};
+  if (llmProvider) body.llm_provider = llmProvider;
+  if (llmModel) body.llm_model = llmModel;
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/discover`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error("Failed to discover stocks");
   return r.json();
 }

@@ -132,3 +132,101 @@ async def test_list_runs_empty():
         r = await client.get("/runs", headers={"Authorization": f"Bearer {token}"})
         assert r.status_code == 200
         assert isinstance(r.json(), list)
+
+
+@pytest.mark.asyncio
+async def test_latest_by_ticker_returns_null_for_no_runs():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _get_token(client, f"lbt_none_{uuid.uuid4().hex[:6]}@test.com")
+        r = await client.get(
+            "/runs/latest-by-ticker?tickers=FAKEXYZ",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        assert r.json() == {"FAKEXYZ": None}
+
+
+@pytest.mark.asyncio
+async def test_latest_by_ticker_returns_most_recent_completed():
+    from app.database import AsyncSessionLocal
+    from app.models.run import Run, RunStatus, RunVerdict
+    from datetime import date, datetime, timezone
+
+    email = f"lbt_{uuid.uuid4().hex[:8]}@test.com"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _get_token(client, email)
+        user_id = await _decode_user_id(token)
+
+        run_id = uuid.uuid4()
+        async with AsyncSessionLocal() as db:
+            db.add(Run(
+                id=run_id,
+                created_by=uuid.UUID(user_id),
+                ticker="AAPL",
+                analysis_date=date.today(),
+                llm_provider="openai",
+                llm_model="gpt-4o",
+                depth="standard",
+                analysts=["market"],
+                status=RunStatus.completed,
+                verdict=RunVerdict.buy,
+                completed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            ))
+            await db.commit()
+
+        r = await client.get(
+            "/runs/latest-by-ticker?tickers=AAPL,FAKEXYZ",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert data["FAKEXYZ"] is None
+        assert data["AAPL"]["run_id"] == str(run_id)
+        assert data["AAPL"]["verdict"] == "buy"
+        assert data["AAPL"]["completed_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_latest_by_ticker_scoped_to_user():
+    """Another user's runs must not appear."""
+    from app.database import AsyncSessionLocal
+    from app.models.run import Run, RunStatus, RunVerdict
+    from app.services.auth import create_invite_token
+    from datetime import date, datetime, timezone
+
+    email_a = f"lbt_a_{uuid.uuid4().hex[:6]}@test.com"
+    email_b = f"lbt_b_{uuid.uuid4().hex[:6]}@test.com"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token_a = await _get_token(client, email_a)
+        invite = create_invite_token(email_b)
+        await client.post("/auth/register", json={
+            "email": email_b, "password": "password1", "name": "Test", "invite_token": invite,
+        })
+        r_b = await client.post("/auth/login", json={"email": email_b, "password": "password1"})
+        token_b = r_b.json()["access_token"]
+        user_a_id = await _decode_user_id(token_a)
+
+        run_id = uuid.uuid4()
+        async with AsyncSessionLocal() as db:
+            db.add(Run(
+                id=run_id,
+                created_by=uuid.UUID(user_a_id),
+                ticker="TSLA",
+                analysis_date=date.today(),
+                llm_provider="openai",
+                llm_model="gpt-4o",
+                depth="standard",
+                analysts=["market"],
+                status=RunStatus.completed,
+                verdict=RunVerdict.sell,
+                completed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            ))
+            await db.commit()
+
+        # user_b should not see user_a's run
+        r = await client.get(
+            "/runs/latest-by-ticker?tickers=TSLA",
+            headers={"Authorization": f"Bearer {token_b}"},
+        )
+        assert r.status_code == 200
+        assert r.json()["TSLA"] is None

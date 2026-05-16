@@ -96,7 +96,7 @@ async def _fire_daily_portfolio_insights() -> None:
                 llm_model = {
                     "openai": "gpt-4o-mini",
                     "anthropic": "claude-haiku-4-5-20251001",
-                    "google": "gemini-1.5-flash",
+                    "google": "gemini-2.5-flash",
                 }[prov]
                 break
 

@@ -1,8 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { generateInsight, getLatestInsight, listInsights, getProviderModels } from "@/lib/api";
+import { WatchButton } from "@/components/portfolio/WatchButton";
 import type { PortfolioInsight, InsightActionItem, InsightRiskAlert } from "@/lib/types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -115,6 +116,8 @@ function HealthScoreRing({ score }: { score: number }) {
 }
 
 function ActionItemCard({ item }: { item: InsightActionItem }) {
+  const router = useRouter();
+
   return (
     <div className="flex items-start gap-3 bg-slate-800/50 rounded p-3 border border-slate-700/50">
       <div className="flex items-center gap-2 mt-0.5 shrink-0">
@@ -124,16 +127,23 @@ function ActionItemCard({ item }: { item: InsightActionItem }) {
         </span>
       </div>
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-slate-200 text-sm font-semibold">{item.ticker}</span>
-          <Link
-            href={`/runs/new?ticker=${item.ticker}`}
-            className="text-blue-400 hover:text-blue-300 text-xs transition-colors"
-          >
-            Analyze →
-          </Link>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex-1 min-w-0">
+            <span className="text-slate-200 text-sm font-semibold">{item.ticker}</span>
+            <p className="text-slate-400 text-xs mt-0.5 leading-relaxed">{item.rationale}</p>
+          </div>
+          {item.ticker && (
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => router.push(`/runs/new?ticker=${encodeURIComponent(item.ticker!)}`)}
+                className="text-xs font-semibold px-2 py-0.5 rounded bg-violet-700 hover:bg-violet-600 text-white transition-colors"
+              >
+                ⚡ Analyze
+              </button>
+              <WatchButton ticker={item.ticker} />
+            </div>
+          )}
         </div>
-        <p className="text-slate-400 text-xs mt-0.5 leading-relaxed">{item.rationale}</p>
       </div>
     </div>
   );

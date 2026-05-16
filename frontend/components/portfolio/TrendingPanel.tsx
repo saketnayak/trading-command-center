@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketTrending, getMarketMovers, getMarketSectors } from "@/lib/api";
 import type { MarketTicker, SectorData, PortfolioHolding } from "@/lib/types";
 import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
+import { WatchButton } from "@/components/portfolio/WatchButton";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -49,81 +51,91 @@ function TickerCard({
   item: MarketTicker;
   onClick: (ticker: string) => void;
 }) {
+  const router = useRouter();
   const up = (item.change_pct ?? 0) >= 0;
 
   return (
-    <button
-      onClick={() => onClick(item.ticker)}
-      className="w-full text-left bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 rounded-xl p-4 transition-all group"
-    >
-      <div className="flex items-start justify-between gap-2 mb-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          {item.logo ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={item.logo}
-              alt={item.ticker}
-              className="w-8 h-8 rounded object-contain bg-slate-700 p-0.5 shrink-0"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-            />
-          ) : (
-            <div className="w-8 h-8 rounded bg-slate-700 flex items-center justify-center shrink-0">
-              <span className="text-[9px] font-bold text-slate-400">{item.ticker.slice(0, 2)}</span>
+    <div className="w-full text-left bg-slate-800/60 hover:bg-slate-800 border border-slate-700/60 hover:border-slate-600 rounded-xl p-4 transition-all group">
+      <button onClick={() => onClick(item.ticker)} className="w-full text-left">
+        <div className="flex items-start justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {item.logo ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={item.logo}
+                alt={item.ticker}
+                className="w-8 h-8 rounded object-contain bg-slate-700 p-0.5 shrink-0"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+              />
+            ) : (
+              <div className="w-8 h-8 rounded bg-slate-700 flex items-center justify-center shrink-0">
+                <span className="text-[9px] font-bold text-slate-400">{item.ticker.slice(0, 2)}</span>
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-white font-mono leading-tight">{item.ticker}</p>
+              {item.name && (
+                <p className="text-[11px] text-slate-400 truncate leading-tight mt-0.5">{item.name}</p>
+              )}
             </div>
-          )}
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-white font-mono leading-tight">{item.ticker}</p>
-            {item.name && (
-              <p className="text-[11px] text-slate-400 truncate leading-tight mt-0.5">{item.name}</p>
+          </div>
+          <span
+            className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums ${
+              up ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
+            }`}
+          >
+            {fmtPct(item.change_pct)}
+          </span>
+        </div>
+
+        <div className="flex items-end justify-between">
+          <div>
+            <p className="text-base font-semibold text-white font-mono tabular-nums">
+              ${fmtPrice(item.price)}
+            </p>
+            <p className={`text-xs tabular-nums ${up ? "text-green-400" : "text-red-400"}`}>
+              {item.change != null ? `${item.change >= 0 ? "+" : ""}${item.change.toFixed(2)}` : ""}
+            </p>
+          </div>
+          <div className="text-right">
+            {item.market_cap != null && (
+              <p className="text-[11px] text-slate-500">Mkt cap {fmtMarketCap(item.market_cap)}</p>
+            )}
+            {item.sector && (
+              <p className="text-[10px] text-slate-600 truncate max-w-[100px]">{item.sector}</p>
             )}
           </div>
         </div>
-        <span
-          className={`shrink-0 text-xs font-semibold px-2 py-0.5 rounded-full tabular-nums ${
-            up ? "bg-green-500/15 text-green-400" : "bg-red-500/15 text-red-400"
-          }`}
+
+        {/* Day range bar */}
+        {item.high != null && item.low != null && item.price != null && item.high > item.low && (
+          <div className="mt-3">
+            <div className="flex justify-between text-[10px] text-slate-600 mb-1">
+              <span>L ${fmtPrice(item.low)}</span>
+              <span>H ${fmtPrice(item.high)}</span>
+            </div>
+            <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
+              <div
+                className={`h-full rounded-full ${up ? "bg-green-500" : "bg-red-500"}`}
+                style={{
+                  width: `${Math.min(100, Math.max(0, ((item.price - item.low) / (item.high - item.low)) * 100))}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </button>
+      {/* Action buttons at footer */}
+      <div className="flex gap-1.5 mt-3">
+        <button
+          onClick={() => router.push(`/runs/new?ticker=${encodeURIComponent(item.ticker)}`)}
+          className="flex-1 text-xs font-semibold py-1 rounded bg-violet-700 hover:bg-violet-600 text-white transition-colors"
         >
-          {fmtPct(item.change_pct)}
-        </span>
+          ⚡ Analyze
+        </button>
+        <WatchButton ticker={item.ticker} />
       </div>
-
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-base font-semibold text-white font-mono tabular-nums">
-            ${fmtPrice(item.price)}
-          </p>
-          <p className={`text-xs tabular-nums ${up ? "text-green-400" : "text-red-400"}`}>
-            {item.change != null ? `${item.change >= 0 ? "+" : ""}${item.change.toFixed(2)}` : ""}
-          </p>
-        </div>
-        <div className="text-right">
-          {item.market_cap != null && (
-            <p className="text-[11px] text-slate-500">Mkt cap {fmtMarketCap(item.market_cap)}</p>
-          )}
-          {item.sector && (
-            <p className="text-[10px] text-slate-600 truncate max-w-[100px]">{item.sector}</p>
-          )}
-        </div>
-      </div>
-
-      {/* Day range bar */}
-      {item.high != null && item.low != null && item.price != null && item.high > item.low && (
-        <div className="mt-3">
-          <div className="flex justify-between text-[10px] text-slate-600 mb-1">
-            <span>L ${fmtPrice(item.low)}</span>
-            <span>H ${fmtPrice(item.high)}</span>
-          </div>
-          <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full ${up ? "bg-green-500" : "bg-red-500"}`}
-              style={{
-                width: `${Math.min(100, Math.max(0, ((item.price - item.low) / (item.high - item.low)) * 100))}%`,
-              }}
-            />
-          </div>
-        </div>
-      )}
-    </button>
+    </div>
   );
 }
 
@@ -136,41 +148,47 @@ function MoverRow({
   item: MarketTicker;
   onClick: (ticker: string) => void;
 }) {
+  const router = useRouter();
   const up = (item.change_pct ?? 0) >= 0;
 
   return (
-    <button
-      onClick={() => onClick(item.ticker)}
-      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800/80 transition-colors group text-left"
-    >
-      {item.logo ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={item.logo}
-          alt={item.ticker}
-          className="w-7 h-7 rounded object-contain bg-slate-700 p-0.5 shrink-0"
-          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-        />
-      ) : (
-        <div className="w-7 h-7 rounded bg-slate-700 flex items-center justify-center shrink-0">
-          <span className="text-[9px] font-bold text-slate-400">{item.ticker.slice(0, 2)}</span>
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-bold text-white font-mono leading-tight">{item.ticker}</p>
-        {item.name && (
-          <p className="text-[10px] text-slate-500 truncate">{item.name}</p>
+    <div className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-slate-800/80 transition-colors group">
+      <button onClick={() => onClick(item.ticker)} className="flex-1 flex items-center gap-3 text-left min-w-0">
+        {item.logo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.logo}
+            alt={item.ticker}
+            className="w-7 h-7 rounded object-contain bg-slate-700 p-0.5 shrink-0"
+            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+          />
+        ) : (
+          <div className="w-7 h-7 rounded bg-slate-700 flex items-center justify-center shrink-0">
+            <span className="text-[9px] font-bold text-slate-400">{item.ticker.slice(0, 2)}</span>
+          </div>
         )}
-      </div>
-      <div className="text-right shrink-0">
-        <p className="text-sm font-semibold text-white font-mono tabular-nums">
-          ${fmtPrice(item.price)}
-        </p>
-        <p className={`text-xs font-semibold tabular-nums ${up ? "text-green-400" : "text-red-400"}`}>
-          {fmtPct(item.change_pct)}
-        </p>
-      </div>
-    </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-bold text-white font-mono leading-tight">{item.ticker}</p>
+          {item.name && (
+            <p className="text-[10px] text-slate-500 truncate">{item.name}</p>
+          )}
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-sm font-semibold text-white font-mono tabular-nums">
+            ${fmtPrice(item.price)}
+          </p>
+          <p className={`text-xs font-semibold tabular-nums ${up ? "text-green-400" : "text-red-400"}`}>
+            {fmtPct(item.change_pct)}
+          </p>
+        </div>
+      </button>
+      <button
+        onClick={() => router.push(`/runs/new?ticker=${encodeURIComponent(item.ticker)}`)}
+        className="shrink-0 text-xs font-semibold px-2 py-1 rounded bg-violet-700 hover:bg-violet-600 text-white transition-colors"
+      >
+        ⚡ Analyze
+      </button>
+    </div>
   );
 }
 

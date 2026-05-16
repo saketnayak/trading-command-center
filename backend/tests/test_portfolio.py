@@ -1,5 +1,7 @@
+import uuid
 import pytest
 from pathlib import Path
+from httpx import AsyncClient, ASGITransport
 from app.services.portfolio_parser import parse_portfolio_csv
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -76,3 +78,24 @@ def test_truly_empty_file_raises_400():
     with pytest.raises(HTTPException) as exc:
         parse_portfolio_csv(b"")
     assert exc.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_sector_gaps_returns_empty_without_finnhub_key():
+    """With no Finnhub key, sector-gaps returns an empty list."""
+    from main import app
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        email = f"sg_{uuid.uuid4().hex[:8]}@test.com"
+        await client.post("/auth/register", json={"email": email, "password": "password1", "name": "T"})
+        r = await client.post("/auth/login", json={"email": email, "password": "password1"})
+        token = r.json()["access_token"]
+
+        rp = await client.post("/portfolio", json={"name": "Test"}, headers={"Authorization": f"Bearer {token}"})
+        portfolio_id = rp.json()["id"]
+
+        r = await client.get(
+            f"/portfolio/{portfolio_id}/sector-gaps",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        assert r.json() == []

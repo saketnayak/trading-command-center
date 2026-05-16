@@ -27,6 +27,11 @@ out/
 docs/superpowers/
 .DS_Store
 
+# Private docs (specs, plans, launch strategy)
+docs/specs/
+docs/plans/
+docs/launch/
+
 # TradingAgents output cache
 backend/results/
 

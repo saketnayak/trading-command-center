@@ -25,8 +25,9 @@ import { EarningsPanel } from "@/components/portfolio/EarningsPanel";
 import { NewsPanel } from "@/components/portfolio/NewsPanel";
 import { TrendingPanel } from "@/components/portfolio/TrendingPanel";
 import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
+import { DiscoverPanel } from "@/components/portfolio/DiscoverPanel";
 
-type Tab = "holdings" | "insights" | "earnings" | "news" | "trending";
+type Tab = "holdings" | "insights" | "earnings" | "news" | "trending" | "discover";
 
 const PROVIDERS = ["openai", "anthropic", "google", "groq", "ollama", "vllm"];
 const DEPTHS = ["quick", "standard", "deep"] as const;
@@ -353,14 +354,30 @@ export default function PortfolioPage() {
               <span>Market</span>
               <span className="text-purple-400 text-xs">↑</span>
             </button>
+            {selectedId && current && (
+              <button
+                onClick={() => setTab("discover")}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  tab === "discover"
+                    ? "border-violet-500 text-violet-400"
+                    : "border-transparent text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Discover 🔍
+              </button>
+            )}
           </div>
         )}
 
         {/* Market panel — available regardless of portfolio selection */}
         {tab === "trending" && <TrendingPanel />}
 
+        {tab === "discover" && selectedPortfolio && (
+          <DiscoverPanel portfolioId={selectedPortfolio.id} />
+        )}
+
         {/* Portfolio tab panels — require a loaded portfolio */}
-        {selectedId && !loadingCurrent && current && tab !== "trending" && (
+        {selectedId && !loadingCurrent && current && tab !== "trending" && tab !== "discover" && (
           <>
             {tab === "holdings" && (
               <div className="space-y-3">
