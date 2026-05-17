@@ -33,7 +33,7 @@ async def upsert_my_profile(
     )
     profile = result.scalar_one_or_none()
 
-    data = req.model_dump(exclude_unset=False)
+    data = req.model_dump(exclude_unset=True)
 
     if profile is None:
         profile = InvestorProfile(user_id=current_user.id, **data)
