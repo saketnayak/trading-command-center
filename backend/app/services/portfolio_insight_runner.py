@@ -61,6 +61,50 @@ async def _fetch_sector(ticker: str, finnhub_key: Optional[str]) -> str:
     return sector
 
 
+def _serialize_investor_profile(profile) -> str:
+    """Convert investor profile to human-readable prompt block. Returns '' if nothing to serialize."""
+    RISK_LABELS = {1: "very conservative", 2: "conservative", 3: "moderate", 4: "aggressive", 5: "very aggressive"}
+    HORIZON_LABELS = {"lt_1y": "< 1 year", "1_3y": "1–3 years", "3_7y": "3–7 years", "7_15y": "7–15 years", "gt_15y": "15+ years"}
+    STYLE_LABELS = {"passive": "passive (index/ETF-first)", "active": "active stock picking", "hybrid": "hybrid"}
+    SIZING_LABELS = {"equal_weight": "equal weight", "conviction": "conviction-based", "market_cap": "market-cap weighted"}
+    INCOME_LABELS = {"growth_only": "growth only (no income needed)", "some_income": "some income (5–20% yield)", "income_first": "income-first (>20% yield)"}
+    ABILITY_LABELS = {"low": "low — cannot afford significant losses", "medium": "medium — can absorb moderate drawdowns", "high": "high — can tolerate large swings"}
+    SIZE_LABELS = {"lt_50k": "< $50k", "50k_250k": "$50k–$250k", "250k_1m": "$250k–$1M", "1m_5m": "$1M–$5M", "gt_5m": "> $5M"}
+
+    lines = []
+    if profile.time_horizon:
+        lines.append(f"- Time horizon: {HORIZON_LABELS.get(profile.time_horizon, profile.time_horizon)}")
+    if profile.risk_willingness:
+        label = RISK_LABELS.get(profile.risk_willingness, str(profile.risk_willingness))
+        lines.append(f"- Risk willingness: {profile.risk_willingness}/5 ({label})")
+    if profile.risk_ability:
+        lines.append(f"- Risk ability: {ABILITY_LABELS.get(profile.risk_ability, profile.risk_ability)}")
+    if profile.investment_style:
+        lines.append(f"- Investment style: {STYLE_LABELS.get(profile.investment_style, profile.investment_style)}")
+    if profile.sizing_approach:
+        lines.append(f"- Position sizing: {SIZING_LABELS.get(profile.sizing_approach, profile.sizing_approach)}")
+    if profile.preferred_sectors:
+        lines.append(f"- Preferred sectors: {', '.join(profile.preferred_sectors)}")
+    if profile.anti_portfolio:
+        lines.append(f"- Anti-portfolio (NEVER recommend adding): {', '.join(profile.anti_portfolio)}")
+    if profile.blind_spots:
+        lines.append(f"- Known blind spots: {profile.blind_spots}")
+    if profile.emotional_tendencies:
+        lines.append(f"- Emotional tendencies: {profile.emotional_tendencies}")
+    if profile.personal_rules:
+        lines.append(f"- Personal rules: {profile.personal_rules}")
+    if profile.target_portfolio_size:
+        lines.append(f"- Target portfolio size: {SIZE_LABELS.get(profile.target_portfolio_size, profile.target_portfolio_size)}")
+    if profile.income_goal:
+        lines.append(f"- Income goal: {INCOME_LABELS.get(profile.income_goal, profile.income_goal)}")
+    if profile.milestones:
+        lines.append(f"- Milestones: {profile.milestones}")
+
+    if not lines:
+        return ""
+    return "INVESTOR PROFILE (personalize all analysis to this user):\n" + "\n".join(lines)
+
+
 async def _call_llm(provider: str, model: str, api_key: Optional[str], prompt: str) -> str:
     """Single LLM call returning raw text. Uses direct provider APIs."""
     _json_payload = {
@@ -169,6 +213,7 @@ def _build_prompt(
     total_pnl: Optional[float],
     total_pnl_pct: Optional[float],
     holdings: list[dict],
+    investor_profile=None,
 ) -> str:
     rows = []
     for h in holdings:
@@ -202,6 +247,20 @@ def _build_prompt(
     else:
         portfolio_type_note = "This is an EQUITY portfolio."
 
+    # Compute staleness threshold based on investor time horizon
+    staleness_days = 7
+    if investor_profile and investor_profile.time_horizon:
+        staleness_days = {"lt_1y": 7, "1_3y": 10, "3_7y": 14, "7_15y": 21, "gt_15y": 30}.get(
+            investor_profile.time_horizon, 7
+        )
+
+    # Build optional investor profile block
+    profile_block = ""
+    if investor_profile:
+        serialized = _serialize_investor_profile(investor_profile)
+        if serialized:
+            profile_block = f"\n{serialized}\n"
+
     return f"""You are a professional portfolio analyst AI. Analyze the following investment portfolio and provide structured daily insights.
 
 Date: {analysis_date}
@@ -210,17 +269,19 @@ Portfolio type: {portfolio_type_note}
 Total market value: {value_str}
 Total unrealized P&L: {pnl_str}
 Number of holdings: {len(holdings)}
-
+{profile_block}
 Holdings:
 {holdings_text}
 
 Your analysis should:
 1. Identify concentration risk (positions >20% of portfolio)
 2. Flag significant unrealized losses (>15% drawdown)
-3. Note stale or missing analysis (>7 days old)
+3. Note stale or missing analysis (>{staleness_days} days old)
 4. Evaluate diversification across sectors (equities) or crypto categories (crypto assets)
 5. Identify positions with recent buy/sell signals
 6. Consider overall market positioning; for crypto note 24/7 trading and higher volatility
+7. Respect the investor's anti-portfolio rules — never recommend buying excluded sectors/assets
+8. Frame urgency and risk relative to the investor's stated time horizon and risk tolerance
 
 Respond ONLY with a single valid JSON object matching this exact schema (no markdown, no explanation):
 {{
@@ -285,6 +346,12 @@ async def generate_portfolio_insight(insight_id: str) -> None:
             portfolio = await db.get(Portfolio, insight.portfolio_id)
             if not portfolio:
                 raise ValueError("Portfolio not found")
+
+            from app.models.investor_profile import InvestorProfile as InvestorProfileModel
+            _profile_result = await db.execute(
+                select(InvestorProfileModel).where(InvestorProfileModel.user_id == portfolio.user_id)
+            )
+            investor_profile = _profile_result.scalar_one_or_none()
 
             # Fetch latest snapshot + holdings
             snap_result = await db.execute(
@@ -385,6 +452,7 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                 total_pnl=total_pnl,
                 total_pnl_pct=total_pnl_pct,
                 holdings=enriched,
+                investor_profile=investor_profile,
             )
 
             raw_response = await _call_llm(llm_provider, llm_model, llm_key, prompt)
