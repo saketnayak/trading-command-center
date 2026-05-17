@@ -1,7 +1,7 @@
 import uuid, enum
 from datetime import datetime
 from sqlalchemy import String, Enum as SAEnum, DateTime, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.base import Base
 
 class UserRole(str, enum.Enum):
@@ -18,3 +18,6 @@ class User(Base):
     google_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
     preferred_currency: Mapped[str] = mapped_column(String(8), server_default="USD")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    investor_profile: Mapped["InvestorProfile | None"] = relationship(
+        "InvestorProfile", back_populates="user", uselist=False
+    )
