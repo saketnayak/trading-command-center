@@ -1,5 +1,5 @@
 import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -493,4 +493,24 @@ export async function discoverStocks(
   });
   if (!r.ok) throw new Error("Failed to discover stocks");
   return r.json();
+}
+
+export async function getInvestorProfile(): Promise<InvestorProfile | null> {
+  const r = await fetchWithAuth("/investor-profile/me");
+  if (!r.ok) throw new Error("Failed to fetch investor profile");
+  return r.json();
+}
+
+export async function upsertInvestorProfile(data: InvestorProfileUpsertRequest): Promise<InvestorProfile> {
+  const r = await fetchWithAuth("/investor-profile/me", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error("Failed to save investor profile");
+  return r.json();
+}
+
+export async function deleteInvestorProfile(): Promise<void> {
+  const r = await fetchWithAuth("/investor-profile/me", { method: "DELETE" });
+  if (!r.ok) throw new Error("Failed to delete investor profile");
 }

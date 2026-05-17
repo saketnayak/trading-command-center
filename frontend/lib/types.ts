@@ -353,3 +353,45 @@ export interface SectorData {
   price: number | null;
   change_pct: number | null;
 }
+
+export interface InvestorProfile {
+  id: string;
+  user_id: string;
+  created_at: string;
+  updated_at: string | null;
+  income_range: string | null;
+  liquidity_reserve: string | null;
+  dependents: number | null;
+  time_horizon: string | null;
+  risk_willingness: number | null;
+  risk_ability: string | null;
+  investment_style: string | null;
+  sizing_approach: string | null;
+  preferred_sectors: string[] | null;
+  blind_spots: string | null;
+  emotional_tendencies: string | null;
+  personal_rules: string | null;
+  anti_portfolio: string[] | null;
+  target_portfolio_size: string | null;
+  income_goal: string | null;
+  milestones: string | null;
+}
+
+export interface InvestorProfileUpsertRequest {
+  income_range?: string | null;
+  liquidity_reserve?: string | null;
+  dependents?: number | null;
+  time_horizon?: string | null;
+  risk_willingness?: number | null;
+  risk_ability?: string | null;
+  investment_style?: string | null;
+  sizing_approach?: string | null;
+  preferred_sectors?: string[] | null;
+  blind_spots?: string | null;
+  emotional_tendencies?: string | null;
+  personal_rules?: string | null;
+  anti_portfolio?: string[] | null;
+  target_portfolio_size?: string | null;
+  income_goal?: string | null;
+  milestones?: string | null;
+}
