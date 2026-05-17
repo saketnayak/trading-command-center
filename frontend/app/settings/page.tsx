@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getApiKeys, getUsers, inviteUser, updateProfile, getSmtpStatus, getMe, downloadDbBackup, restoreDbBackup, getInvestorProfile } from "@/lib/api";
-import type { InvestorProfile } from "@/lib/types";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { TopNav } from "@/components/layout/TopNav";
 import { ApiKeyRow } from "@/components/settings/ApiKeyRow";

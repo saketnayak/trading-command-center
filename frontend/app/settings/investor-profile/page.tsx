@@ -208,7 +208,7 @@ export default function InvestorProfilePage() {
               </Select>
             </div>
             <div>
-              <Label>Monthly liquidity reserve (e.g. "3 months expenses")</Label>
+              <Label>{"Monthly liquidity reserve (e.g. \"3 months expenses\")"}</Label>
               <input
                 type="text"
                 value={form.liquidity_reserve}
