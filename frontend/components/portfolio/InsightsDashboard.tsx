@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { generateInsight, getLatestInsight, listInsights, getProviderModels } from "@/lib/api";
 import { WatchButton } from "@/components/portfolio/WatchButton";
+import { ThesisPanel } from "@/components/portfolio/ThesisPanel";
 import type { PortfolioInsight, InsightActionItem, InsightRiskAlert } from "@/lib/types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -620,6 +621,8 @@ export function InsightsDashboard({ portfolioId, hasHoldings, portfolioName }: I
           <InsightView insight={selectedInsight} portfolioName={portfolioName} />
         )}
       </div>
+
+      <ThesisPanel portfolioId={portfolioId} />
     </div>
   );
 }
