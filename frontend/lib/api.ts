@@ -514,3 +514,37 @@ export async function deleteInvestorProfile(): Promise<void> {
   const r = await fetchWithAuth("/investor-profile/me", { method: "DELETE" });
   if (!r.ok) throw new Error("Failed to delete investor profile");
 }
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface PortfolioChatResponse {
+  response: string;
+  provider: string;
+  model: string;
+}
+
+export async function sendPortfolioChat(
+  portfolioId: string,
+  message: string,
+  conversationHistory: ChatMessage[],
+  llmProvider: string,
+  llmModel: string,
+): Promise<PortfolioChatResponse> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/chat`, {
+    method: "POST",
+    body: JSON.stringify({
+      message,
+      conversation_history: conversationHistory,
+      llm_provider: llmProvider,
+      llm_model: llmModel,
+    }),
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    throw new Error(body?.detail ?? "Chat request failed");
+  }
+  return r.json();
+}
