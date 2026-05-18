@@ -120,7 +120,7 @@ def _detect_complacency(
 
     days_since: Optional[int] = None
     if most_recent_run_at is not None:
-        days_since = (datetime.now(timezone.utc) - most_recent_run_at).days
+        days_since = (datetime.now(timezone.utc).replace(tzinfo=None) - most_recent_run_at.replace(tzinfo=None)).days
 
     if days_since is None or days_since >= 14:
         severity = "critical" if (days_since is None or days_since > 30) else "warning"
@@ -147,6 +147,7 @@ def _detect_complacency(
         if existing:
             existing["affected_tickers"] = unanalyzed
             existing["unanalyzed_count"] = len(unanalyzed)
+            existing["severity"] = "critical"
         else:
             alerts.append({
                 "type": "complacency",
@@ -253,12 +254,16 @@ async def compute_behavioral_alerts(
     value_map: dict[str, float] = {}
     sector_map: dict[str, str] = {}
 
-    if latest_insight and latest_insight.holdings_snapshot:
+    if latest_insight and isinstance(latest_insight.holdings_snapshot, dict):
         for ticker, data in latest_insight.holdings_snapshot.items():
-            if data.get("market_value"):
-                value_map[ticker] = float(data["market_value"])
-            if data.get("sector"):
-                sector_map[ticker] = data["sector"]
+            if not isinstance(data, dict):
+                continue
+            val = data.get("market_value")
+            if val is not None:
+                value_map[ticker] = float(val)
+            sec = data.get("sector")
+            if sec:
+                sector_map[ticker] = sec
 
     for h in holdings:
         if h.ticker not in value_map and h.avg_cost and h.shares:
