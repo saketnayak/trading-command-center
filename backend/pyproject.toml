@@ -19,7 +19,7 @@ dependencies = [
     "email-validator>=2.0",
     "langchain-core>=0.3",
     "langchain-openai>=1.0",
-    "tradingagents>=0.3",
+    "tradingagents==0.3.2",
     "apscheduler>=4.0.0a5",
 ]
 
