@@ -1,5 +1,5 @@
 import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -513,6 +513,34 @@ export async function upsertInvestorProfile(data: InvestorProfileUpsertRequest):
 export async function deleteInvestorProfile(): Promise<void> {
   const r = await fetchWithAuth("/investor-profile/me", { method: "DELETE" });
   if (!r.ok) throw new Error("Failed to delete investor profile");
+}
+
+export async function createThesisCrossRef(
+  portfolioId: string,
+  data: { thesis_text: string; llm_provider: string; llm_model: string }
+): Promise<ThesisCrossRef> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/thesis-crossref`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    throw new Error(body?.detail ?? "Thesis analysis failed");
+  }
+  return r.json();
+}
+
+export async function getThesisCrossRefs(portfolioId: string): Promise<ThesisCrossRef[]> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/thesis-crossrefs`);
+  if (!r.ok) throw new Error("Failed to fetch thesis history");
+  return r.json();
+}
+
+export async function deleteThesisCrossRef(portfolioId: string, crossrefId: string): Promise<void> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/thesis-crossrefs/${crossrefId}`, {
+    method: "DELETE",
+  });
+  if (!r.ok) throw new Error("Failed to delete thesis cross-reference");
 }
 
 export interface ChatMessage {
