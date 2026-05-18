@@ -143,7 +143,11 @@ def _detect_complacency(
 
     unanalyzed = [t for t in tickers if t not in verdicts_by_ticker]
     if len(unanalyzed) > total / 2 and total > 0:
-        if not any(a["type"] == "complacency" for a in alerts):
+        existing = next((a for a in alerts if a["type"] == "complacency"), None)
+        if existing:
+            existing["affected_tickers"] = unanalyzed
+            existing["unanalyzed_count"] = len(unanalyzed)
+        else:
             alerts.append({
                 "type": "complacency",
                 "severity": "critical",
