@@ -664,6 +664,52 @@ class ChatResponse(BaseModel):
     model: str
 
 
+class ThesisCrossRefRequest(BaseModel):
+    thesis_text: str
+    llm_provider: str
+    llm_model: str
+
+
+class ThesisCrossRefResponse(BaseModel):
+    id: str
+    portfolio_id: str
+    created_at: str
+    llm_provider: str
+    llm_model: str
+    thesis_text_preview: str
+    alignment_score: Optional[int]
+    thesis_summary: Optional[str]
+    aligned_positions: Optional[list]
+    misaligned_positions: Optional[list]
+    missing_exposure: Optional[list]
+    excess_exposure: Optional[list]
+    recommendations: Optional[list]
+    summary: Optional[str]
+    holdings_snapshot: Optional[dict]
+    error: Optional[str]
+
+    @classmethod
+    def from_orm(cls, obj) -> "ThesisCrossRefResponse":
+        return cls(
+            id=str(obj.id),
+            portfolio_id=str(obj.portfolio_id),
+            created_at=obj.created_at.isoformat(),
+            llm_provider=obj.llm_provider,
+            llm_model=obj.llm_model,
+            thesis_text_preview=obj.thesis_text_preview,
+            alignment_score=obj.alignment_score,
+            thesis_summary=obj.thesis_summary,
+            aligned_positions=obj.aligned_positions,
+            misaligned_positions=obj.misaligned_positions,
+            missing_exposure=obj.missing_exposure,
+            excess_exposure=obj.excess_exposure,
+            recommendations=obj.recommendations,
+            summary=obj.summary,
+            holdings_snapshot=obj.holdings_snapshot,
+            error=obj.error,
+        )
+
+
 class InsightResponse(BaseModel):
     id: UUID
     portfolio_id: UUID
@@ -805,6 +851,70 @@ async def portfolio_chat(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return ChatResponse(response=response_text, provider=body.llm_provider, model=body.llm_model)
+
+
+@router.post("/portfolio/{portfolio_id}/thesis-crossref", response_model=ThesisCrossRefResponse)
+async def create_thesis_crossref(
+    portfolio_id: UUID,
+    body: ThesisCrossRefRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    if len(body.thesis_text) < 50 or len(body.thesis_text) > 10000:
+        raise HTTPException(status_code=422, detail="thesis_text must be 50–10,000 characters")
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.services.portfolio_thesis_runner import run_thesis_crossref
+    try:
+        crossref = await run_thesis_crossref(
+            portfolio_id=portfolio_id,
+            thesis_text=body.thesis_text,
+            llm_provider=body.llm_provider,
+            llm_model=body.llm_model,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return ThesisCrossRefResponse.from_orm(crossref)
+
+
+@router.get("/portfolio/{portfolio_id}/thesis-crossrefs", response_model=list[ThesisCrossRefResponse])
+async def list_thesis_crossrefs(
+    portfolio_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.models.portfolio_thesis_crossref import PortfolioThesisCrossRef
+    result = await db.execute(
+        select(PortfolioThesisCrossRef)
+        .where(PortfolioThesisCrossRef.portfolio_id == portfolio_id)
+        .order_by(desc(PortfolioThesisCrossRef.created_at))
+        .limit(20)
+    )
+    rows = result.scalars().all()
+    return [ThesisCrossRefResponse.from_orm(r) for r in rows]
+
+
+@router.delete("/portfolio/{portfolio_id}/thesis-crossrefs/{crossref_id}", status_code=204)
+async def delete_thesis_crossref(
+    portfolio_id: UUID,
+    crossref_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.models.portfolio_thesis_crossref import PortfolioThesisCrossRef
+    result = await db.execute(
+        select(PortfolioThesisCrossRef).where(
+            PortfolioThesisCrossRef.id == crossref_id,
+            PortfolioThesisCrossRef.portfolio_id == portfolio_id,
+        )
+    )
+    crossref = result.scalar_one_or_none()
+    if not crossref:
+        raise HTTPException(status_code=404, detail="Cross-reference not found")
+    await db.delete(crossref)
+    await db.commit()
 
 
 # ── Batch Analyze ─────────────────────────────────────────────────────────────
