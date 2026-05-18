@@ -1,6 +1,7 @@
 """Runs a thesis cross-reference analysis against the user's portfolio."""
 import asyncio
 import json
+import re
 import uuid
 
 from sqlalchemy import select, desc
@@ -13,6 +14,7 @@ from app.services.portfolio_insight_runner import (
     _call_llm,
     _fetch_sector,
     _get_api_key,
+    _serialize_investor_profile,
 )
 
 _FINNHUB_CONCURRENCY = asyncio.Semaphore(5)
@@ -27,7 +29,7 @@ Holdings:
 
 Sector breakdown:
 {sector_text}
-
+{profile_block}
 INVESTMENT THESIS (user-provided):
 {thesis_text}
 
@@ -47,7 +49,11 @@ Respond ONLY with valid JSON matching this exact schema (no markdown, no explana
     {{"action": "<TRIM|EXIT|CONSIDER|HOLD>", "ticker": "<string>", "rationale": "<1 sentence>"}}
   ],
   "summary": "<2-3 paragraph narrative of overall alignment>"
-}}"""
+}}
+
+Rules:
+- Respect the investor's anti-portfolio rules — never recommend adding excluded sectors/assets in the recommendations field
+- Tailor alignment score and recommendations to the investor's stated risk tolerance, time horizon, and investment style when provided"""
 
 
 def _format_holdings_for_thesis(enriched: list[dict]) -> str:
@@ -98,7 +104,13 @@ async def run_thesis_crossref(
     holdings = snapshot.holdings if snapshot else []
     tickers = [h.ticker for h in holdings]
 
+    from app.models.investor_profile import InvestorProfile as InvestorProfileModel
     from app.routers.portfolio import _fetch_prices_bulk, _get_finnhub_key
+
+    profile_result = await db.execute(
+        select(InvestorProfileModel).where(InvestorProfileModel.user_id == portfolio.user_id)
+    )
+    investor_profile = profile_result.scalar_one_or_none()
 
     finnhub_key = await _get_finnhub_key(db)
     llm_api_key = await _get_api_key(llm_provider, db)
@@ -142,11 +154,18 @@ async def run_thesis_crossref(
 
     total_value_str = f"${total_market_value:,.2f}" if total_market_value > 0 else "N/A"
 
+    profile_block = ""
+    if investor_profile:
+        serialized = _serialize_investor_profile(investor_profile)
+        if serialized:
+            profile_block = f"\n{serialized}\n"
+
     prompt = THESIS_PROMPT_TEMPLATE.format(
         portfolio_name=portfolio.name,
         total_value=total_value_str,
         holdings_text=_format_holdings_for_thesis(enriched),
         sector_text=_format_sectors_for_thesis(enriched, total_market_value),
+        profile_block=profile_block,
         thesis_text=thesis_text[:10000],
     )
 
@@ -165,8 +184,10 @@ async def run_thesis_crossref(
 
     try:
         raw = await _call_llm(llm_provider, llm_model, llm_api_key, prompt)
-        cleaned = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        parsed = json.loads(cleaned)
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            raise ValueError("No JSON object found in LLM response")
+        parsed = json.loads(match.group(0))
         crossref.alignment_score = parsed.get("alignment_score")
         crossref.thesis_summary = parsed.get("thesis_summary")
         crossref.aligned_positions = parsed.get("aligned_positions")

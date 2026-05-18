@@ -12,7 +12,7 @@ from app.models.portfolio import Portfolio, PortfolioSnapshot, PortfolioHolding
 from app.models.portfolio_insight import PortfolioInsight, InsightStatus
 from app.models.run import Run, RunStatus
 from app.services.portfolio_insight_runner import (
-    _call_llm,
+    _call_llm_chat,
     _fetch_sector,
     _get_api_key,
     _serialize_investor_profile,
@@ -22,6 +22,8 @@ _FINNHUB_CONCURRENCY = asyncio.Semaphore(5)
 
 
 SYSTEM_PROMPT_TEMPLATE = """You are a personal portfolio advisor for a specific investor. Answer their questions based ONLY on their actual portfolio data shown below. Be direct, specific, and concise. Do not give generic advice — always reference their specific tickers, weights, and verdicts.
+
+IMPORTANT: Always respond in plain conversational prose. Never use JSON, XML, or any structured data format in your response. Write like a trusted advisor talking directly to the investor.
 
 Portfolio: {portfolio_name}
 Total market value: {total_value}
@@ -37,6 +39,7 @@ Sector breakdown:
 {insight_block}
 
 Rules:
+- Respond in plain English prose — no JSON, no bullet arrays, no structured objects
 - Only analyze the portfolio shown above — do not hallucinate positions they don't hold
 - When uncertain about external market data, say so — don't fabricate prices or news
 - Be direct and opinionated, not wishy-washy
@@ -96,24 +99,6 @@ def _format_insight_block(insight: Optional[PortfolioInsight]) -> str:
             lines.append(f"    - [{alert.get('severity')}] {alert.get('description', '')[:120]} ({tickers})")
     return "\n".join(lines)
 
-
-def _build_conversation_prompt(system_prompt: str, conversation_history: list[dict], new_message: str) -> str:
-    """Serialize conversation history into a single prompt string."""
-    max_msgs = _MAX_HISTORY_TURNS * 2
-    capped = conversation_history[-max_msgs:] if len(conversation_history) > max_msgs else conversation_history
-
-    parts = [system_prompt, ""]
-    for msg in capped:
-        role = msg.get("role", "user")
-        content = msg.get("content", "")
-        if role == "user":
-            parts.append(f"User: {content}")
-        elif role == "assistant":
-            parts.append(f"Assistant: {content}")
-
-    parts.append(f"User: {new_message}")
-    parts.append("Assistant:")
-    return "\n".join(parts)
 
 
 async def generate_chat_response(
@@ -248,5 +233,13 @@ async def generate_chat_response(
         insight_block=_format_insight_block(latest_insight),
     )
 
-    full_prompt = _build_conversation_prompt(system_prompt, conversation_history, message)
-    return await _call_llm(llm_provider, llm_model, llm_api_key, full_prompt)
+    max_msgs = _MAX_HISTORY_TURNS * 2
+    capped = conversation_history[-max_msgs:] if len(conversation_history) > max_msgs else conversation_history
+    chat_messages = [{"role": m["role"], "content": m["content"]} for m in capped]
+    chat_messages.append({"role": "user", "content": message})
+
+    response = await _call_llm_chat(llm_provider, llm_model, llm_api_key, system_prompt, chat_messages)
+    stripped = response.strip()
+    if stripped.startswith("{") or stripped.startswith("["):
+        return "I received a structured response instead of prose. Please try rephrasing your question."
+    return response
