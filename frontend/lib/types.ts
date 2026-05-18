@@ -425,3 +425,29 @@ export interface ThesisCrossRef {
   holdings_snapshot: Record<string, unknown> | null;
   error: string | null;
 }
+
+export interface BehavioralAlert {
+  type: "ignored_sell_signal" | "concentration_drift" | "complacency" | "repeated_action_item";
+  severity: "critical" | "warning" | "info";
+  title: string;
+  description: string;
+  affected_tickers: string[];
+  suggested_action: string;
+  // optional fields depending on type
+  days?: number;
+  current_weight_pct?: number;
+  threshold_pct?: number;
+  days_since_last_run?: number | null;
+  unanalyzed_count?: number;
+  total_holdings?: number;
+  consecutive_count?: number;
+  first_seen_date?: string;
+}
+
+export interface BehavioralAlertsResponse {
+  alerts: BehavioralAlert[];
+  alert_count: number;
+  critical_count: number;
+  warning_count: number;
+  info_count: number;
+}

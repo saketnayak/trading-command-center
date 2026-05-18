@@ -1455,3 +1455,21 @@ Candidates:
 
     _discover_cache[cache_key] = (recommendations, now + _DISCOVER_TTL)
     return {"recommendations": recommendations, "cached": False}
+
+
+@router.get("/portfolio/{portfolio_id}/behavioral-alerts")
+async def get_behavioral_alerts(
+    portfolio_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.services.behavioral_alerts_service import compute_behavioral_alerts
+    alerts = await compute_behavioral_alerts(portfolio_id, user.id, db)
+    return {
+        "alerts": alerts,
+        "alert_count": len(alerts),
+        "critical_count": sum(1 for a in alerts if a["severity"] == "critical"),
+        "warning_count": sum(1 for a in alerts if a["severity"] == "warning"),
+        "info_count": sum(1 for a in alerts if a["severity"] == "info"),
+    }
