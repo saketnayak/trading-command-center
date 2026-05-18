@@ -138,13 +138,16 @@ with open(graph_path) as f:
     content = f.read()
 
 if '"technical": ToolNode' not in content:
-    content = content.replace(
+    new_content = content.replace(
         '"fundamentals": ToolNode([\n                get_fundamentals,\n                get_balance_sheet,\n                get_cashflow,\n                get_income_statement,\n            ]),\n        }',
         '"fundamentals": ToolNode([\n                get_fundamentals,\n                get_balance_sheet,\n                get_cashflow,\n                get_income_statement,\n            ]),\n            "technical": ToolNode([get_stock_data, get_indicators]),\n        }',
     )
-    with open(graph_path, "w") as f:
-        f.write(content)
-    print("  ✓ Patched trading_graph.py — added technical ToolNode")
+    if new_content == content:
+        print("  ✗ WARNING: trading_graph.py patch did not match — check library version")
+    else:
+        with open(graph_path, "w") as f:
+            f.write(new_content)
+        print("  ✓ Patched trading_graph.py — added technical ToolNode")
 else:
     print("  · trading_graph.py already patched")
 
