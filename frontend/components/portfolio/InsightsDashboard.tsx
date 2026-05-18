@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { generateInsight, getLatestInsight, listInsights, getProviderModels } from "@/lib/api";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 import type { PortfolioInsight, InsightActionItem, InsightRiskAlert } from "@/lib/types";
+import { BehavioralAlerts } from "@/components/portfolio/BehavioralAlerts";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -565,7 +566,9 @@ export function InsightsDashboard({ portfolioId, hasHoldings, portfolioName }: I
   }
 
   return (
-    <div className="flex gap-5">
+    <div>
+      <BehavioralAlerts portfolioId={portfolioId} />
+      <div className="flex gap-5">
       {/* Sidebar: history + generate button */}
       <div className="w-52 shrink-0 space-y-2">
         <button
@@ -621,6 +624,7 @@ export function InsightsDashboard({ portfolioId, hasHoldings, portfolioName }: I
         )}
       </div>
 
+      </div>
     </div>
   );
 }

@@ -12,8 +12,9 @@ import {
   getPortfolioFundamentals,
   batchAnalyzePortfolio,
   getProviderModels,
+  getBehavioralAlerts,
 } from "@/lib/api";
-import type { Portfolio, PortfolioHolding } from "@/lib/types";
+import type { Portfolio, PortfolioHolding, BehavioralAlertsResponse } from "@/lib/types";
 import { isCrypto } from "@/lib/asset";
 import { PortfolioSwitcher } from "@/components/portfolio/PortfolioSwitcher";
 import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
@@ -224,6 +225,14 @@ export default function PortfolioPage() {
     staleTime: 1000 * 60 * 30,
   });
 
+  const { data: behavioralAlerts } = useQuery<BehavioralAlertsResponse>({
+    queryKey: ["behavioralAlerts", selectedId],
+    queryFn: () => getBehavioralAlerts(selectedId!),
+    enabled: selectedId != null && tab === "insights",
+    staleTime: 1000 * 60 * 5,
+  });
+  const alertCount = (behavioralAlerts?.critical_count ?? 0) + (behavioralAlerts?.warning_count ?? 0);
+
   // Auto-select first portfolio on load
   useEffect(() => {
     if (selectedId === null && portfolios.length > 0) {
@@ -275,9 +284,9 @@ export default function PortfolioPage() {
     URL.revokeObjectURL(url);
   }
 
-  const TABS: Array<{ id: Tab; label: string; badge?: string }> = [
+  const TABS: Array<{ id: Tab; label: string; badge?: string; alertCount?: number }> = [
     { id: "holdings", label: "Holdings" },
-    { id: "insights", label: "AI Insights", badge: "✦" },
+    { id: "insights", label: "AI Insights", badge: "✦", alertCount: alertCount > 0 ? alertCount : undefined },
     ...(!allCrypto ? [{ id: "earnings" as Tab, label: "Earnings" }] : []),
     { id: "news", label: "News" },
     { id: "chat", label: "Chat" },
@@ -344,7 +353,12 @@ export default function PortfolioPage() {
                 }`}
               >
                 <span>{t.label}</span>
-                {t.badge && <span className="text-purple-400 text-xs">{t.badge}</span>}
+                {t.alertCount != null && (
+                  <span className="text-xs px-1 py-0.5 bg-red-500 text-white rounded font-mono leading-none min-w-[16px] text-center">
+                    {t.alertCount}
+                  </span>
+                )}
+                {!t.alertCount && t.badge && <span className="text-purple-400 text-xs">{t.badge}</span>}
               </button>
             ))}
             <button
