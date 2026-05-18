@@ -2,8 +2,10 @@
 """Patches the installed TradingAgents library to add technical analyst support."""
 
 import os
+import re
 import shutil
 import site
+import sys
 
 def find_pkg() -> str:
     for sp in site.getsitepackages():
@@ -138,16 +140,18 @@ with open(graph_path) as f:
     content = f.read()
 
 if '"technical": ToolNode' not in content:
-    new_content = content.replace(
-        '"fundamentals": ToolNode([\n                get_fundamentals,\n                get_balance_sheet,\n                get_cashflow,\n                get_income_statement,\n            ]),\n        }',
-        '"fundamentals": ToolNode([\n                get_fundamentals,\n                get_balance_sheet,\n                get_cashflow,\n                get_income_statement,\n            ]),\n            "technical": ToolNode([get_stock_data, get_indicators]),\n        }',
+    new_content = re.sub(
+        r'("fundamentals":\s*ToolNode\(\[.*?\]\s*\))',
+        r'\1\n            "technical": ToolNode([get_stock_data, get_indicators])',
+        content,
+        flags=re.DOTALL,
     )
     if new_content == content:
-        print("  ✗ WARNING: trading_graph.py patch did not match — check library version")
-    else:
-        with open(graph_path, "w") as f:
-            f.write(new_content)
-        print("  ✓ Patched trading_graph.py — added technical ToolNode")
+        print("  ✗ ERROR: trading_graph.py patch did not match — check library version")
+        sys.exit(1)
+    with open(graph_path, "w") as f:
+        f.write(new_content)
+    print("  ✓ Patched trading_graph.py — added technical ToolNode")
 else:
     print("  · trading_graph.py already patched")
 
