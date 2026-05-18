@@ -651,6 +651,19 @@ class InsightGenerateRequest(BaseModel):
     llm_model: str
 
 
+class ChatRequest(BaseModel):
+    message: str
+    conversation_history: list[dict] = []
+    llm_provider: str
+    llm_model: str
+
+
+class ChatResponse(BaseModel):
+    response: str
+    provider: str
+    model: str
+
+
 class InsightResponse(BaseModel):
     id: UUID
     portfolio_id: UUID
@@ -769,6 +782,29 @@ async def get_insight(
     if not insight:
         raise HTTPException(status_code=404, detail="Insight not found")
     return insight
+
+
+@router.post("/portfolio/{portfolio_id}/chat", response_model=ChatResponse)
+async def portfolio_chat(
+    portfolio_id: UUID,
+    body: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.services.portfolio_chat_service import generate_chat_response
+    try:
+        response_text = await generate_chat_response(
+            portfolio_id=portfolio_id,
+            message=body.message,
+            conversation_history=body.conversation_history,
+            llm_provider=body.llm_provider,
+            llm_model=body.llm_model,
+            db=db,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return ChatResponse(response=response_text, provider=body.llm_provider, model=body.llm_model)
 
 
 # ── Batch Analyze ─────────────────────────────────────────────────────────────
