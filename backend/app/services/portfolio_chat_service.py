@@ -23,6 +23,8 @@ _FINNHUB_CONCURRENCY = asyncio.Semaphore(5)
 
 SYSTEM_PROMPT_TEMPLATE = """You are a personal portfolio advisor for a specific investor. Answer their questions based ONLY on their actual portfolio data shown below. Be direct, specific, and concise. Do not give generic advice — always reference their specific tickers, weights, and verdicts.
 
+IMPORTANT: Always respond in plain conversational prose. Never use JSON, XML, or any structured data format in your response. Write like a trusted advisor talking directly to the investor.
+
 Portfolio: {portfolio_name}
 Total market value: {total_value}
 Total unrealized P&L: {total_pnl}
@@ -37,6 +39,7 @@ Sector breakdown:
 {insight_block}
 
 Rules:
+- Respond in plain English prose — no JSON, no bullet arrays, no structured objects
 - Only analyze the portfolio shown above — do not hallucinate positions they don't hold
 - When uncertain about external market data, say so — don't fabricate prices or news
 - Be direct and opinionated, not wishy-washy
@@ -249,4 +252,8 @@ async def generate_chat_response(
     )
 
     full_prompt = _build_conversation_prompt(system_prompt, conversation_history, message)
-    return await _call_llm(llm_provider, llm_model, llm_api_key, full_prompt)
+    response = await _call_llm(llm_provider, llm_model, llm_api_key, full_prompt)
+    stripped = response.strip()
+    if stripped.startswith("{") or stripped.startswith("["):
+        return "I received a structured response instead of prose. Please try rephrasing your question."
+    return response
