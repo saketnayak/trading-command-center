@@ -206,6 +206,82 @@ async def _call_llm(provider: str, model: str, api_key: Optional[str], prompt: s
     raise ValueError(f"Unsupported LLM provider: {provider}")
 
 
+async def _call_llm_chat(
+    provider: str,
+    model: str,
+    api_key: Optional[str],
+    system: str,
+    messages: list[dict],
+) -> str:
+    """Multi-turn chat LLM call with a separate system prompt and message list."""
+    if provider in ("openai", "groq", "vllm", "ollama"):
+        structured = [{"role": "system", "content": system}] + messages
+        payload: dict = {"model": model, "messages": structured, "temperature": 0.7, "max_tokens": 1024}
+        if provider == "openai":
+            if not api_key:
+                raise ValueError("OpenAI API key is not configured. Add it in Settings → API Keys.")
+            url = "https://api.openai.com/v1/chat/completions"
+            headers: dict[str, str] = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+            timeout = 90
+        elif provider == "groq":
+            if not api_key:
+                raise ValueError("Groq API key is not configured. Add it in Settings → API Keys.")
+            url = "https://api.groq.com/openai/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+            timeout = 90
+        elif provider == "vllm":
+            from app.config import settings as _s
+            base_url = getattr(_s, "vllm_base_url", "http://localhost:8080")
+            url = f"{base_url}/v1/chat/completions"
+            headers = {"Content-Type": "application/json"}
+            if api_key:
+                headers["Authorization"] = f"Bearer {api_key}"
+            timeout = 180
+        else:  # ollama
+            from app.config import settings as _s
+            base_url = getattr(_s, "ollama_host", "http://localhost:11434")
+            url = f"{base_url}/v1/chat/completions"
+            headers = {"Content-Type": "application/json"}
+            timeout = 180
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.post(url, json=payload, headers=headers)
+            r.raise_for_status()
+            return r.json()["choices"][0]["message"]["content"]
+
+    if provider == "anthropic":
+        if not api_key:
+            raise ValueError("Anthropic API key is not configured. Add it in Settings → API Keys.")
+        payload = {"model": model, "system": system, "messages": messages, "max_tokens": 1024, "temperature": 0.7}
+        headers = {"x-api-key": api_key, "anthropic-version": "2023-06-01", "Content-Type": "application/json"}
+        async with httpx.AsyncClient(timeout=90) as client:
+            r = await client.post("https://api.anthropic.com/v1/messages", json=payload, headers=headers)
+            r.raise_for_status()
+            return r.json()["content"][0]["text"]
+
+    if provider == "google":
+        if not api_key:
+            raise ValueError("Google API key is not configured. Add it in Settings → API Keys.")
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{model}:generateContent?key={api_key}"
+        )
+        contents = [
+            {"role": "user" if m["role"] == "user" else "model", "parts": [{"text": m["content"]}]}
+            for m in messages
+        ]
+        payload = {
+            "system_instruction": {"parts": [{"text": system}]},
+            "contents": contents,
+            "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024},
+        }
+        async with httpx.AsyncClient(timeout=90) as client:
+            r = await client.post(url, json=payload)
+            r.raise_for_status()
+            return r.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+    raise ValueError(f"Unsupported LLM provider: {provider}")
+
+
 def _build_prompt(
     portfolio_name: str,
     analysis_date: str,

@@ -1,6 +1,7 @@
 """Runs a thesis cross-reference analysis against the user's portfolio."""
 import asyncio
 import json
+import re
 import uuid
 
 from sqlalchemy import select, desc
@@ -183,8 +184,10 @@ async def run_thesis_crossref(
 
     try:
         raw = await _call_llm(llm_provider, llm_model, llm_api_key, prompt)
-        cleaned = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
-        parsed = json.loads(cleaned)
+        match = re.search(r"\{.*\}", raw, re.DOTALL)
+        if not match:
+            raise ValueError("No JSON object found in LLM response")
+        parsed = json.loads(match.group(0))
         crossref.alignment_score = parsed.get("alignment_score")
         crossref.thesis_summary = parsed.get("thesis_summary")
         crossref.aligned_positions = parsed.get("aligned_positions")
