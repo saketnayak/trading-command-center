@@ -17,7 +17,8 @@ from app.services.portfolio_insight_runner import (
     _get_api_key,
     _serialize_investor_profile,
 )
-from app.routers.portfolio import _fetch_prices_bulk, _get_finnhub_key
+
+_FINNHUB_CONCURRENCY = asyncio.Semaphore(5)
 
 
 SYSTEM_PROMPT_TEMPLATE = """You are a personal portfolio advisor for a specific investor. Answer their questions based ONLY on their actual portfolio data shown below. Be direct, specific, and concise. Do not give generic advice — always reference their specific tickers, weights, and verdicts.
@@ -155,13 +156,19 @@ async def generate_chat_response(
     )
     latest_insight = insight_result.scalar_one_or_none()
 
+    from app.routers.portfolio import _fetch_prices_bulk, _get_finnhub_key
+
     finnhub_key = await _get_finnhub_key(db)
     llm_api_key = await _get_api_key(llm_provider, db)
 
     if tickers:
+        async def _bounded_sector(t: str) -> str:
+            async with _FINNHUB_CONCURRENCY:
+                return await _fetch_sector(t, finnhub_key)
+
         price_map, sectors = await asyncio.gather(
             _fetch_prices_bulk(tickers, finnhub_key),
-            asyncio.gather(*[_fetch_sector(t, finnhub_key) for t in tickers]),
+            asyncio.gather(*[_bounded_sector(t) for t in tickers]),
         )
         sector_map: dict[str, str] = dict(zip(tickers, sectors))
     else:
@@ -170,22 +177,21 @@ async def generate_chat_response(
 
     today = date.today()
     last_verdicts: dict[str, tuple[str, int]] = {}
-    for ticker in tickers:
-        run_result = await db.execute(
+    if tickers:
+        runs_result = await db.execute(
             select(Run)
             .where(
                 Run.created_by == portfolio.user_id,
-                Run.ticker == ticker,
+                Run.ticker.in_(tickers),
                 Run.status == RunStatus.completed,
                 Run.verdict.isnot(None),
             )
-            .order_by(desc(Run.created_at))
-            .limit(1)
+            .distinct(Run.ticker)
+            .order_by(Run.ticker, desc(Run.created_at))
         )
-        run = run_result.scalar_one_or_none()
-        if run:
+        for run in runs_result.scalars():
             days = (today - run.analysis_date).days
-            last_verdicts[ticker] = (run.verdict.value, days)
+            last_verdicts[run.ticker] = (run.verdict.value, days)
 
     total_market_value = 0.0
     total_cost = 0.0

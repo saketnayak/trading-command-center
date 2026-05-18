@@ -14,7 +14,8 @@ from app.services.portfolio_insight_runner import (
     _fetch_sector,
     _get_api_key,
 )
-from app.routers.portfolio import _fetch_prices_bulk, _get_finnhub_key
+
+_FINNHUB_CONCURRENCY = asyncio.Semaphore(5)
 
 THESIS_PROMPT_TEMPLATE = """You are a portfolio analyst. A user has pasted an investment thesis below. Analyze how well their current portfolio aligns with this thesis.
 
@@ -97,13 +98,19 @@ async def run_thesis_crossref(
     holdings = snapshot.holdings if snapshot else []
     tickers = [h.ticker for h in holdings]
 
+    from app.routers.portfolio import _fetch_prices_bulk, _get_finnhub_key
+
     finnhub_key = await _get_finnhub_key(db)
     llm_api_key = await _get_api_key(llm_provider, db)
 
     if tickers:
+        async def _bounded_sector(t: str) -> str:
+            async with _FINNHUB_CONCURRENCY:
+                return await _fetch_sector(t, finnhub_key)
+
         price_map, sectors = await asyncio.gather(
             _fetch_prices_bulk(tickers, finnhub_key),
-            asyncio.gather(*[_fetch_sector(t, finnhub_key) for t in tickers]),
+            asyncio.gather(*[_bounded_sector(t) for t in tickers]),
         )
         sector_map: dict[str, str] = dict(zip(tickers, sectors))
     else:
@@ -158,7 +165,8 @@ async def run_thesis_crossref(
 
     try:
         raw = await _call_llm(llm_provider, llm_model, llm_api_key, prompt)
-        parsed = json.loads(raw)
+        cleaned = raw.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+        parsed = json.loads(cleaned)
         crossref.alignment_score = parsed.get("alignment_score")
         crossref.thesis_summary = parsed.get("thesis_summary")
         crossref.aligned_positions = parsed.get("aligned_positions")
