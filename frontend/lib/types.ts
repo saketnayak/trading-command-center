@@ -395,3 +395,33 @@ export interface InvestorProfileUpsertRequest {
   income_goal?: string | null;
   milestones?: string | null;
 }
+
+export interface ThesisCrossRefPosition {
+  ticker: string;
+  reason: string;
+}
+
+export interface ThesisCrossRefRecommendation {
+  action: "TRIM" | "EXIT" | "CONSIDER" | "HOLD";
+  ticker: string;
+  rationale: string;
+}
+
+export interface ThesisCrossRef {
+  id: string;
+  portfolio_id: string;
+  created_at: string;
+  llm_provider: string;
+  llm_model: string;
+  thesis_text_preview: string;
+  alignment_score: number | null;
+  thesis_summary: string | null;
+  aligned_positions: ThesisCrossRefPosition[] | null;
+  misaligned_positions: ThesisCrossRefPosition[] | null;
+  missing_exposure: string[] | null;
+  excess_exposure: string[] | null;
+  recommendations: ThesisCrossRefRecommendation[] | null;
+  summary: string | null;
+  holdings_snapshot: Record<string, unknown> | null;
+  error: string | null;
+}
