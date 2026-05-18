@@ -18,7 +18,7 @@ services:
 
   backend:
     build: ./backend
-    image: ghcr.io/saketnayak/agentfloor-backend:latest
+    image: ghcr.io/saketnayak/agentfloor-backend:${TAG:-latest}
     restart: unless-stopped
     depends_on:
       db:
@@ -37,7 +37,7 @@ services:
 
   frontend:
     build: ./frontend
-    image: ghcr.io/saketnayak/agentfloor-frontend:latest
+    image: ghcr.io/saketnayak/agentfloor-frontend:${TAG:-latest}
     restart: unless-stopped
     depends_on:
       - backend
