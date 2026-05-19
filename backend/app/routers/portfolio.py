@@ -1497,6 +1497,7 @@ async def get_delivery_settings(
             "webhook_enabled": False,
             "webhook_url": None,
             "webhook_format": "json",
+            "telegram_chat_id": None,
         }
     return {
         "email_enabled": ds.email_enabled,
@@ -1504,6 +1505,7 @@ async def get_delivery_settings(
         "webhook_enabled": ds.webhook_enabled,
         "webhook_url": ds.webhook_url,
         "webhook_format": ds.webhook_format,
+        "telegram_chat_id": ds.telegram_chat_id,
     }
 
 
@@ -1538,6 +1540,8 @@ async def update_delivery_settings(
         ds.webhook_url = req.webhook_url
     if req.webhook_format is not None:
         ds.webhook_format = req.webhook_format
+    if req.telegram_chat_id is not None:
+        ds.telegram_chat_id = req.telegram_chat_id
 
     await db.commit()
     await db.refresh(ds)
@@ -1547,6 +1551,7 @@ async def update_delivery_settings(
         "webhook_enabled": ds.webhook_enabled,
         "webhook_url": ds.webhook_url,
         "webhook_format": ds.webhook_format,
+        "telegram_chat_id": ds.telegram_chat_id,
     }
 
 
@@ -1570,6 +1575,8 @@ async def test_webhook_delivery(
     ds = ds_result.scalar_one_or_none()
     if not ds or not ds.webhook_url:
         raise HTTPException(status_code=400, detail="No webhook URL configured")
+    if ds.webhook_format == "telegram" and not ds.telegram_chat_id:
+        raise HTTPException(status_code=400, detail="No Telegram chat ID configured")
 
     portfolio = await db.get(Portfolio, portfolio_id)
 
@@ -1602,15 +1609,23 @@ async def test_webhook_delivery(
                 strengths=insight.strengths or [],
                 weaknesses=insight.weaknesses or [],
                 date_str=date_str,
+                telegram_chat_id=ds.telegram_chat_id,
             )
         else:
             import httpx as _httpx
-            payload = {
-                "portfolio_id": str(portfolio_id),
-                "portfolio_name": portfolio.name,
-                "test": True,
-                "message": "This is a test webhook from AgentFloor (no insight generated yet)",
-            }
+            if ds.webhook_format == "telegram":
+                payload = {
+                    "chat_id": ds.telegram_chat_id,
+                    "text": f"<b>AgentFloor test</b>\nWebhook for <b>{portfolio.name}</b> is working.",
+                    "parse_mode": "HTML",
+                }
+            else:
+                payload = {
+                    "portfolio_id": str(portfolio_id),
+                    "portfolio_name": portfolio.name,
+                    "test": True,
+                    "message": "This is a test webhook from AgentFloor (no insight generated yet)",
+                }
             async with _httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(
                     ds.webhook_url,

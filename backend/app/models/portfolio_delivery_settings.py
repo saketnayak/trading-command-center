@@ -34,3 +34,4 @@ class PortfolioDeliverySettings(Base):
     webhook_format: Mapped[str] = mapped_column(
         sa.String(16), default="json", server_default="json", nullable=False
     )
+    telegram_chat_id: Mapped[Optional[str]] = mapped_column(sa.String(64), nullable=True)

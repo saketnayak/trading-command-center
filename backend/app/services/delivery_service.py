@@ -175,6 +175,43 @@ def _build_json_payload(
     }
 
 
+def _build_telegram_text(
+    portfolio_name: str,
+    date_str: str,
+    health: int,
+    stance: str,
+    summary: str,
+    action_items: list,
+    risk_alerts: list,
+) -> str:
+    dots = "●" * health + "○" * (10 - health)
+    lines = [
+        f"<b>AgentFloor Morning Brief — {portfolio_name}</b>",
+        f"<i>{date_str}</i>",
+        "",
+        f"<b>Health:</b> {dots} {health}/10 · {stance.title()}",
+        "",
+        f"<b>Summary</b>",
+        summary[:400],
+    ]
+    if action_items:
+        lines += ["", "<b>Top Actions</b>"]
+        for item in action_items[:3]:
+            ticker = item.get("ticker", "")
+            action = item.get("action", "")
+            priority = str(item.get("priority", "")).upper()
+            icon = "⚡" if priority == "HIGH" else "⚠" if priority in ("MED", "MEDIUM") else "ℹ"
+            lines.append(f"{icon} <b>{ticker}</b> · {action}")
+    if risk_alerts:
+        lines += ["", "<b>Risk Alerts</b>"]
+        for alert in risk_alerts[:2]:
+            severity = str(alert.get("severity", "")).upper()
+            desc = str(alert.get("description", ""))[:100]
+            icon = "🔴" if severity == "CRITICAL" else "🟡"
+            lines.append(f"{icon} {desc}")
+    return "\n".join(lines)
+
+
 def _build_slack_payload(
     portfolio_name: str,
     date_str: str,
@@ -217,9 +254,21 @@ async def send_webhook_brief(
     strengths: list,
     weaknesses: list,
     date_str: str,
+    telegram_chat_id: Optional[str] = None,
 ) -> None:
     frontend_url = getattr(settings, "frontend_url", "http://localhost:3000")
-    if webhook_format == "slack":
+    if webhook_format == "telegram":
+        text = _build_telegram_text(
+            portfolio_name=portfolio_name,
+            date_str=date_str,
+            health=health,
+            stance=stance,
+            summary=summary,
+            action_items=action_items,
+            risk_alerts=risk_alerts,
+        )
+        payload: dict = {"chat_id": telegram_chat_id, "text": text, "parse_mode": "HTML"}
+    elif webhook_format == "slack":
         payload = _build_slack_payload(
             portfolio_name=portfolio_name,
             date_str=date_str,
@@ -322,6 +371,7 @@ async def deliver_insight_if_configured(insight_id: str) -> None:
                     strengths=insight.strengths or [],
                     weaknesses=insight.weaknesses or [],
                     date_str=date_str,
+                    telegram_chat_id=ds.telegram_chat_id,
                 )
 
     except Exception:

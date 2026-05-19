@@ -8,7 +8,8 @@ class DeliverySettingsResponse(BaseModel):
     email_address: Optional[str]
     webhook_enabled: bool
     webhook_url: Optional[str]
-    webhook_format: Literal["json", "slack"]
+    webhook_format: Literal["json", "slack", "telegram"]
+    telegram_chat_id: Optional[str]
 
     model_config = {"from_attributes": True}
 
@@ -18,7 +19,8 @@ class UpdateDeliverySettingsRequest(BaseModel):
     email_address: Optional[str] = None
     webhook_enabled: Optional[bool] = None
     webhook_url: Optional[str] = None
-    webhook_format: Optional[Literal["json", "slack"]] = None
+    webhook_format: Optional[Literal["json", "slack", "telegram"]] = None
+    telegram_chat_id: Optional[str] = None
 
     @field_validator("webhook_url")
     @classmethod

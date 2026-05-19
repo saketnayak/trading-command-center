@@ -457,7 +457,8 @@ export interface DeliverySettings {
   email_address: string | null;
   webhook_enabled: boolean;
   webhook_url: string | null;
-  webhook_format: "json" | "slack";
+  webhook_format: "json" | "slack" | "telegram";
+  telegram_chat_id: string | null;
 }
 
 export interface UpdateDeliverySettingsRequest {
@@ -465,5 +466,6 @@ export interface UpdateDeliverySettingsRequest {
   email_address?: string | null;
   webhook_enabled?: boolean;
   webhook_url?: string | null;
-  webhook_format?: "json" | "slack";
+  webhook_format?: "json" | "slack" | "telegram";
+  telegram_chat_id?: string | null;
 }

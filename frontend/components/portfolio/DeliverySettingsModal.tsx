@@ -127,13 +127,27 @@ export function DeliverySettingsModal({ portfolioId, open, onClose }: Props) {
                     <label className="text-xs text-slate-400 mb-1 block">Format</label>
                     <select
                       value={form.webhook_format ?? "json"}
-                      onChange={(e) => setForm((f) => ({ ...f, webhook_format: e.target.value as "json" | "slack" }))}
+                      onChange={(e) => setForm((f) => ({ ...f, webhook_format: e.target.value as "json" | "slack" | "telegram" }))}
                       className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
                     >
                       <option value="json">Generic JSON</option>
                       <option value="slack">Slack Message</option>
+                      <option value="telegram">Telegram</option>
                     </select>
                   </div>
+                  {form.webhook_format === "telegram" && (
+                    <div>
+                      <label className="text-xs text-slate-400 mb-1 block">Telegram Chat ID</label>
+                      <input
+                        type="text"
+                        value={form.telegram_chat_id ?? ""}
+                        onChange={(e) => setForm((f) => ({ ...f, telegram_chat_id: e.target.value || null }))}
+                        placeholder="-1001234567890 or @username"
+                        className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">Set the webhook URL to your bot&apos;s sendMessage endpoint: <span className="text-slate-400">https://api.telegram.org/bot&lt;TOKEN&gt;/sendMessage</span></p>
+                    </div>
+                  )}
                   <div className="flex items-center gap-3">
                     <button
                       onClick={handleTest}
