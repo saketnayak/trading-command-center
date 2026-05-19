@@ -141,8 +141,8 @@ with open(graph_path) as f:
 
 if '"technical": ToolNode' not in content:
     new_content = re.sub(
-        r'("fundamentals":\s*ToolNode\(\[.*?\]\s*\))',
-        r'\1,\n            "technical": ToolNode([get_stock_data, get_indicators])',
+        r'("fundamentals":\s*ToolNode\([\s\S]+\),)',
+        r'\1\n            "technical": ToolNode([get_stock_data, get_indicators])',
         content,
         flags=re.DOTALL,
     )
