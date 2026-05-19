@@ -23,6 +23,7 @@ from app.models.report import Report
 from app.models.api_key import ApiKey
 from app.services.encryption import decrypt_key
 from app.services.portfolio_parser import parse_portfolio_csv
+from app.schemas.portfolio_delivery_settings import UpdateDeliverySettingsRequest
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
 import app.services.fx_service as fx
@@ -1509,14 +1510,13 @@ async def get_delivery_settings(
 @router.put("/portfolio/{portfolio_id}/delivery-settings")
 async def update_delivery_settings(
     portfolio_id: UUID,
-    body: dict,
+    body: UpdateDeliverySettingsRequest,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     await _verify_portfolio_access(portfolio_id, user.id, db)
     from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
-    from app.schemas.portfolio_delivery_settings import UpdateDeliverySettingsRequest
-    req = UpdateDeliverySettingsRequest.model_validate(body)
+    req = body
 
     result = await db.execute(
         select(PortfolioDeliverySettings).where(
