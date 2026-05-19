@@ -14,6 +14,7 @@ export function DeliverySettingsModal({ portfolioId, open, onClose }: Props) {
   const queryClient = useQueryClient();
   const [testStatus, setTestStatus] = useState<"idle" | "sending" | "ok" | "error">("idle");
   const [testError, setTestError] = useState("");
+  const [showChatIdHelp, setShowChatIdHelp] = useState(false);
 
   const { data, isLoading } = useQuery<DeliverySettings>({
     queryKey: ["deliverySettings", portfolioId],
@@ -154,7 +155,16 @@ export function DeliverySettingsModal({ portfolioId, open, onClose }: Props) {
                         <p className="text-xs font-mono text-slate-400 mt-0.5">https://api.telegram.org/bot&lt;TOKEN&gt;/sendMessage</p>
                       </div>
                       <div>
-                        <label className="text-xs text-slate-400 mb-1 block">Telegram Chat ID</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs text-slate-400">Telegram Chat ID</label>
+                          <button
+                            type="button"
+                            onClick={() => setShowChatIdHelp((v) => !v)}
+                            className="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+                          >
+                            {showChatIdHelp ? "Hide help ▲" : "How to get your Chat ID ▼"}
+                          </button>
+                        </div>
                         <input
                           type="text"
                           value={form.telegram_chat_id ?? ""}
@@ -162,17 +172,18 @@ export function DeliverySettingsModal({ portfolioId, open, onClose }: Props) {
                           placeholder="-1001234567890"
                           className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
                         />
-                      </div>
-                      <div className="bg-slate-900/60 border border-slate-700 rounded-lg p-3 space-y-1.5">
-                        <p className="text-xs font-medium text-slate-300">How to get your Chat ID</p>
-                        <ol className="text-xs text-slate-400 space-y-1 list-decimal list-inside">
-                          <li>Create a bot via <span className="text-slate-300">@BotFather</span> in Telegram and copy the token</li>
-                          <li>Send your bot any message (e.g. <span className="text-slate-300">/start</span>)</li>
-                          <li>Open <span className="font-mono text-slate-300">https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</span> in a browser</li>
-                          <li>Find <span className="font-mono text-slate-300">&quot;chat&quot;:&#123;&quot;id&quot;:...</span> — that number is your Chat ID</li>
-                        </ol>
-                        <p className="text-xs text-slate-500 pt-0.5">For a channel: add the bot as admin, post a message, then check <span className="text-slate-400">getUpdates</span>. The ID will be a negative number like <span className="font-mono text-slate-400">-1001234567890</span>.</p>
-                        <p className="text-xs text-indigo-400 pt-0.5">Shortcut: forward any message from the target chat to <span className="font-medium">@userinfobot</span> — it replies with the ID instantly.</p>
+                        {showChatIdHelp && (
+                          <div className="mt-2 bg-slate-900/60 border border-slate-700 rounded-lg p-3 space-y-1.5">
+                            <ol className="text-xs text-slate-400 space-y-1 list-decimal list-inside">
+                              <li>Create a bot via <span className="text-slate-300">@BotFather</span> in Telegram and copy the token</li>
+                              <li>Send your bot any message (e.g. <span className="text-slate-300">/start</span>)</li>
+                              <li>Open <span className="font-mono text-slate-300">https://api.telegram.org/bot&lt;TOKEN&gt;/getUpdates</span> in a browser</li>
+                              <li>Find <span className="font-mono text-slate-300">&quot;chat&quot;:&#123;&quot;id&quot;:...</span> — that number is your Chat ID</li>
+                            </ol>
+                            <p className="text-xs text-slate-500 pt-0.5">For a channel: add the bot as admin, post a message, then check <span className="text-slate-400">getUpdates</span>. The ID will be a negative number like <span className="font-mono text-slate-400">-1001234567890</span>.</p>
+                            <p className="text-xs text-indigo-400 pt-0.5">Shortcut: forward any message from the target chat to <span className="font-medium">@userinfobot</span> — it replies with the ID instantly.</p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
