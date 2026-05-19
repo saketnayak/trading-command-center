@@ -418,6 +418,7 @@ async def generate_portfolio_insight(insight_id: str) -> None:
         insight.status = InsightStatus.running
         await db.commit()
 
+        _completed = False
         try:
             portfolio = await db.get(Portfolio, insight.portfolio_id)
             if not portfolio:
@@ -560,6 +561,7 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                 "holdings": enriched,
             }
             insight.status = InsightStatus.completed
+            _completed = True
 
         except Exception as exc:
             logger.exception("Insight generation failed for insight_id=%s", insight_id)
@@ -567,3 +569,6 @@ async def generate_portfolio_insight(insight_id: str) -> None:
             insight.error = str(exc)[:1000]
 
         await db.commit()
+        if _completed:
+            from app.services.delivery_service import deliver_insight_if_configured
+            asyncio.create_task(deliver_insight_if_configured(insight_id))

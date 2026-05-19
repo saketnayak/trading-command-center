@@ -23,6 +23,7 @@ from app.models.report import Report
 from app.models.api_key import ApiKey
 from app.services.encryption import decrypt_key
 from app.services.portfolio_parser import parse_portfolio_csv
+from app.schemas.portfolio_delivery_settings import UpdateDeliverySettingsRequest
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
 import app.services.fx_service as fx
@@ -1473,3 +1474,154 @@ async def get_behavioral_alerts(
         "warning_count": sum(1 for a in alerts if a["severity"] == "warning"),
         "info_count": sum(1 for a in alerts if a["severity"] == "info"),
     }
+
+
+@router.get("/portfolio/{portfolio_id}/delivery-settings")
+async def get_delivery_settings(
+    portfolio_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
+    result = await db.execute(
+        select(PortfolioDeliverySettings).where(
+            PortfolioDeliverySettings.portfolio_id == portfolio_id
+        )
+    )
+    ds = result.scalar_one_or_none()
+    if not ds:
+        return {
+            "email_enabled": False,
+            "email_address": None,
+            "webhook_enabled": False,
+            "webhook_url": None,
+            "webhook_format": "json",
+            "telegram_chat_id": None,
+        }
+    return {
+        "email_enabled": ds.email_enabled,
+        "email_address": ds.email_address,
+        "webhook_enabled": ds.webhook_enabled,
+        "webhook_url": ds.webhook_url,
+        "webhook_format": ds.webhook_format,
+        "telegram_chat_id": ds.telegram_chat_id,
+    }
+
+
+@router.put("/portfolio/{portfolio_id}/delivery-settings")
+async def update_delivery_settings(
+    portfolio_id: UUID,
+    body: UpdateDeliverySettingsRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
+
+    result = await db.execute(
+        select(PortfolioDeliverySettings).where(
+            PortfolioDeliverySettings.portfolio_id == portfolio_id
+        )
+    )
+    ds = result.scalar_one_or_none()
+    if not ds:
+        ds = PortfolioDeliverySettings(portfolio_id=portfolio_id)
+        db.add(ds)
+
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(ds, field, value)
+
+    await db.commit()
+    await db.refresh(ds)
+    return {
+        "email_enabled": ds.email_enabled,
+        "email_address": ds.email_address,
+        "webhook_enabled": ds.webhook_enabled,
+        "webhook_url": ds.webhook_url,
+        "webhook_format": ds.webhook_format,
+        "telegram_chat_id": ds.telegram_chat_id,
+    }
+
+
+@router.post("/portfolio/{portfolio_id}/delivery-settings/test-webhook")
+async def test_webhook_delivery(
+    portfolio_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    portfolio = await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
+    from app.models.portfolio_insight import InsightStatus, PortfolioInsight
+    from app.services.delivery_service import send_webhook_brief
+
+    ds_result = await db.execute(
+        select(PortfolioDeliverySettings).where(
+            PortfolioDeliverySettings.portfolio_id == portfolio_id
+        )
+    )
+    ds = ds_result.scalar_one_or_none()
+    if not ds or not ds.webhook_url:
+        raise HTTPException(status_code=400, detail="No webhook URL configured")
+    if ds.webhook_format == "telegram" and not ds.telegram_chat_id:
+        raise HTTPException(status_code=400, detail="No Telegram chat ID configured")
+
+    insight_result = await db.execute(
+        select(PortfolioInsight)
+        .where(
+            PortfolioInsight.portfolio_id == portfolio_id,
+            PortfolioInsight.status == InsightStatus.completed,
+        )
+        .order_by(desc(PortfolioInsight.generated_at))
+        .limit(1)
+    )
+    insight = insight_result.scalar_one_or_none()
+
+    try:
+        if insight:
+            date_str = (f"{insight.generated_at.strftime('%b')} {insight.generated_at.day}, {insight.generated_at.year}" if insight.generated_at else "Today")
+            await send_webhook_brief(
+                webhook_url=ds.webhook_url,
+                webhook_format=ds.webhook_format,
+                portfolio_id=str(portfolio_id),
+                portfolio_name=portfolio.name,
+                generated_at=insight.generated_at.isoformat() if insight.generated_at else "",
+                health=insight.health_score or 0,
+                stance=insight.overall_stance.value if insight.overall_stance else "neutral",
+                summary=insight.summary or "",
+                action_items=insight.action_items or [],
+                risk_alerts=insight.risk_alerts or [],
+                sector_analysis=insight.sector_analysis,
+                strengths=insight.strengths or [],
+                weaknesses=insight.weaknesses or [],
+                date_str=date_str,
+                telegram_chat_id=ds.telegram_chat_id,
+            )
+        else:
+            message = "This is a test webhook from AgentFloor (no insight generated yet)"
+            if ds.webhook_format == "telegram":
+                payload = {
+                    "chat_id": ds.telegram_chat_id,
+                    "text": f"<b>AgentFloor test</b>\n{message}",
+                    "parse_mode": "HTML",
+                }
+            elif ds.webhook_format == "slack":
+                payload = {"text": message}
+            else:
+                payload = {
+                    "portfolio_id": str(portfolio_id),
+                    "portfolio_name": portfolio.name,
+                    "test": True,
+                    "message": message,
+                }
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    ds.webhook_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                resp.raise_for_status()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Webhook delivery failed: {exc}")
+
+    return {"sent": True}

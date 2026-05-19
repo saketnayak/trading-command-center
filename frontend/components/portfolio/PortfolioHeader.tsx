@@ -9,6 +9,7 @@ interface PortfolioHeaderProps {
   broker: string | null;
   onUploadClick: () => void;
   onExportClick: () => void;
+  onDeliveryClick: () => void;
 }
 
 function fmtPct(n: number | null | undefined): string {
@@ -24,6 +25,7 @@ export function PortfolioHeader({
   broker,
   onUploadClick,
   onExportClick,
+  onDeliveryClick,
 }: PortfolioHeaderProps) {
   const hasData = totals !== null;
   const pnl = totals?.unrealized_pnl ?? null;
@@ -102,6 +104,13 @@ export function PortfolioHeader({
         >
           <span>⬇</span>
           <span>Export</span>
+        </button>
+        <button
+          onClick={onDeliveryClick}
+          className="flex items-center gap-1 text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors"
+          title="Brief delivery settings"
+        >
+          <span>🔔</span>
         </button>
       </div>
     </div>

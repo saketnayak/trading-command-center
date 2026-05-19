@@ -29,6 +29,7 @@ import { ThesisPanel } from "@/components/portfolio/ThesisPanel";
 import { TrendingPanel } from "@/components/portfolio/TrendingPanel";
 import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 import { DiscoverPanel } from "@/components/portfolio/DiscoverPanel";
+import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsModal";
 
 type Tab = "holdings" | "insights" | "earnings" | "news" | "trending" | "discover" | "chat" | "thesis";
 
@@ -200,6 +201,7 @@ export default function PortfolioPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("holdings");
   const [batchOpen, setBatchOpen] = useState(false);
+  const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [drawerHolding, setDrawerHolding] = useState<PortfolioHolding | null>(null);
 
   const { data: portfolios = [], isLoading: loadingPortfolios } = useQuery({
@@ -319,6 +321,7 @@ export default function PortfolioPage() {
             broker={current?.snapshot?.broker ?? null}
             onUploadClick={() => setUploadOpen(true)}
             onExportClick={handleExport}
+            onDeliveryClick={() => setDeliveryOpen(true)}
           />
         )}
 
@@ -328,6 +331,13 @@ export default function PortfolioPage() {
           onUpload={(file) => uploadMutation.mutate(file)}
           uploading={uploadMutation.isPending}
         />
+        {selectedId && (
+          <DeliverySettingsModal
+            portfolioId={selectedId}
+            open={deliveryOpen}
+            onClose={() => setDeliveryOpen(false)}
+          />
+        )}
 
         {selectedId === null && portfolios.length === 0 && !loadingPortfolios && (
           <p className="text-slate-500 text-sm text-center py-10">
