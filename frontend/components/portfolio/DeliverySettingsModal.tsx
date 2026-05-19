@@ -159,17 +159,21 @@ export function DeliverySettingsModal({ portfolioId, open, onClose }: Props) {
                       <p className="text-xs text-slate-500 mt-1">Set the webhook URL to your bot&apos;s sendMessage endpoint: <span className="text-slate-400">https://api.telegram.org/bot&lt;TOKEN&gt;/sendMessage</span></p>
                     </div>
                   )}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <button
                       onClick={handleTest}
                       disabled={testStatus === "sending" || !form.webhook_url}
                       className="text-xs text-indigo-400 hover:text-indigo-300 disabled:text-slate-600 transition-colors"
+                      title="Tests against saved settings — click Save first if you've made changes"
                     >
                       {testStatus === "sending" ? "Sending…" : "Test webhook"}
                     </button>
                     {testStatus === "ok" && <span className="text-xs text-green-400">✓ Sent</span>}
-                    {testStatus === "error" && <span className="text-xs text-red-400">{testError}</span>}
+                    {testStatus === "error" && (
+                      <span className="text-xs text-red-400 break-all">{testError}</span>
+                    )}
                   </div>
+                  <p className="text-xs text-slate-600">Tests saved settings — click Save first if you&apos;ve made changes</p>
                 </>
               )}
             </div>

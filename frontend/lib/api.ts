@@ -606,6 +606,10 @@ export async function testWebhook(portfolioId: string): Promise<{ sent: boolean 
   const r = await fetchWithAuth(`/portfolio/${portfolioId}/delivery-settings/test-webhook`, {
     method: "POST",
   });
-  if (!r.ok) throw new Error("Failed to test webhook");
+  if (!r.ok) {
+    let detail = "Failed to test webhook";
+    try { detail = (await r.json()).detail ?? detail; } catch { /* ignore parse errors */ }
+    throw new Error(detail);
+  }
   return r.json();
 }
