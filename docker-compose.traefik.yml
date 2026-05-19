@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: agentfloor
       POSTGRES_DB: agentfloor
     networks:
-      - tcc-backend  
+      - tcc-network  
     volumes:
       - agentfloor_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +23,7 @@ services:
       db:
         condition: service_healthy
     networks:
-      - tcc-backend  
+      - tcc-network  
     environment:
       DATABASE_URL: postgresql+asyncpg://agentfloor:agentfloor@db:5432/agentfloor
       JWT_SECRET: "${JWT_SECRET}"
@@ -38,12 +38,11 @@ services:
 
   frontend:
     build: ./frontend
-    #image: ghcr.io/saketnayak/agentfloor-frontend:latest
     restart: unless-stopped
     depends_on:
       - backend
     networks:
-      - tcc-backend  
+      - tcc-network
     environment:
       NEXTAUTH_URL: "${NEXTAUTH_URL:-http://localhost}"
       NEXTAUTH_SECRET: "${NEXTAUTH_SECRET}"
@@ -57,14 +56,12 @@ services:
     depends_on:
       - frontend
       - backend
-#    ports:
-#      - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./logs:/var/log/nginx
     networks:
       - proxy
-      - tcc-backend  
+      - tcc-network
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
@@ -93,9 +90,7 @@ volumes:
 
 
 networks: 
-  tcc-backend:
-    name: tcc-backend
-    driver: bridge
-    internal: true
+  tcc-network:
+    name: tcc-network
   proxy:
     external: true
