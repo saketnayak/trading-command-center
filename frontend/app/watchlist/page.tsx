@@ -204,7 +204,7 @@ function CronLabel({ cron }: { cron: string | null }) {
 
 function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemRequest) => void; isPending: boolean }) {
   const [ticker, setTicker] = useState("");
-  const [provider, setProvider] = useState("openai");
+  const [provider, setProvider] = useState("ionos");
   const [model, setModel] = useState("");
   const [depth, setDepth] = useState<"quick" | "standard" | "deep">("standard");
   const [analysts, setAnalysts] = useState<string[]>(["market", "social", "news", "fundamentals", "technical"]);
@@ -257,6 +257,7 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
             <option value="openai">openai</option>
             <option value="anthropic">anthropic</option>
             <option value="google">google</option>
+            <option value="ionos">ionos</option>
             <option value="ollama">ollama (local)</option>
             <option value="vllm">vllm (local)</option>
           </select>
