@@ -298,7 +298,12 @@ async def send_webhook_brief(
         json=payload,
         headers={"Content-Type": "application/json"},
     )
-    resp.raise_for_status()
+    if not resp.is_success:
+        try:
+            description = resp.json().get("description") or resp.text
+        except Exception:
+            description = resp.text or str(resp.status_code)
+        raise ValueError(f"HTTP {resp.status_code}: {description}")
 
 
 # ── Orchestrator ───────────────────────────────────────────────────────────────
