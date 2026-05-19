@@ -451,3 +451,19 @@ export interface BehavioralAlertsResponse {
   warning_count: number;
   info_count: number;
 }
+
+export interface DeliverySettings {
+  email_enabled: boolean;
+  email_address: string | null;
+  webhook_enabled: boolean;
+  webhook_url: string | null;
+  webhook_format: "json" | "slack";
+}
+
+export interface UpdateDeliverySettingsRequest {
+  email_enabled?: boolean;
+  email_address?: string | null;
+  webhook_enabled?: boolean;
+  webhook_url?: string | null;
+  webhook_format?: "json" | "slack";
+}
