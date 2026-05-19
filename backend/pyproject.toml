@@ -20,7 +20,8 @@ dependencies = [
     "langchain-core>=0.3",
     "langchain-openai>=1.0",
     "apscheduler>=4.0.0a5",
-    "tradingagents==0.3.2",
+    # in version 0.6.0 the function extract_trade_signalhas changed
+    "tradingagents>=0.3.2,<=0.5.1",
 ]
 
 [project.optional-dependencies]
