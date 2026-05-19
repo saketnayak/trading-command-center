@@ -1,5 +1,5 @@
 import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -492,5 +492,87 @@ export async function discoverStocks(
     body: JSON.stringify(body),
   });
   if (!r.ok) throw new Error("Failed to discover stocks");
+  return r.json();
+}
+
+export async function getInvestorProfile(): Promise<InvestorProfile | null> {
+  const r = await fetchWithAuth("/investor-profile/me");
+  if (!r.ok) throw new Error("Failed to fetch investor profile");
+  return r.json();
+}
+
+export async function upsertInvestorProfile(data: InvestorProfileUpsertRequest): Promise<InvestorProfile> {
+  const r = await fetchWithAuth("/investor-profile/me", {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) throw new Error("Failed to save investor profile");
+  return r.json();
+}
+
+export async function deleteInvestorProfile(): Promise<void> {
+  const r = await fetchWithAuth("/investor-profile/me", { method: "DELETE" });
+  if (!r.ok) throw new Error("Failed to delete investor profile");
+}
+
+export async function createThesisCrossRef(
+  portfolioId: string,
+  data: { thesis_text: string; llm_provider: string; llm_model: string }
+): Promise<ThesisCrossRef> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/thesis-crossref`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    throw new Error(body?.detail ?? "Thesis analysis failed");
+  }
+  return r.json();
+}
+
+export async function getThesisCrossRefs(portfolioId: string): Promise<ThesisCrossRef[]> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/thesis-crossrefs`);
+  if (!r.ok) throw new Error("Failed to fetch thesis history");
+  return r.json();
+}
+
+export async function deleteThesisCrossRef(portfolioId: string, crossrefId: string): Promise<void> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/thesis-crossrefs/${crossrefId}`, {
+    method: "DELETE",
+  });
+  if (!r.ok) throw new Error("Failed to delete thesis cross-reference");
+}
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface PortfolioChatResponse {
+  response: string;
+  provider: string;
+  model: string;
+}
+
+export async function sendPortfolioChat(
+  portfolioId: string,
+  message: string,
+  conversationHistory: ChatMessage[],
+  llmProvider: string,
+  llmModel: string,
+): Promise<PortfolioChatResponse> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/chat`, {
+    method: "POST",
+    body: JSON.stringify({
+      message,
+      conversation_history: conversationHistory,
+      llm_provider: llmProvider,
+      llm_model: llmModel,
+    }),
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    throw new Error(body?.detail ?? "Chat request failed");
+  }
   return r.json();
 }

@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getApiKeys, getUsers, inviteUser, updateProfile, getSmtpStatus, getMe, downloadDbBackup, restoreDbBackup } from "@/lib/api";
+import { getApiKeys, getUsers, inviteUser, updateProfile, getSmtpStatus, getMe, downloadDbBackup, restoreDbBackup, getInvestorProfile } from "@/lib/api";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { TopNav } from "@/components/layout/TopNav";
 import { ApiKeyRow } from "@/components/settings/ApiKeyRow";
@@ -82,6 +82,22 @@ export default function SettingsPage() {
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: getMe });
+
+  const { data: investorProfile, isLoading: profileLoading } = useQuery({
+    queryKey: ["investorProfile"],
+    queryFn: getInvestorProfile,
+  });
+
+  const HORIZON_LABELS: Record<string, string> = {
+    lt_1y: "< 1 year", "1_3y": "1–3 years", "3_7y": "3–7 years",
+    "7_15y": "7–15 years", gt_15y: "15+ years",
+  };
+  const RISK_LABELS: Record<number, string> = {
+    1: "Very conservative", 2: "Conservative", 3: "Moderate", 4: "Aggressive", 5: "Very aggressive",
+  };
+  const STYLE_LABELS: Record<string, string> = {
+    passive: "Passive", active: "Active", hybrid: "Hybrid",
+  };
 
   const [profileName, setProfileName] = useState((session?.user as { name?: string })?.name ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -236,6 +252,47 @@ export default function SettingsPage() {
               {profileStatus === "success" && <span className="text-green-400 text-xs">Saved.</span>}
               {profileStatus === "error" && <span className="text-red-400 text-xs">{profileError}</span>}
             </div>
+          </div>
+        </SectionCard>
+
+        {/* Investor DNA */}
+        <SectionCard title="Investor DNA" description="Personalize AI insights with your investment context.">
+          <div className="px-4 py-4">
+            {profileLoading ? (
+              <div className="h-8 bg-slate-800 rounded animate-pulse w-48" />
+            ) : investorProfile ? (
+              <div className="flex items-center justify-between">
+                <div className="flex gap-6 text-sm">
+                  {investorProfile.time_horizon && (
+                    <div>
+                      <span className="text-slate-500 text-xs">Horizon</span>
+                      <p className="text-slate-200">{HORIZON_LABELS[investorProfile.time_horizon] ?? investorProfile.time_horizon}</p>
+                    </div>
+                  )}
+                  {investorProfile.risk_willingness && (
+                    <div>
+                      <span className="text-slate-500 text-xs">Risk</span>
+                      <p className="text-slate-200">{RISK_LABELS[investorProfile.risk_willingness] ?? investorProfile.risk_willingness}</p>
+                    </div>
+                  )}
+                  {investorProfile.investment_style && (
+                    <div>
+                      <span className="text-slate-500 text-xs">Style</span>
+                      <p className="text-slate-200">{STYLE_LABELS[investorProfile.investment_style] ?? investorProfile.investment_style}</p>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-green-400 font-medium">● DNA active</span>
+                  <a href="/settings/investor-profile" className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 rounded px-2 py-1">Edit</a>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <p className="text-slate-400 text-sm">Personalize your AI insights by sharing your investment context.</p>
+                <a href="/settings/investor-profile" className="text-xs text-purple-400 hover:text-purple-300 border border-purple-500/30 rounded px-3 py-1.5">Set up →</a>
+              </div>
+            )}
           </div>
         </SectionCard>
 

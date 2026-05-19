@@ -622,6 +622,7 @@ export function InsightsDashboard({ portfolioId, hasHoldings, portfolioName }: I
           <InsightView insight={selectedInsight} portfolioName={portfolioName} />
         )}
       </div>
+
     </div>
   );
 }
