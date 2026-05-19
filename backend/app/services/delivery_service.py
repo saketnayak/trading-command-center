@@ -1,5 +1,4 @@
 """Email and webhook delivery for portfolio AI insights."""
-import asyncio
 import logging
 import uuid
 from typing import Optional
@@ -9,6 +8,8 @@ import httpx
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+_http_client = httpx.AsyncClient(timeout=10.0)
 
 
 # ── Email ──────────────────────────────────────────────────────────────────────
@@ -292,13 +293,12 @@ async def send_webhook_brief(
             weaknesses=weaknesses,
         )
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post(
-            webhook_url,
-            json=payload,
-            headers={"Content-Type": "application/json"},
-        )
-        resp.raise_for_status()
+    resp = await _http_client.post(
+        webhook_url,
+        json=payload,
+        headers={"Content-Type": "application/json"},
+    )
+    resp.raise_for_status()
 
 
 # ── Orchestrator ───────────────────────────────────────────────────────────────
@@ -334,7 +334,7 @@ async def deliver_insight_if_configured(insight_id: str) -> None:
             if not ds:
                 return
 
-            date_str = insight.generated_at.strftime("%b %-d, %Y") if insight.generated_at else "Today"
+            date_str = (f"{insight.generated_at.strftime('%b')} {insight.generated_at.day}, {insight.generated_at.year}" if insight.generated_at else "Today")
             health = insight.health_score or 0
             stance = insight.overall_stance.value if insight.overall_stance else "neutral"
             summary = insight.summary or ""

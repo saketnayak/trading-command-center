@@ -1518,7 +1518,6 @@ async def update_delivery_settings(
 ):
     await _verify_portfolio_access(portfolio_id, user.id, db)
     from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
-    req = body
 
     result = await db.execute(
         select(PortfolioDeliverySettings).where(
@@ -1530,18 +1529,8 @@ async def update_delivery_settings(
         ds = PortfolioDeliverySettings(portfolio_id=portfolio_id)
         db.add(ds)
 
-    if req.email_enabled is not None:
-        ds.email_enabled = req.email_enabled
-    if req.email_address is not None:
-        ds.email_address = req.email_address
-    if req.webhook_enabled is not None:
-        ds.webhook_enabled = req.webhook_enabled
-    if req.webhook_url is not None:
-        ds.webhook_url = req.webhook_url
-    if req.webhook_format is not None:
-        ds.webhook_format = req.webhook_format
-    if req.telegram_chat_id is not None:
-        ds.telegram_chat_id = req.telegram_chat_id
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(ds, field, value)
 
     await db.commit()
     await db.refresh(ds)
@@ -1561,8 +1550,7 @@ async def test_webhook_delivery(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    await _verify_portfolio_access(portfolio_id, user.id, db)
-    from app.models.portfolio import Portfolio
+    portfolio = await _verify_portfolio_access(portfolio_id, user.id, db)
     from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
     from app.models.portfolio_insight import InsightStatus, PortfolioInsight
     from app.services.delivery_service import send_webhook_brief
@@ -1578,8 +1566,6 @@ async def test_webhook_delivery(
     if ds.webhook_format == "telegram" and not ds.telegram_chat_id:
         raise HTTPException(status_code=400, detail="No Telegram chat ID configured")
 
-    portfolio = await db.get(Portfolio, portfolio_id)
-
     insight_result = await db.execute(
         select(PortfolioInsight)
         .where(
@@ -1593,7 +1579,7 @@ async def test_webhook_delivery(
 
     try:
         if insight:
-            date_str = insight.generated_at.strftime("%b %-d, %Y") if insight.generated_at else "Today"
+            date_str = (f"{insight.generated_at.strftime('%b')} {insight.generated_at.day}, {insight.generated_at.year}" if insight.generated_at else "Today")
             await send_webhook_brief(
                 webhook_url=ds.webhook_url,
                 webhook_format=ds.webhook_format,
@@ -1612,21 +1598,23 @@ async def test_webhook_delivery(
                 telegram_chat_id=ds.telegram_chat_id,
             )
         else:
-            import httpx as _httpx
+            message = "This is a test webhook from AgentFloor (no insight generated yet)"
             if ds.webhook_format == "telegram":
                 payload = {
                     "chat_id": ds.telegram_chat_id,
-                    "text": f"<b>AgentFloor test</b>\nWebhook for <b>{portfolio.name}</b> is working.",
+                    "text": f"<b>AgentFloor test</b>\n{message}",
                     "parse_mode": "HTML",
                 }
+            elif ds.webhook_format == "slack":
+                payload = {"text": message}
             else:
                 payload = {
                     "portfolio_id": str(portfolio_id),
                     "portfolio_name": portfolio.name,
                     "test": True,
-                    "message": "This is a test webhook from AgentFloor (no insight generated yet)",
+                    "message": message,
                 }
-            async with _httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:
                 resp = await client.post(
                     ds.webhook_url,
                     json=payload,

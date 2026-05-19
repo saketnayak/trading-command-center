@@ -97,7 +97,18 @@ export function DeliverySettingsModal({ portfolioId, open, onClose }: Props) {
             {/* Webhook section */}
             <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-slate-200">Webhook Delivery</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-slate-200">Webhook Delivery</span>
+                  <div className="group relative">
+                    <span className="cursor-help text-slate-500 text-xs leading-none border border-slate-600 rounded-full w-4 h-4 inline-flex items-center justify-center">?</span>
+                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 rounded-lg bg-slate-800 border border-slate-600 p-3 text-xs text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-xl">
+                      <p className="font-semibold mb-1">Webhook formats</p>
+                      <p className="mb-2 text-slate-400"><span className="text-slate-200 font-medium">Generic JSON</span> — POSTs the full insight payload to any URL.</p>
+                      <p className="mb-2 text-slate-400"><span className="text-slate-200 font-medium">Slack</span> — Sends a formatted Slack Block Kit message. Use a Slack <a className="text-indigo-400" href="https://api.slack.com/messaging/webhooks" target="_blank" rel="noopener noreferrer">Incoming Webhook</a> URL.</p>
+                      <p className="text-slate-400"><span className="text-slate-200 font-medium">Telegram</span> — Sends an HTML message via a Telegram bot. Set URL to <span className="font-mono text-slate-300">https://api.telegram.org/bot&lt;TOKEN&gt;/sendMessage</span> and enter the chat ID below.</p>
+                    </div>
+                  </div>
+                </div>
                 <button
                   onClick={() => setForm((f) => ({ ...f, webhook_enabled: !f.webhook_enabled }))}
                   className={`relative w-10 h-5 rounded-full transition-colors ${
