@@ -1473,3 +1473,152 @@ async def get_behavioral_alerts(
         "warning_count": sum(1 for a in alerts if a["severity"] == "warning"),
         "info_count": sum(1 for a in alerts if a["severity"] == "info"),
     }
+
+
+@router.get("/portfolio/{portfolio_id}/delivery-settings")
+async def get_delivery_settings(
+    portfolio_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
+    result = await db.execute(
+        select(PortfolioDeliverySettings).where(
+            PortfolioDeliverySettings.portfolio_id == portfolio_id
+        )
+    )
+    ds = result.scalar_one_or_none()
+    if not ds:
+        return {
+            "email_enabled": False,
+            "email_address": None,
+            "webhook_enabled": False,
+            "webhook_url": None,
+            "webhook_format": "json",
+        }
+    return {
+        "email_enabled": ds.email_enabled,
+        "email_address": ds.email_address,
+        "webhook_enabled": ds.webhook_enabled,
+        "webhook_url": ds.webhook_url,
+        "webhook_format": ds.webhook_format,
+    }
+
+
+@router.put("/portfolio/{portfolio_id}/delivery-settings")
+async def update_delivery_settings(
+    portfolio_id: UUID,
+    body: dict,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
+    from app.schemas.portfolio_delivery_settings import UpdateDeliverySettingsRequest
+    req = UpdateDeliverySettingsRequest.model_validate(body)
+
+    result = await db.execute(
+        select(PortfolioDeliverySettings).where(
+            PortfolioDeliverySettings.portfolio_id == portfolio_id
+        )
+    )
+    ds = result.scalar_one_or_none()
+    if not ds:
+        ds = PortfolioDeliverySettings(portfolio_id=portfolio_id)
+        db.add(ds)
+
+    if req.email_enabled is not None:
+        ds.email_enabled = req.email_enabled
+    if req.email_address is not None:
+        ds.email_address = req.email_address
+    if req.webhook_enabled is not None:
+        ds.webhook_enabled = req.webhook_enabled
+    if req.webhook_url is not None:
+        ds.webhook_url = req.webhook_url
+    if req.webhook_format is not None:
+        ds.webhook_format = req.webhook_format
+
+    await db.commit()
+    await db.refresh(ds)
+    return {
+        "email_enabled": ds.email_enabled,
+        "email_address": ds.email_address,
+        "webhook_enabled": ds.webhook_enabled,
+        "webhook_url": ds.webhook_url,
+        "webhook_format": ds.webhook_format,
+    }
+
+
+@router.post("/portfolio/{portfolio_id}/delivery-settings/test-webhook")
+async def test_webhook_delivery(
+    portfolio_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+    from app.models.portfolio import Portfolio
+    from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
+    from app.models.portfolio_insight import InsightStatus, PortfolioInsight
+    from app.services.delivery_service import send_webhook_brief
+
+    ds_result = await db.execute(
+        select(PortfolioDeliverySettings).where(
+            PortfolioDeliverySettings.portfolio_id == portfolio_id
+        )
+    )
+    ds = ds_result.scalar_one_or_none()
+    if not ds or not ds.webhook_url:
+        raise HTTPException(status_code=400, detail="No webhook URL configured")
+
+    portfolio = await db.get(Portfolio, portfolio_id)
+
+    insight_result = await db.execute(
+        select(PortfolioInsight)
+        .where(
+            PortfolioInsight.portfolio_id == portfolio_id,
+            PortfolioInsight.status == InsightStatus.completed,
+        )
+        .order_by(desc(PortfolioInsight.generated_at))
+        .limit(1)
+    )
+    insight = insight_result.scalar_one_or_none()
+
+    try:
+        if insight:
+            date_str = insight.generated_at.strftime("%b %-d, %Y") if insight.generated_at else "Today"
+            await send_webhook_brief(
+                webhook_url=ds.webhook_url,
+                webhook_format=ds.webhook_format,
+                portfolio_id=str(portfolio_id),
+                portfolio_name=portfolio.name,
+                generated_at=insight.generated_at.isoformat() if insight.generated_at else "",
+                health=insight.health_score or 0,
+                stance=insight.overall_stance.value if insight.overall_stance else "neutral",
+                summary=insight.summary or "",
+                action_items=insight.action_items or [],
+                risk_alerts=insight.risk_alerts or [],
+                sector_analysis=insight.sector_analysis,
+                strengths=insight.strengths or [],
+                weaknesses=insight.weaknesses or [],
+                date_str=date_str,
+            )
+        else:
+            import httpx as _httpx
+            payload = {
+                "portfolio_id": str(portfolio_id),
+                "portfolio_name": portfolio.name,
+                "test": True,
+                "message": "This is a test webhook from AgentFloor (no insight generated yet)",
+            }
+            async with _httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    ds.webhook_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"},
+                )
+                resp.raise_for_status()
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Webhook delivery failed: {exc}")
+
+    return {"sent": True}
