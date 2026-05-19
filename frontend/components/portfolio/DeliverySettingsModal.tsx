@@ -169,9 +169,7 @@ export function DeliverySettingsModal({ portfolioId, open, onClose }: Props) {
                       {testStatus === "sending" ? "Sending…" : "Test webhook"}
                     </button>
                     {testStatus === "ok" && <span className="text-xs text-green-400">✓ Sent</span>}
-                    {testStatus === "error" && (
-                      <span className="text-xs text-red-400 break-all">{testError}</span>
-                    )}
+                    {testStatus === "error" && <span className="text-xs text-red-400 break-words min-w-0">{testError}</span>}
                   </div>
                   <p className="text-xs text-slate-600">Tests saved settings — click Save first if you&apos;ve made changes</p>
                 </>
