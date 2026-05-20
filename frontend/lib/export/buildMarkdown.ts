@@ -51,10 +51,6 @@ function mdSection(heading: string, content: string | undefined | null): string 
   return `## ${heading}\n\n${content.trim()}\n\n`;
 }
 
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
 export function buildMarkdown(run: Run, report: Report): string {
   const raw = report.raw_report;
 
