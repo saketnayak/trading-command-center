@@ -267,10 +267,9 @@ function PdfTable({ rows }: { rows: string[][] }) {
                   key={cellIndex}
                   style={
                     isHeader
-                      ? [
-                          styles.tableHeaderCell,
-                          isLastCell? { borderRightWidth: 0 }: null,
-                        ]
+                      ? isLastCell
+                        ? [styles.tableHeaderCell, { borderRightWidth: 0 }]
+                        : styles.tableHeaderCell
                       : isLastCell
                         ? styles.tableCellLast
                         : styles.tableCell
