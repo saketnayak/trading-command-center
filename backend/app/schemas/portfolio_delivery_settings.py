@@ -10,6 +10,7 @@ class DeliverySettingsResponse(BaseModel):
     webhook_url: Optional[str]
     webhook_format: Literal["json", "slack", "telegram"]
     telegram_chat_id: Optional[str]
+    delivery_timezone: str = "UTC"
 
     model_config = {"from_attributes": True}
 
@@ -21,6 +22,7 @@ class UpdateDeliverySettingsRequest(BaseModel):
     webhook_url: Optional[str] = None
     webhook_format: Optional[Literal["json", "slack", "telegram"]] = None
     telegram_chat_id: Optional[str] = None
+    delivery_timezone: Optional[str] = None
 
     @field_validator("webhook_url")
     @classmethod
