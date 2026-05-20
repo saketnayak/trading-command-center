@@ -1,5 +1,37 @@
 import type { Run, Report } from "../types";
 
+/** Escape characters that are meaningful in inline Markdown. */
+function escapeMd(raw: string): string {
+  // Escape: \ ` * _ { } [ ] ( ) # + - . ! | > ~
+  return raw.replace(/[\\`*_{}[\]()#+\-.!|>~]/g, "\\$&");
+}
+
+/**
+ * Escape `$` signs so they are never interpreted as LaTeX math delimiters.
+ * Applies *after* escapeMd so we don't double-escape other characters.
+ */
+function escapeDollars(s: string): string {
+  return s.replace(/\$/g, "\\$");
+}
+
+/** "fundamental_analysis" → "Fundamental Analysis" */
+function humanize(s: string): string {
+  return s
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Join non-empty sections, placing `---` *between* them (not after the last). */
+function joinSections(...sections: string[]): string {
+  return sections.filter(Boolean).join("---\n\n");
+}
+
+/** Format a price field safely, treating 0 as a valid value. */
+function priceField(label: string, value: string | null | undefined): string | null {
+  if (value == null) return null;
+  return `**${label}:** ${escapeDollars(value.trim())}`;
+}
+
 function extractHistory(value: unknown): string {
   if (!value) return "";
   if (typeof value === "string") return value;
@@ -9,9 +41,14 @@ function extractHistory(value: unknown): string {
   return "";
 }
 
+/**
+ * Render a level-2 section.
+ * The separator is NOT appended here — callers decide whether a rule follows,
+ * preventing a dangling `---` at the end of the document.
+ */
 function mdSection(heading: string, content: string | undefined | null): string {
   if (!content?.trim()) return "";
-  return `## ${heading}\n\n${content.trim()}\n\n---\n\n`;
+  return `## ${heading}\n\n${content.trim()}\n\n`;
 }
 
 function capitalize(s: string): string {
@@ -22,20 +59,20 @@ export function buildMarkdown(run: Run, report: Report): string {
   const raw = report.raw_report;
 
   const priceParts = [
-    report.suggested_entry ? `**Entry:** $${report.suggested_entry}` : null,
-    report.suggested_stop ? `**Stop:** $${report.suggested_stop}` : null,
-    report.suggested_target ? `**Target:** $${report.suggested_target}` : null,
-  ].filter(Boolean);
+    priceField("Entry", report.suggested_entry),
+    priceField("Stop", report.suggested_stop),
+    priceField("Target", report.suggested_target),
+  ].filter((x): x is string => x !== null);
 
-  const pricesLine = priceParts.length > 0 ? priceParts.join(" · ") + "\n" : "";
+  const pricesLine = priceParts.length > 0 ? priceParts.join(" · ") + "\n\n" : "";
 
   const header =
-    `# ${run.ticker} Research Report — ${run.analysis_date}\n\n` +
-    `**Verdict:** ${report.verdict.toUpperCase()}\n` +
+    `# ${escapeMd(run.ticker)} Research Report — ${escapeMd(run.analysis_date)}\n\n` +
+    `**Verdict:** ${escapeMd(report.verdict.toUpperCase())}\n\n` +
     pricesLine +
-    `**Model:** ${run.llm_provider} / ${run.llm_model} · **Depth:** ${run.depth}\n` +
-    `**Analysts:** ${run.analysts.map(capitalize).join(", ")}\n\n` +
-    `---\n\n`;
+    `**Model:** ${escapeMd(run.llm_provider)} / ${escapeMd(run.llm_model)}` +
+    ` · **Depth:** ${escapeMd(String(run.depth))}\n\n` +
+    `**Analysts:** ${run.analysts.map((a) => escapeMd(humanize(a))).join(", ")}\n\n`;
 
   const analystSections = run.analysts
     .map((analyst) => {
@@ -44,13 +81,15 @@ export function buildMarkdown(run: Run, report: Report): string {
         (raw?.[analyst] as string | undefined) ??
         "";
       if (!content.trim()) return "";
-      return `### ${capitalize(analyst)} Analyst\n\n${content.trim()}\n\n`;
+      // Wrap in a fenced block to prevent heading bleed; or strip leading #s:
+      const safeContent = content.trim().replace(/^#{1,6} /gm, (h) => "#" + h);
+      return `### ${humanize(analyst)} Analyst\n\n${safeContent}\n\n`;
     })
     .filter(Boolean)
     .join("");
 
   const analystBlock = analystSections
-    ? `## Analyst Reports\n\n${analystSections}---\n\n`
+    ? `## Analyst Reports\n\n${analystSections}`
     : "";
 
   const debateHistory = extractHistory(raw?.investment_debate_state);
@@ -62,16 +101,15 @@ export function buildMarkdown(run: Run, report: Report): string {
       debateBlock += `### Investment Debate\n\n${debateHistory.trim()}\n\n`;
     if (riskHistory)
       debateBlock += `### Risk Discussion\n\n${riskHistory.trim()}\n\n`;
-    debateBlock += "---\n\n";
   }
 
-  return (
-    header +
-    mdSection("Trader Decision", report.trader_decision) +
-    analystBlock +
-    debateBlock +
-    mdSection("Investment Plan", raw?.investment_plan as string | undefined) +
-    mdSection("Final Trade Decision", raw?.final_trade_decision as string | undefined)
+  return joinSections(
+    header,
+    mdSection("Trader Decision", report.trader_decision),
+    analystBlock,
+    debateBlock,
+    mdSection("Investment Plan", raw?.investment_plan as string | undefined),
+    mdSection("Final Trade Decision", raw?.final_trade_decision as string | undefined),
   )
     .trimEnd()
     .concat("\n");

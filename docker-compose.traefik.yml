@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: agentfloor
       POSTGRES_DB: agentfloor
     networks:
-      - tcc-network  
+      - tcc-network
     volumes:
       - agentfloor_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +23,7 @@ services:
       db:
         condition: service_healthy
     networks:
-      - tcc-network  
+      - tcc-network
     environment:
       DATABASE_URL: postgresql+asyncpg://agentfloor:agentfloor@db:5432/agentfloor
       JWT_SECRET: "${JWT_SECRET}"
