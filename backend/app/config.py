@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     smtp_from: str = "noreply@agentfloor.local"
     frontend_url: str = "http://localhost:3000"
     run_timeout_seconds: int = 3600
+    disable_registration: bool = False
 
     @model_validator(mode="after")
     def validate_secrets(self) -> "Settings":

@@ -22,6 +22,9 @@ async def register(req: RegisterRequest, db: AsyncSession = Depends(get_db)):
     count_result = await db.execute(select(func.count()).select_from(User))
     is_first_user = count_result.scalar() == 0
 
+    if settings.disable_registration and not is_first_user:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Registration is disabled. Please contact your administrator.")
+
     if not is_first_user:
         if not req.invite_token:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "An invite token is required to register")
