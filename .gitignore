@@ -40,3 +40,7 @@ docs/launch/
 backend/results/
 
 logs/
+.vscode/mcp.json
+.vscode/settings.json
+Caddyfile
+.github/copilot-instructions.md
