@@ -459,6 +459,7 @@ export interface DeliverySettings {
   webhook_url: string | null;
   webhook_format: "json" | "slack" | "telegram";
   telegram_chat_id: string | null;
+  delivery_timezone: string;
 }
 
 export interface UpdateDeliverySettingsRequest {
@@ -468,4 +469,5 @@ export interface UpdateDeliverySettingsRequest {
   webhook_url?: string | null;
   webhook_format?: "json" | "slack" | "telegram";
   telegram_chat_id?: string | null;
+  delivery_timezone?: string;
 }

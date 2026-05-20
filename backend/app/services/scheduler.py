@@ -1,4 +1,5 @@
 """APScheduler wrapper — fires scheduled watchlist runs and daily portfolio insights."""
+import zoneinfo
 from datetime import date, datetime, timezone
 from apscheduler import AsyncScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -9,6 +10,14 @@ from app.models.watchlist import WatchlistItem, Watchlist
 from app.models.run import Run
 from app.services.job_manager import start_run
 from app.utils.asset_type import is_crypto
+
+
+def _is_nine_am_in_timezone(tz_name: str) -> bool:
+    """Returns True if the current local hour is 9 AM in the given IANA timezone."""
+    try:
+        return datetime.now(zoneinfo.ZoneInfo(tz_name)).hour == 9
+    except Exception:
+        return datetime.now(timezone.utc).hour == 9
 
 
 def _crypto_safe_analysts(ticker: str, analysts: list[str]) -> list[str]:
@@ -75,16 +84,17 @@ async def _reload_jobs(scheduler: AsyncScheduler) -> None:
 
 
 async def _fire_daily_portfolio_insights() -> None:
-    """Generate AI insights for every portfolio that has at least one holding."""
+    """Generate AI insights for portfolios where it is currently 9 AM in their delivery timezone."""
+    import asyncio
     from sqlalchemy.orm import selectinload as _selectinload
-    from app.models.portfolio import Portfolio, PortfolioSnapshot
+    from app.models.portfolio import Portfolio
+    from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
     from app.models.portfolio_insight import PortfolioInsight, InsightStatus, InsightTrigger
     from app.models.api_key import ApiKey
-    from app.services.encryption import decrypt_key
     from app.services.portfolio_insight_runner import generate_portfolio_insight
 
     async with AsyncSessionLocal() as db:
-        # Pick the first available LLM provider key to use for scheduled insights
+        # Pick the first available LLM provider key
         providers_in_order = ["openai", "anthropic", "google"]
         llm_provider = None
         llm_model = None
@@ -92,7 +102,6 @@ async def _fire_daily_portfolio_insights() -> None:
             row = (await db.execute(select(ApiKey).where(ApiKey.provider == prov))).scalar_one_or_none()
             if row and row.is_valid:
                 llm_provider = prov
-                # Use a sensible default model per provider
                 llm_model = {
                     "openai": "gpt-4o-mini",
                     "anthropic": "claude-haiku-4-5-20251001",
@@ -101,9 +110,8 @@ async def _fire_daily_portfolio_insights() -> None:
                 break
 
         if not llm_provider:
-            return  # No LLM key configured — skip scheduled insights
+            return
 
-        # Find all portfolios that have at least one holding in their latest snapshot
         all_portfolios = (
             await db.execute(select(Portfolio).options(_selectinload(Portfolio.snapshots)))
         ).scalars().all()
@@ -113,7 +121,21 @@ async def _fire_daily_portfolio_insights() -> None:
             if not portfolio.snapshots or not any(s.row_count > 0 for s in portfolio.snapshots):
                 continue
 
-            # Skip if insight already generated in last 12 hours
+            # Determine delivery timezone: use the portfolio's setting or default to UTC
+            ds = (
+                await db.execute(
+                    select(PortfolioDeliverySettings).where(
+                        PortfolioDeliverySettings.portfolio_id == portfolio.id
+                    )
+                )
+            ).scalar_one_or_none()
+            tz_name = (ds.delivery_timezone if ds else None) or "UTC"
+
+            # Only fire during the 9 AM hour in the portfolio's timezone
+            if not _is_nine_am_in_timezone(tz_name):
+                continue
+
+            # Skip if insight already generated in last 12 hours (dedup guard)
             existing = (
                 await db.execute(
                     select(PortfolioInsight)
@@ -156,8 +178,6 @@ async def _fire_daily_portfolio_insights() -> None:
 
         await db.commit()
 
-    # Launch generation tasks outside the DB session
-    import asyncio
     for insight_id in tasks:
         asyncio.create_task(generate_portfolio_insight(insight_id))
 
@@ -168,10 +188,10 @@ async def start_scheduler() -> AsyncScheduler:
     await _scheduler.__aenter__()
     await _scheduler.start_in_background()  # actually runs the scheduler loop
     await _reload_jobs(_scheduler)
-    # Register daily portfolio insights job (weekdays at 9:15 AM UTC)
+    # Run every weekday hour at :15 — each portfolio fires when it's 9 AM in its delivery timezone
     await _scheduler.add_schedule(
         _fire_daily_portfolio_insights,
-        CronTrigger(hour=9, minute=15, day_of_week="mon-fri"),
+        CronTrigger(minute=15, day_of_week="mon-fri"),
         id="daily_portfolio_insights",
         conflict_policy="replace",
     )

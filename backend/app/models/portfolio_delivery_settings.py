@@ -35,3 +35,6 @@ class PortfolioDeliverySettings(Base):
         sa.String(16), default="json", server_default="json", nullable=False
     )
     telegram_chat_id: Mapped[Optional[str]] = mapped_column(sa.String(64), nullable=True)
+    delivery_timezone: Mapped[str] = mapped_column(
+        sa.String(64), default="UTC", server_default="UTC", nullable=False
+    )

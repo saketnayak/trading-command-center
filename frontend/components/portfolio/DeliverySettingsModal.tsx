@@ -4,6 +4,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getDeliverySettings, updateDeliverySettings, testWebhook } from "@/lib/api";
 import type { DeliverySettings } from "@/lib/types";
 
+const TIMEZONES = [
+  "UTC",
+  "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles",
+  "America/Toronto", "America/Vancouver", "America/Sao_Paulo", "America/Buenos_Aires",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Madrid", "Europe/Rome",
+  "Europe/Amsterdam", "Europe/Stockholm", "Europe/Helsinki", "Europe/Moscow",
+  "Africa/Cairo", "Africa/Johannesburg",
+  "Asia/Dubai", "Asia/Kolkata", "Asia/Bangkok", "Asia/Singapore",
+  "Asia/Hong_Kong", "Asia/Shanghai", "Asia/Tokyo", "Asia/Seoul",
+  "Australia/Sydney", "Australia/Melbourne",
+  "Pacific/Auckland", "Pacific/Honolulu",
+];
+
 interface Props {
   portfolioId: string;
   open: boolean;
@@ -25,7 +38,15 @@ export function DeliverySettingsModal({ portfolioId, open, onClose }: Props) {
   const [form, setForm] = useState<Partial<DeliverySettings>>({});
 
   useEffect(() => {
-    if (data) setForm(data);
+    if (data) {
+      const browserTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      setForm({
+        ...data,
+        delivery_timezone: data.delivery_timezone && data.delivery_timezone !== "UTC"
+          ? data.delivery_timezone
+          : browserTz,
+      });
+    }
   }, [data]);
 
   const saveMutation = useMutation({
@@ -92,7 +113,22 @@ export function DeliverySettingsModal({ portfolioId, open, onClose }: Props) {
                   />
                 </div>
               )}
-              <p className="text-xs text-slate-500">Delivered weekdays ~9:15 AM UTC</p>
+              <p className="text-xs text-slate-500">Delivered weekdays ~9:15 AM in your delivery timezone</p>
+            </div>
+
+            {/* Timezone section */}
+            <div className="bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-2">
+              <label className="text-sm font-medium text-slate-200 block">Delivery Timezone</label>
+              <select
+                value={form.delivery_timezone ?? "UTC"}
+                onChange={(e) => setForm((f) => ({ ...f, delivery_timezone: e.target.value }))}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-indigo-500"
+              >
+                {TIMEZONES.map((tz) => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
+              <p className="text-xs text-slate-500">Briefs are generated and delivered at 9:15 AM in this timezone.</p>
             </div>
 
             {/* Webhook section */}

@@ -1498,6 +1498,7 @@ async def get_delivery_settings(
             "webhook_url": None,
             "webhook_format": "json",
             "telegram_chat_id": None,
+            "delivery_timezone": "UTC",
         }
     return {
         "email_enabled": ds.email_enabled,
@@ -1506,6 +1507,7 @@ async def get_delivery_settings(
         "webhook_url": ds.webhook_url,
         "webhook_format": ds.webhook_format,
         "telegram_chat_id": ds.telegram_chat_id,
+        "delivery_timezone": ds.delivery_timezone,
     }
 
 
@@ -1541,6 +1543,7 @@ async def update_delivery_settings(
         "webhook_url": ds.webhook_url,
         "webhook_format": ds.webhook_format,
         "telegram_chat_id": ds.telegram_chat_id,
+        "delivery_timezone": ds.delivery_timezone,
     }
 
 
