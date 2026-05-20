@@ -127,6 +127,55 @@ const styles = StyleSheet.create({
   numberedText: { fontSize: 10, color: "#1e293b", lineHeight: 1.6, flex: 1 },
   boldInline: { fontFamily: "Helvetica-Bold" },
   italicInline: { fontFamily: "Helvetica-Oblique" },
+
+  // ── tables ───────────────────────────────────────────────────────────────
+    table: {
+    width: "100%",
+    borderWidth: 1,
+    borderColor: "#cbd5e1",
+    borderRadius: 3,
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e2e8f0",
+  },
+  tableRowLast: {
+    flexDirection: "row",
+  },
+  tableHeaderCell: {
+    flex: 1,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    backgroundColor: "#f1f5f9",
+    borderRightWidth: 1,
+    borderRightColor: "#e2e8f0",
+  },
+  tableCell: {
+    flex: 1,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+    borderRightWidth: 1,
+    borderRightColor: "#e2e8f0",
+  },
+  tableCellLast: {
+    flex: 1,
+    paddingVertical: 5,
+    paddingHorizontal: 6,
+  },
+  tableHeaderText: {
+    fontSize: 8.5,
+    fontFamily: "Helvetica-Bold",
+    color: "#0f3460",
+    lineHeight: 1.4,
+  },
+  tableCellText: {
+    fontSize: 8.5,
+    color: "#1e293b",
+    lineHeight: 1.4,
+  },
 });
 
 type PDFStyle = typeof styles[keyof typeof styles];
@@ -188,6 +237,59 @@ function InlineText({ raw, style }: { raw: string; style: PDFStyle }) {
   );
 }
 
+// ── table renderer ─────────────────────────────────────────────────────
+function PdfTable({ rows }: { rows: string[][] }) {
+  if (rows.length === 0) return null;
+
+  const colCount = Math.max(...rows.map((row) => row.length));
+
+  function normalizeRow(row: string[]): string[] {
+    return Array.from({ length: colCount }, (_, i) => row[i]?? "");
+  }
+
+  return (
+    <View style={styles.table}>
+      {rows.map((rawRow, rowIndex) => {
+        const row = normalizeRow(rawRow);
+        const isHeader = rowIndex === 0;
+        const isLastRow = rowIndex === rows.length - 1;
+
+        return (
+          <View
+            key={rowIndex}
+            style={isLastRow? styles.tableRowLast: styles.tableRow}
+          >
+            {row.map((cell, cellIndex) => {
+              const isLastCell = cellIndex === row.length - 1;
+
+              return (
+                <View
+                  key={cellIndex}
+                  style={
+                    isHeader
+                      ? [
+                          styles.tableHeaderCell,
+                          isLastCell? { borderRightWidth: 0 }: null,
+                        ]
+                      : isLastCell
+                        ? styles.tableCellLast
+                        : styles.tableCell
+                  }
+                >
+                  <InlineText
+                    raw={cell}
+                    style={isHeader? styles.tableHeaderText: styles.tableCellText}
+                  />
+                </View>
+              );
+            })}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 // ── markdown content renderer ─────────────────────────────────────────────
 function MdContent({ text }: { text: string }) {
   const segments = parseMdForPdf(text);
@@ -198,6 +300,7 @@ function MdContent({ text }: { text: string }) {
         if (seg.kind === "h1") return <InlineText key={i} raw={seg.text} style={styles.h1} />;
         if (seg.kind === "h2") return <InlineText key={i} raw={seg.text} style={styles.h2} />;
         if (seg.kind === "h3") return <InlineText key={i} raw={seg.text} style={styles.h3} />;
+        if (seg.kind === "table") return <PdfTable key={i} rows={seg.rows} />;
         if (seg.kind === "bullet") {
           const numMatch = seg.text.match(/^(\d+)\.\s+(.+)/);
           if (numMatch) {
