@@ -4,6 +4,9 @@ import re
 from queue import Queue as SyncQueue
 from datetime import datetime, timezone
 from langchain_core.callbacks import BaseCallbackHandler
+import mdformat
+from decimal import Decimal
+from typing import Optional
 
 # Serializes env-var patching so concurrent local-inference runs don't race on os.environ.
 _env_fallback_lock = asyncio.Lock()
@@ -34,7 +37,28 @@ _DEPTH_PARAMS: dict[str, dict] = {
     "deep":     {"max_debate_rounds": 3, "max_risk_discuss_rounds": 3, "max_recur_limit": 200},
 }
 
+def _to_decimal(value: str) -> Decimal:
+    return Decimal(value.replace(",", ""))
 
+def normalize_markdown(markdown: str) -> str:
+    """
+    Normalize a Markdown string. Returns the original string if formatting fails.
+
+    Requires:
+        pip install mdformat mdformat-gfm mdformat-tables mdformat-frontmatter
+    """
+    try:
+        return mdformat.text(
+            markdown,
+            extensions={
+                "gfm",
+                "tables",
+                "frontmatter",
+            },
+        )
+    except Exception:
+        return markdown
+        
 class _SyncEmitter(BaseCallbackHandler):
     """Sync LangChain callback that enqueues events into a thread-safe queue."""
 
@@ -222,7 +246,9 @@ async def execute_run(run_id: str, config: dict) -> None:
 
         verdict = _parse_verdict(signal)
         raw = final_state.model_dump() if hasattr(final_state, "model_dump") else {}
-        trader_decision = str(getattr(final_state, "final_trade_decision", ""))
+        trader_decision = normalize_markdown(
+            str(getattr(final_state, "final_trade_decision", ""))
+        )
         suggested_entry, suggested_stop, suggested_target = _extract_prices(trader_decision)
         async with AsyncSessionLocal() as db:
             db.add(Report(
@@ -300,41 +326,45 @@ def _extract_risk_assessment(state) -> str:
 
 def _extract_prices(text: str) -> tuple[str | None, str | None, str | None]:
     """Regex-parse entry, stop-loss, and price target from free-form LLM text."""
-    def _find(patterns: list[str]) -> str | None:
+    def _find(patterns: list[str]) -> Optional[Decimal]:
         for pat in patterns:
             m = re.search(pat, text, re.IGNORECASE)
             if m:
-                return m.group(1)
+                return _to_decimal(m.group(1))
         return None
 
+    number = r"([\d,]+(?:\.\d+)?)"
+
     entry = _find([
-        r"entry\s+price\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
-        r"entry\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
-        r"buy\s+at\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
-        r"entry\s+(?:at|around|near|@)\s*\$?([\d,]+(?:\.\d+)?)",
-        r"(?:initial|suggested)\s+entry\s*[:=]?\s*(?:at\s+)?\$?([\d,]+(?:\.\d+)?)",
-        r"enter\s+(?:at|around|near)\s*\$?([\d,]+(?:\.\d+)?)",
-        r"(?:buy|initiate|open)\s+(?:a?\s*(?:long|position|trade)\s+)?(?:at|near|around|@)\s*\$?([\d,]+(?:\.\d+)?)",
+        rf"entry\s+price\s*[:=]\s*\$?{number}",
+        rf"entry\s*[:=]\s*\$?{number}",
+        rf"buy\s+at\s*[:=]\s*\$?{number}",
+        rf"entry\s+(?:at|around|near|@)\s*\$?{number}",
+        rf"(?:initial|suggested)\s+entry\s*[:=]?\s*(?:at\s+)?\$?{number}",
+        rf"enter\s+(?:at|around|near)\s*\$?{number}",
+        rf"(?:buy|initiate|open)\s+(?:a?\s*(?:long|position|trade)\s+)?(?:at|near|around|@)\s*\$?{number}",
     ])
+
     stop = _find([
-        r"stop[\s-]*loss\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
-        r"stop\s+at\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
-        r"stop\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
-        r"stop[\s-]*loss\s+(?:at|below|above|near|around|@)\s*\$?([\d,]+(?:\.\d+)?)",
-        r"stop\s+(?:below|above|near|around|@)\s*\$?([\d,]+(?:\.\d+)?)",
-        r"trailing\s+stop\s*[:=]?\s*(?:at\s+)?\$?([\d,]+(?:\.\d+)?)",
-        r"stop\s+(?:price\s+)?(?:at|below|above)\s*\$?([\d,]+(?:\.\d+)?)",
+        rf"stop[\s-]*loss\s*[:=]\s*\$?{number}",
+        rf"stop\s+at\s*[:=]\s*\$?{number}",
+        rf"stop\s*[:=]\s*\$?{number}",
+        rf"stop[\s-]*loss\s+(?:at|below|above|near|around|@)\s*\$?{number}",
+        rf"stop\s+(?:below|above|near|around|@)\s*\$?{number}",
+        rf"trailing\s+stop\s*[:=]?\s*(?:at\s+)?\$?{number}",
+        rf"stop\s+(?:price\s+)?(?:at|below|above)\s*\$?{number}",
     ])
+
     target = _find([
-        r"price\s+target\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
-        r"take[\s-]*profit\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
-        r"profit\s+target\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
-        r"target\s*[:=]\s*\$?([\d,]+(?:\.\d+)?)",
-        r"(?:price\s+)?target\s+(?:at|near|of|around|@)\s*\$?([\d,]+(?:\.\d+)?)",
-        r"target\s+\$([\d,]+(?:\.\d+)?)",
-        r"(?:take[\s-]*profit|tp)\s*[:=]?\s*(?:at\s+)?\$?([\d,]+(?:\.\d+)?)",
-        r"(?:first\s+)?(?:profit\s+)?target\s*:\s*\$?([\d,]+(?:\.\d+)?)",
-        r"(?:exit|close)\s+(?:at|near|around)\s*\$?([\d,]+(?:\.\d+)?)",
+        rf"price\s+target\s*[:=]\s*\$?{number}",
+        rf"take[\s-]*profit\s*[:=]\s*\$?{number}",
+        rf"profit\s+target\s*[:=]\s*\$?{number}",
+        rf"target\s*[:=]\s*\$?{number}",
+        rf"(?:price\s+)?target\s+(?:at|near|of|around|@)\s*\$?{number}",
+        rf"target\s+\${number}",
+        rf"(?:take[\s-]*profit|tp)\s*[:=]?\s*(?:at\s+)?\$?{number}",
+        rf"(?:first\s+)?(?:profit\s+)?target\s*:\s*\$?{number}",
+        rf"(?:exit|close)\s+(?:at|near|around)\s*\$?{number}",
     ])
     return entry, stop, target
 
