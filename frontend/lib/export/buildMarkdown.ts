@@ -1,5 +1,5 @@
 import type { Run, Report } from "../types";
-import { normalizeMarkdown } from "./normalizeMarkdown";
+import { normalizeMarkdown } from "@/lib/normalizeMarkdown";
 
 /** "fundamental_analysis" → "Fundamental Analysis" */
 function humanize(s: string): string {

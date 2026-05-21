@@ -11,6 +11,8 @@ import { getRun, getReport, getRunOutcome, updateRun } from "@/lib/api";
 import { DownloadMenu } from "@/components/runs/DownloadMenu";
 import { OutcomeCard } from "@/components/runs/OutcomeCard";
 import type { RunOutcome } from "@/lib/types";
+import { normalizeMarkdown } from "@/lib/normalizeMarkdown";
+
 
 function rerunUrl(run: { ticker: string; llm_provider: string; llm_model: string; depth: string; analysts: string[] }): string {
   const p = new URLSearchParams({

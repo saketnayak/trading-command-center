@@ -1,6 +1,7 @@
 "use client";
 import type { Report } from "@/lib/types";
 import { Markdown } from "@/components/ui/Markdown";
+import { normalizeMarkdown } from "@/lib/normalizeMarkdown";
 
 interface Props {
   report: Report | undefined;
@@ -29,13 +30,13 @@ export function BullBearDebate({ report }: Props) {
       {debateHistory && (
         <div>
           <h3 className="text-slate-400 text-xs uppercase tracking-wider mb-3">Investment Debate</h3>
-          <Markdown>{debateHistory}</Markdown>
+          <Markdown>{normalizeMarkdown(debateHistory)}</Markdown>
         </div>
       )}
       {riskHistory && (
         <div>
           <h3 className="text-slate-400 text-xs uppercase tracking-wider mb-3">Risk Discussion</h3>
-          <Markdown>{riskHistory}</Markdown>
+          <Markdown>{normalizeMarkdown(riskHistory)}</Markdown>
         </div>
       )}
     </div>
