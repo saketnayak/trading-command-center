@@ -10,7 +10,7 @@ export type MdSegment =
   | { kind: "bullet"; text: string }
   | { kind: "paragraph"; text: string }
   | { kind: "table"; headers: string[]; rows: string[][] }
-  | { kind: "code"; text: string; lang?: string }
+  | { kind: "code"; text: string }
   | { kind: "paragraph"; spans: InlineSpan[] }
   | { kind: "blank" };
 
