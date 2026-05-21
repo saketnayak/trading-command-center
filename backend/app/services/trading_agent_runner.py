@@ -244,7 +244,6 @@ async def execute_run(run_id: str, config: dict) -> None:
         await async_q.put(None)  # sentinel
         await process_task
 
-        final_state= normalize_markdown(str(final_state)) if final_state else ""
         verdict = _parse_verdict(signal)
         raw = normalize_markdown(final_state.model_dump()) if hasattr(final_state, "model_dump") else {}
         trader_decision = str(getattr(final_state, "final_trade_decision", ""))
