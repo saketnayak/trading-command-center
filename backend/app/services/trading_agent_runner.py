@@ -365,7 +365,7 @@ def _extract_prices(text: str) -> tuple[str | None, str | None, str | None]:
         rf"(?:first\s+)?(?:profit\s+)?target\s*:\s*\$?{number}",
         rf"(?:exit|close)\s+(?:at|near|around)\s*\$?{number}",
     ])
-    return entry, stop, target
+    return str(entry), str(stop), str(target)
 
 
 def _parse_verdict(signal: str) -> "RunVerdict":
