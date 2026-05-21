@@ -3,8 +3,8 @@ import os
 import re
 from queue import Queue as SyncQueue
 from datetime import datetime, timezone
+from backend.app.services.markdown_normalizer import MarkdownNormalizer
 from langchain_core.callbacks import BaseCallbackHandler
-import mdformat
 from decimal import Decimal
 from typing import Optional
 
@@ -39,25 +39,6 @@ _DEPTH_PARAMS: dict[str, dict] = {
 
 def _to_decimal(value: str) -> Decimal:
     return Decimal(value.replace(",", ""))
-
-def normalize_markdown(markdown: str) -> str:
-    """
-    Normalize a Markdown string. Returns the original string if formatting fails.
-
-    Requires:
-        pip install mdformat mdformat-gfm mdformat-tables mdformat-frontmatter
-    """
-    try:
-        return mdformat.text(
-            markdown,
-            extensions={
-                "gfm",
-                "tables",
-                "frontmatter",
-            },
-        )
-    except Exception:
-        return markdown
         
 class _SyncEmitter(BaseCallbackHandler):
     """Sync LangChain callback that enqueues events into a thread-safe queue."""
@@ -245,8 +226,10 @@ async def execute_run(run_id: str, config: dict) -> None:
         await process_task
 
         verdict = _parse_verdict(signal)
-        raw = normalize_markdown(final_state.model_dump()) if hasattr(final_state, "model_dump") else {}
-        trader_decision = str(getattr(final_state, "final_trade_decision", ""))
+        raw = final_state.model_dump() if hasattr(final_state, "model_dump") else {}
+        trader_decision = MarkdownNormalizer.normalize(
+            str(getattr(final_state, "final_trade_decision", ""))
+            )
         
         suggested_entry, suggested_stop, suggested_target = _extract_prices(trader_decision)
         async with AsyncSessionLocal() as db:
