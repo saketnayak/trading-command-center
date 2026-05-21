@@ -15,7 +15,18 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-
+  
+  adminer:
+    image: adminer:4
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: db
+    expose:
+      - "8080"
+      
   backend:
     build: ./backend
     restart: unless-stopped
@@ -52,6 +63,7 @@ services:
     depends_on:
       - frontend
       - backend
+      - adminer
     ports:
       - "80:80"
     volumes:
