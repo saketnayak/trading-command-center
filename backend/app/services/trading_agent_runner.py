@@ -245,10 +245,9 @@ async def execute_run(run_id: str, config: dict) -> None:
         await process_task
 
         verdict = _parse_verdict(signal)
-        raw = final_state.model_dump() if hasattr(final_state, "model_dump") else {}
-        trader_decision = normalize_markdown(
-            str(getattr(final_state, "final_trade_decision", ""))
-        )
+        raw = normalize_markdown(final_state.model_dump()) if hasattr(final_state, "model_dump") else {}
+        trader_decision = str(getattr(final_state, "final_trade_decision", ""))
+        
         suggested_entry, suggested_stop, suggested_target = _extract_prices(trader_decision)
         async with AsyncSessionLocal() as db:
             db.add(Report(
