@@ -11,6 +11,7 @@ const PLACEHOLDERS: Record<string, string> = {
   openai: "gpt-5.5",
   anthropic: "claude-sonnet-4-6",
   google: "gemini-3-flash-preview",
+  groq: "llama-3.3-70b-versatile",
   ollama: "llama3",
   vllm: "mistralai/Mistral-7B-Instruct-v0.3",
 };
@@ -193,6 +194,7 @@ export function RunForm({ onSuccess, initialValues }: Props) {
           <option value="openai">openai</option>
           <option value="anthropic">anthropic</option>
           <option value="google">google</option>
+          <option value="groq">groq</option>
           <option value="ollama">ollama (local)</option>
           <option value="vllm">vllm (local)</option>
         </select>

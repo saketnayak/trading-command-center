@@ -19,6 +19,7 @@ const PLACEHOLDERS: Record<string, string> = {
   openai: "gpt-4o-mini",
   anthropic: "claude-haiku-4-5",
   google: "gemini-2.0-flash",
+  groq: "llama-3.3-70b-versatile",
   ollama: "llama3",
   vllm: "mistralai/Mistral-7B-Instruct-v0.3",
 };
@@ -256,6 +257,7 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
             <option value="openai">openai</option>
             <option value="anthropic">anthropic</option>
             <option value="google">google</option>
+            <option value="groq">groq</option>
             <option value="ollama">ollama (local)</option>
             <option value="vllm">vllm (local)</option>
           </select>

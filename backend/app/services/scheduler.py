@@ -95,7 +95,7 @@ async def _fire_daily_portfolio_insights() -> None:
 
     async with AsyncSessionLocal() as db:
         # Pick the first available LLM provider key
-        providers_in_order = ["openai", "anthropic", "google"]
+        providers_in_order = ["openai", "anthropic", "google", "groq"]
         llm_provider = None
         llm_model = None
         for prov in providers_in_order:
@@ -106,6 +106,7 @@ async def _fire_daily_portfolio_insights() -> None:
                     "openai": "gpt-4o-mini",
                     "anthropic": "claude-haiku-4-5-20251001",
                     "google": "gemini-2.5-flash",
+                    "groq": "llama-3.3-70b-versatile",
                 }[prov]
                 break
 
