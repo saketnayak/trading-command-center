@@ -31,6 +31,23 @@ const components: Components = {
   li: ({ children }) => (
     <li className="text-slate-300 text-sm leading-relaxed">{children}</li>
   ),
+  table: ({ children }) => (
+    <div className="overflow-x-auto my-4">
+      <table className="min-w-full border-collapse border border-neutral-300">
+        {children}
+      </table>
+    </div>
+  ),
+  th: ({ children }) => (
+    <th className="border border-neutral-300 px-3 py-2 text-left font-semibold">
+      {children}
+    </th>
+  ),
+  td: ({ children }) => (
+    <td className="border border-neutral-300 px-3 py-2">
+      {children}
+    </td>
+  ),
   hr: () => <hr className="border-slate-700 my-4" />,
   blockquote: ({ children }) => (
     <blockquote className="border-l-2 border-slate-600 pl-3 my-3 text-slate-400 italic">
