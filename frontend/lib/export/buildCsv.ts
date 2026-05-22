@@ -10,15 +10,15 @@ function escapeCsvCell(value: string | number | null | undefined): string {
 }
 
 function rowsToCsv(headers: string[], rows: Array<Array<string | number | null | undefined>>): string {
-  const lines = [headers.join(",")];
+  const lines = [headers.map(escapeCsvCell).join(",")];
   for (const row of rows) {
     lines.push(row.map(escapeCsvCell).join(","));
   }
-  return lines.join("\n");
+  return lines.join("\r\n");
 }
 
 function triggerDownload(filename: string, content: string) {
-  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
+  const blob = new Blob(["﻿", content], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

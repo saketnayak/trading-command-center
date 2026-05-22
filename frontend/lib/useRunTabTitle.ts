@@ -71,8 +71,9 @@ export function useRunTabTitle(ticker: string | undefined, status: RunLikeStatus
 
   // Restore on unmount.
   useEffect(() => {
+    const original = document.title;
     return () => {
-      document.title = DEFAULT_TITLE;
+      document.title = original;
     };
   }, []);
 }
