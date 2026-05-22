@@ -29,6 +29,7 @@ class RunResponse(BaseModel):
     depth: str
     analysts: list[str]
     label: str | None
+    notes: str | None = None
     status: str
     verdict: str | None
     archived: bool

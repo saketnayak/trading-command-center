@@ -1,6 +1,6 @@
 import uuid, enum
 from datetime import datetime, date
-from sqlalchemy import String, Enum as SAEnum, DateTime, Date, ARRAY, ForeignKey, func
+from sqlalchemy import String, Text, Enum as SAEnum, DateTime, Date, ARRAY, ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.base import Base
 
@@ -27,6 +27,7 @@ class Run(Base):
     depth: Mapped[str] = mapped_column(String)  # quick|standard|deep
     analysts: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     label: Mapped[str | None] = mapped_column(String, nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[RunStatus] = mapped_column(SAEnum(RunStatus), default=RunStatus.pending)
     archived: Mapped[bool] = mapped_column(default=False)
     verdict: Mapped[RunVerdict | None] = mapped_column(SAEnum(RunVerdict), nullable=True)

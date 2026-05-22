@@ -4,23 +4,25 @@ import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { TopNav } from "@/components/layout/TopNav";
-import { RunFilters } from "@/components/runs/RunFilters";
+import { RunFilters, dateRangeToFrom, type DateRangePreset } from "@/components/runs/RunFilters";
 import { RunTable } from "@/components/runs/RunTable";
 import { StatsBar } from "@/components/runs/StatsBar";
 import { getRuns, bulkAbortRuns, bulkDeleteRuns } from "@/lib/api";
+import { downloadRunsCsv } from "@/lib/export/buildCsv";
 import type { Run } from "@/lib/types";
 
 interface FilterValues {
   ticker: string;
   status: string;
   verdict: string;
+  dateRange: DateRangePreset;
 }
 
 type Tab = "active" | "archived";
 
 export default function RunsPage() {
   const [tab, setTab] = useState<Tab>("active");
-  const [filters, setFilters] = useState<FilterValues>({ ticker: "", status: "", verdict: "" });
+  const [filters, setFilters] = useState<FilterValues>({ ticker: "", status: "", verdict: "", dateRange: "" });
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const queryClient = useQueryClient();
@@ -31,13 +33,16 @@ export default function RunsPage() {
 
   const { data, isLoading, isError, isFetching, refetch } = useQuery({
     queryKey: ["runs", tab, filters],
-    queryFn: () =>
-      getRuns({
+    queryFn: () => {
+      const dateFrom = dateRangeToFrom(filters.dateRange);
+      return getRuns({
         ...(filters.ticker ? { ticker: filters.ticker } : {}),
         ...(filters.status ? { status: filters.status } : {}),
         ...(filters.verdict ? { verdict: filters.verdict } : {}),
+        ...(dateFrom ? { date_from: dateFrom } : {}),
         archived: tab === "archived",
-      }),
+      });
+    },
     refetchInterval: (query) => {
       const runs = query.state.data ?? [];
       const hasActive = runs.some((r) => r.status === "running" || r.status === "pending");
@@ -110,6 +115,14 @@ export default function RunsPage() {
               >
                 <path fillRule="evenodd" d="M13.836 2.477a.75.75 0 0 1 .75.75v3.182a.75.75 0 0 1-.75.75h-3.182a.75.75 0 0 1 0-1.5h1.37l-.84-.841a4.5 4.5 0 0 0-7.08.932.75.75 0 0 1-1.3-.75 6 6 0 0 1 9.44-1.242l.842.84V3.227a.75.75 0 0 1 .75-.75Zm-.911 7.5A.75.75 0 0 1 13.199 11a6 6 0 0 1-9.44 1.241l-.84-.84v1.371a.75.75 0 0 1-1.5 0V9.591a.75.75 0 0 1 .75-.75H5.35a.75.75 0 0 1 0 1.5H3.98l.841.841a4.5 4.5 0 0 0 7.08-.932.75.75 0 0 1 1.025-.273Z" clipRule="evenodd" />
               </svg>
+            </button>
+            <button
+              onClick={() => downloadRunsCsv(runs)}
+              disabled={runs.length === 0}
+              title="Export current view to CSV"
+              className="text-slate-400 hover:text-slate-200 disabled:opacity-40 text-xs border border-slate-700 rounded px-2 py-1.5"
+            >
+              Export CSV
             </button>
             <Link
               href="/runs/new"

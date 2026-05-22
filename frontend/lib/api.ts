@@ -16,12 +16,14 @@ async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Resp
   });
 }
 
-export async function getRuns(params?: { ticker?: string; status?: string; verdict?: string; archived?: boolean; limit?: number; offset?: number }): Promise<Run[]> {
+export async function getRuns(params?: { ticker?: string; status?: string; verdict?: string; archived?: boolean; date_from?: string; date_to?: string; limit?: number; offset?: number }): Promise<Run[]> {
   const p: Record<string, string> = {};
   if (params?.ticker) p.ticker = params.ticker;
   if (params?.status) p.status = params.status;
   if (params?.verdict) p.verdict = params.verdict;
   if (params?.archived) p.archived = "true";
+  if (params?.date_from) p.date_from = params.date_from;
+  if (params?.date_to) p.date_to = params.date_to;
   if (params?.limit != null) p.limit = String(params.limit);
   if (params?.offset != null) p.offset = String(params.offset);
   const qs = new URLSearchParams(p).toString();
@@ -46,7 +48,7 @@ export async function abortRun(id: string): Promise<void> {
   await fetchWithAuth(`/runs/${id}`, { method: "DELETE" });
 }
 
-export async function updateRun(id: string, data: { label?: string | null }): Promise<Run> {
+export async function updateRun(id: string, data: { label?: string | null; notes?: string | null }): Promise<Run> {
   const r = await fetchWithAuth(`/runs/${id}`, { method: "PATCH", body: JSON.stringify(data) });
   if (!r.ok) throw new Error("Failed to update run");
   return r.json();

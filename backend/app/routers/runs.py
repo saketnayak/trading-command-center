@@ -78,6 +78,8 @@ async def list_runs(
     verdict: str | None = Query(None),
     user_id: UUID | None = Query(None),
     archived: bool = Query(False),
+    date_from: datetime | None = Query(None, description="Filter runs created at or after this ISO timestamp"),
+    date_to: datetime | None = Query(None, description="Filter runs created at or before this ISO timestamp"),
     limit: int = Query(200, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -93,6 +95,10 @@ async def list_runs(
         q = q.where(Run.verdict == verdict)
     if user_id:
         q = q.where(Run.created_by == user_id)
+    if date_from:
+        q = q.where(Run.created_at >= date_from)
+    if date_to:
+        q = q.where(Run.created_at <= date_to)
     q = q.limit(limit).offset(offset)
     result = await db.execute(q)
     runs = result.scalars().all()
@@ -263,6 +269,7 @@ async def get_latest_runs_by_ticker(
 
 class RunUpdateRequest(BaseModel):
     label: str | None = None
+    notes: str | None = None
 
 
 @router.patch("/runs/{run_id}", response_model=RunResponse)
@@ -277,8 +284,10 @@ async def update_run(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found")
     if str(run.created_by) != str(user.id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized")
-    if "label" in req.model_fields_set or req.label is not None:
+    if "label" in req.model_fields_set:
         run.label = req.label or None
+    if "notes" in req.model_fields_set:
+        run.notes = req.notes or None
     await db.commit()
     await db.refresh(run)
     return _run_to_response(run)

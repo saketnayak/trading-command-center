@@ -230,3 +230,114 @@ async def test_latest_by_ticker_scoped_to_user():
         )
         assert r.status_code == 200
         assert r.json()["TSLA"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_runs_filters_by_date_range():
+    """GET /runs?date_from=... excludes runs created before the cutoff."""
+    from app.database import AsyncSessionLocal
+    from app.models.run import Run, RunStatus, RunVerdict
+    from datetime import date, datetime, timezone, timedelta
+    from sqlalchemy import update
+    from urllib.parse import quote
+
+    email = f"dr_{uuid.uuid4().hex[:8]}@test.com"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _get_token(client, email)
+        user_id = await _decode_user_id(token)
+
+        old_id = uuid.uuid4()
+        new_id = uuid.uuid4()
+        old_ts = datetime.now(timezone.utc) - timedelta(days=30)
+        new_ts = datetime.now(timezone.utc) - timedelta(hours=1)
+        async with AsyncSessionLocal() as db:
+            for rid, ticker in [(old_id, "OLDX"), (new_id, "NEWX")]:
+                db.add(Run(
+                    id=rid,
+                    created_by=uuid.UUID(user_id),
+                    ticker=ticker,
+                    analysis_date=date.today(),
+                    llm_provider="openai",
+                    llm_model="gpt-4o",
+                    depth="standard",
+                    analysts=["market"],
+                    status=RunStatus.completed,
+                    verdict=RunVerdict.buy,
+                ))
+            await db.commit()
+            # created_at uses server_default, so override explicitly for both rows.
+            await db.execute(update(Run).where(Run.id == old_id).values(created_at=old_ts))
+            await db.execute(update(Run).where(Run.id == new_id).values(created_at=new_ts))
+            await db.commit()
+
+        cutoff = quote((datetime.now(timezone.utc) - timedelta(days=7)).isoformat())
+        r = await client.get(
+            f"/runs?date_from={cutoff}",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        tickers = [row["ticker"] for row in r.json()]
+        assert "NEWX" in tickers
+        assert "OLDX" not in tickers
+
+
+@pytest.mark.asyncio
+async def test_patch_run_updates_notes():
+    """PATCH /runs/{id} persists notes and returns them in the response."""
+    from app.database import AsyncSessionLocal
+    from app.models.run import Run, RunStatus, RunVerdict
+    from datetime import date
+
+    email = f"notes_{uuid.uuid4().hex[:8]}@test.com"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _get_token(client, email)
+        user_id = await _decode_user_id(token)
+
+        run_id = uuid.uuid4()
+        async with AsyncSessionLocal() as db:
+            db.add(Run(
+                id=run_id,
+                created_by=uuid.UUID(user_id),
+                ticker="AAPL",
+                analysis_date=date.today(),
+                llm_provider="openai",
+                llm_model="gpt-4o",
+                depth="standard",
+                analysts=["market"],
+                status=RunStatus.completed,
+                verdict=RunVerdict.buy,
+            ))
+            await db.commit()
+
+        r = await client.patch(
+            f"/runs/{run_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"notes": "Took the trade, stopped out on FOMC."},
+        )
+        assert r.status_code == 200
+        assert r.json()["notes"] == "Took the trade, stopped out on FOMC."
+
+        # Clearing via empty string should null the field.
+        r = await client.patch(
+            f"/runs/{run_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"notes": ""},
+        )
+        assert r.status_code == 200
+        assert r.json()["notes"] is None
+
+        # Omitting notes from the body must NOT clobber the existing value.
+        r = await client.patch(
+            f"/runs/{run_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"notes": "Second attempt"},
+        )
+        assert r.status_code == 200
+        r = await client.patch(
+            f"/runs/{run_id}",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"label": "tagged"},
+        )
+        assert r.status_code == 200
+        assert r.json()["notes"] == "Second attempt"
+        assert r.json()["label"] == "tagged"
