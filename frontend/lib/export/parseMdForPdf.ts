@@ -9,7 +9,7 @@ export type MdSegment =
   | { kind: "h3"; text: string }
   | { kind: "bullet"; text: string }
   | { kind: "paragraph"; text: string; spans: InlineSpan[] }
-  | { kind: "table"; headers: string[]; rows: string[][] }
+  | { kind: "table"; rows: string[][] }
   | { kind: "code"; text: string }
   | { kind: "blank" };
 
@@ -111,7 +111,7 @@ export function parseMdForPdf(md: string): MdSegment[] {
     if (node.type === "table") {
       const rows = tableRowsFromNode(node);
       if (rows.length > 0) {
-        segments.push({ kind: "table", headers: rows[0], rows: rows.slice(1) });
+        segments.push({ kind: "table", rows: rows });
       }
       continue;
     }
