@@ -15,6 +15,7 @@ export interface Run {
   depth: "quick" | "standard" | "deep";
   analysts: string[];
   label: string | null;
+  notes: string | null;
   status: "pending" | "running" | "completed" | "aborted" | "failed";
   verdict: "buy" | "sell" | "hold" | null;
   archived: boolean;

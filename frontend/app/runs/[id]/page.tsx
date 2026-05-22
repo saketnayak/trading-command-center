@@ -23,6 +23,71 @@ function rerunUrl(run: { ticker: string; llm_provider: string; llm_model: string
   return `/runs/new?${p.toString()}`;
 }
 
+function NotesEditor({ id, notes }: { id: string; notes: string | null }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(notes ?? "");
+  const queryClient = useQueryClient();
+
+  const mutation = useMutation({
+    mutationFn: (next: string) => updateRun(id, { notes: next || null }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["run", id] });
+      queryClient.invalidateQueries({ queryKey: ["runs"] });
+      setEditing(false);
+    },
+  });
+
+  if (editing) {
+    return (
+      <div className="bg-navy-800 border border-slate-700 rounded-lg p-4 flex flex-col gap-2">
+        <label className="text-xs text-slate-400 uppercase tracking-wide">Notes</label>
+        <textarea
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          placeholder="What did you decide? Did you take the trade? Any context worth keeping…"
+          rows={4}
+          className="bg-navy-900 border border-slate-600 rounded px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 resize-y"
+        />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => mutation.mutate(value)}
+            disabled={mutation.isPending}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs rounded px-3 py-1.5 disabled:opacity-50"
+          >
+            {mutation.isPending ? "Saving…" : "Save"}
+          </button>
+          <button
+            onClick={() => { setValue(notes ?? ""); setEditing(false); }}
+            className="text-xs text-slate-500 hover:text-slate-300"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-navy-800 border border-slate-700 rounded-lg p-4 flex items-start justify-between gap-4">
+      <div className="flex-1 min-w-0">
+        <p className="text-xs text-slate-400 uppercase tracking-wide mb-1">Notes</p>
+        {notes ? (
+          <p className="text-sm text-slate-200 whitespace-pre-wrap break-words">{notes}</p>
+        ) : (
+          <p className="text-sm text-slate-600 italic">No notes yet — capture your decision or context.</p>
+        )}
+      </div>
+      <button
+        onClick={() => { setValue(notes ?? ""); setEditing(true); }}
+        className="text-xs text-slate-400 hover:text-blue-400 flex-shrink-0"
+      >
+        {notes ? "Edit" : "Add"}
+      </button>
+    </div>
+  );
+}
+
 function LabelEditor({ id, label }: { id: string; label: string | null }) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(label ?? "");
@@ -137,6 +202,7 @@ export default function RunResultsPage() {
 
         <TraderDecision run={run} report={report} />
         {outcome && <OutcomeCard outcome={outcome} />}
+        {run && <NotesEditor id={id} notes={run.notes} />}
         <AnalystReports report={report} analysts={run?.analysts ?? []} />
         <BullBearDebate report={report} />
       </main>

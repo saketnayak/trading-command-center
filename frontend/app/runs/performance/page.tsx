@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { TopNav } from "@/components/layout/TopNav";
 import { getPerformanceStats } from "@/lib/api";
+import { downloadPerformanceCsv } from "@/lib/export/buildCsv";
 
 function AccuracyBadge({ value }: { value: number | null }) {
   if (value === null) return <span className="text-slate-500 text-sm">—</span>;
@@ -24,7 +25,17 @@ export default function PerformancePage() {
           <Link href="/runs" className="text-blue-400 hover:underline text-sm">
             ← Back to History
           </Link>
-          <h1 className="text-lg font-semibold text-white">Trade Accuracy</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-lg font-semibold text-white">Trade Accuracy</h1>
+            <button
+              onClick={() => data && downloadPerformanceCsv(data)}
+              disabled={!data || data.outcomes.length === 0}
+              title="Export outcomes table to CSV"
+              className="text-slate-400 hover:text-slate-200 disabled:opacity-40 text-xs border border-slate-700 rounded px-2 py-1"
+            >
+              Export CSV
+            </button>
+          </div>
         </div>
 
         {isLoading && <div className="text-slate-400 text-sm">Loading…</div>}

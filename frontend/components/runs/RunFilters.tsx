@@ -1,9 +1,12 @@
 "use client";
 
+export type DateRangePreset = "" | "24h" | "7d" | "30d" | "90d";
+
 interface FilterValues {
   ticker: string;
   status: string;
   verdict: string;
+  dateRange: DateRangePreset;
 }
 
 interface RunFiltersProps {
@@ -23,6 +26,7 @@ export function RunFilters({ value, onChange }: RunFiltersProps) {
         value={value.ticker}
         onChange={(e) => onChange({ ...value, ticker: e.target.value })}
         className={inputClass}
+        data-run-filter-ticker
       />
       <select
         value={value.status}
@@ -46,6 +50,30 @@ export function RunFilters({ value, onChange }: RunFiltersProps) {
         <option value="sell">sell</option>
         <option value="hold">hold</option>
       </select>
+      <select
+        value={value.dateRange}
+        onChange={(e) => onChange({ ...value, dateRange: e.target.value as DateRangePreset })}
+        className={inputClass}
+        aria-label="Date range"
+      >
+        <option value="">All time</option>
+        <option value="24h">Last 24h</option>
+        <option value="7d">Last 7 days</option>
+        <option value="30d">Last 30 days</option>
+        <option value="90d">Last 90 days</option>
+      </select>
     </div>
   );
+}
+
+export function dateRangeToFrom(preset: DateRangePreset): string | undefined {
+  if (!preset) return undefined;
+  const now = Date.now();
+  const ms: Record<Exclude<DateRangePreset, "">, number> = {
+    "24h": 24 * 60 * 60 * 1000,
+    "7d": 7 * 24 * 60 * 60 * 1000,
+    "30d": 30 * 24 * 60 * 60 * 1000,
+    "90d": 90 * 24 * 60 * 60 * 1000,
+  };
+  return new Date(now - ms[preset]).toISOString();
 }

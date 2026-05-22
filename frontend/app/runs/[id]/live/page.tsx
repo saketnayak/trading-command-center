@@ -9,6 +9,7 @@ import { AgentSidebar } from "@/components/runs/AgentSidebar";
 import { PipelinePanel } from "@/components/runs/PipelinePanel";
 import { getRun, abortRun, getRunEvents } from "@/lib/api";
 import { useAgentStream } from "@/lib/websocket";
+import { useRunTabTitle } from "@/lib/useRunTabTitle";
 import type { AgentEventPayload } from "@/lib/types";
 
 export default function LiveRunPage() {
@@ -44,6 +45,7 @@ export default function LiveRunPage() {
   }, [refetch]);
 
   useAgentStream(id, handleEvent);
+  useRunTabTitle(run?.ticker, run?.status);
 
   const handleAbort = async () => {
     await abortRun(id);
