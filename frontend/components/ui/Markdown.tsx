@@ -1,5 +1,6 @@
 "use client";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from 'remark-gfm';
 import type { Components } from "react-markdown";
 
 const components: Components = {
@@ -55,5 +56,5 @@ interface Props {
 }
 
 export function Markdown({ children }: Props) {
-  return <ReactMarkdown components={components}>{children}</ReactMarkdown>;
+  return <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{children}</ReactMarkdown>;
 }
