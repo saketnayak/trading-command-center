@@ -69,7 +69,7 @@ requires-dist = [
     { name = "pytest-httpx", marker = "extra == 'dev'", specifier = ">=0.30" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "tradingagents", specifier = ">=0.3.2,<0.6.0" },
+    { name = "tradingagents", specifier = ">=0.6.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 provides-extras = ["dev"]
@@ -4005,7 +4005,7 @@ wheels = [
 
 [[package]]
 name = "tradingagents"
-version = "0.5.1"
+version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "backtrader" },
@@ -4033,9 +4033,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "yfinance" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c3/fc/de2347d591fc38ba3598aee37b4e1044bee8209cd33b4dccab285afad0b9/tradingagents-0.5.1.tar.gz", hash = "sha256:c4f75dadedc2416d0dc996443a90cf50b3d26818eefa6cdd1d2f53c2ab4af0ca", size = 376499, upload-time = "2026-05-11T16:13:09.765Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/fd/20/92dd994d18702b3a2d586e4a8b67c7f841ba2194e30a4443a11f68b41457/tradingagents-0.7.0.tar.gz", hash = "sha256:94f190f8e23c3246a538d796ab159d7f50c3df3f36de73b5492e9dc8a411ade6", size = 450046, upload-time = "2026-05-21T11:18:10.601Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/85/a4/bbd1c72695fcaa2c7f9b16bee2d4c1e72c9fd54778cc3bb7f3faf86a39d8/tradingagents-0.5.1-py3-none-any.whl", hash = "sha256:25c08d2c0249fe565f343c068f1e8b8e1f498fe9d8576c512691d083712b1ce6", size = 113763, upload-time = "2026-05-11T16:13:08.573Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/12/00736cc7d5092137da186c4a3efe4a827acefee388bbe9c255c8fb80fd84/tradingagents-0.7.0-py3-none-any.whl", hash = "sha256:f7d244588b7c03b0af72883f2fae875434ae4104410338f145ad9badac23cff2", size = 163702, upload-time = "2026-05-21T11:18:09.148Z" },
 ]
 
 [[package]]

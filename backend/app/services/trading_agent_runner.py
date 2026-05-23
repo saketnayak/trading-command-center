@@ -205,7 +205,7 @@ async def execute_run(run_id: str, config: dict) -> None:
                     callbacks=[emitter],
                 )
                 from app.config import settings as _settings
-                final_state, signal = await asyncio.wait_for(
+                final_state, recommendation = await asyncio.wait_for(
                     asyncio.to_thread(
                         graph.propagate,
                         config["ticker"],
@@ -224,11 +224,13 @@ async def execute_run(run_id: str, config: dict) -> None:
         await async_q.put(None)  # sentinel
         await process_task
 
-        verdict = _parse_verdict(signal)
+        verdict = _parse_verdict(recommendation)
         raw = final_state.model_dump() if hasattr(final_state, "model_dump") else {}
-        trader_decision = str(getattr(final_state, "final_trade_decision", ""))
-        
-        suggested_entry, suggested_stop, suggested_target = _extract_prices(trader_decision)
+        trader_decision = _extract_trader_decision(final_state, recommendation)
+
+        suggested_entry = _normalize_price(getattr(recommendation, "entry_reference_price", None))
+        suggested_stop = _normalize_price(getattr(recommendation, "stop_loss", None))
+        suggested_target = _normalize_price(getattr(recommendation, "target_price", None))
         async with AsyncSessionLocal() as db:
             db.add(Report(
                 run_id=run_id,
@@ -348,15 +350,36 @@ def _extract_prices(text: str) -> tuple[str | None, str | None, str | None]:
     return str(entry), str(stop), str(target)
 
 
-def _parse_verdict(signal: str) -> "RunVerdict":
+def _normalize_price(value) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text or text.lower() in {"none", "null", "n/a", "na"}:
+        return None
+    return text
+
+
+def _extract_trader_decision(state, recommendation) -> str:
+    rationale = getattr(recommendation, "rationale", None)
+    if rationale:
+        return str(rationale).strip()
+
+    final_recommendation = getattr(state, "final_trade_recommendation", None)
+    if final_recommendation is not None:
+        final_rationale = getattr(final_recommendation, "rationale", None)
+        if final_rationale:
+            return str(final_rationale).strip()
+
+    final_decision = getattr(state, "final_trade_decision", "")
+    return str(final_decision).strip()
+
+
+def _parse_verdict(recommendation) -> "RunVerdict":
     from app.models.run import RunVerdict
-    _NEGATION = r"(?:do\s+not|don'?t|not\s+a?)\s+"
-    buy_match = re.search(r'\bbuy\b', signal, re.IGNORECASE)
-    buy_negated = re.search(_NEGATION + r'buy\b', signal, re.IGNORECASE)
-    sell_match = re.search(r'\bsell\b', signal, re.IGNORECASE)
-    sell_negated = re.search(_NEGATION + r'sell\b', signal, re.IGNORECASE)
-    if buy_match and not buy_negated:
+
+    signal = str(getattr(recommendation, "signal", "")).strip().lower()
+    if signal == "buy":
         return RunVerdict.buy
-    if sell_match and not sell_negated:
+    if signal == "sell":
         return RunVerdict.sell
     return RunVerdict.hold
