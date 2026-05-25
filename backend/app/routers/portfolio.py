@@ -1090,6 +1090,15 @@ _fundamentals_cache: dict[str, tuple[dict, float]] = {}
 _FUNDAMENTALS_TTL = 21600  # 6 hours
 
 
+def compute_peg(pe: float | None, eps_growth_3y: float | None) -> float | None:
+    """Return P/E ÷ 3-year EPS growth rate, or None if not computable."""
+    if pe is None or eps_growth_3y is None:
+        return None
+    if pe <= 0 or eps_growth_3y <= 0:
+        return None
+    return round(pe / eps_growth_3y, 2)
+
+
 async def _fetch_fundamentals(ticker: str, api_key: Optional[str]) -> dict:
     now = time.time()
     if ticker in _fundamentals_cache:
@@ -1107,15 +1116,19 @@ async def _fetch_fundamentals(ticker: str, api_key: Optional[str]) -> dict:
                 r = await client.get(url)
                 r.raise_for_status()
                 m = r.json().get("metric", {})
+            pe = m.get("peAnnual") or m.get("peTTM")
+            eps_growth_3y = m.get("epsGrowth3Y")
             data = {
                 "asset_type": "stock",
-                "pe_ratio": m.get("peAnnual") or m.get("peTTM"),
+                "pe_ratio": pe,
                 "beta": m.get("beta"),
                 "week52_high": m.get("52WeekHigh"),
                 "week52_low": m.get("52WeekLow"),
                 "dividend_yield": m.get("dividendYieldIndicatedAnnual"),
                 "eps_ttm": m.get("epsBasicExclExtraItemsTTM"),
                 "market_cap": m.get("marketCapitalization"),
+                "eps_growth_3y": eps_growth_3y,
+                "peg_ratio": compute_peg(pe, eps_growth_3y),
             }
         except Exception:
             data = {"asset_type": "stock"}
