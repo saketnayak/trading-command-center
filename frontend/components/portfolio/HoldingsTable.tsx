@@ -120,7 +120,7 @@ function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: n
         {
           label: "PEG",
           value: fmtNum(data.peg_ratio ?? null),
-          color: data.peg_ratio != null ? pegSignal(data.peg_ratio).color.split(" ")[0] : undefined,
+          color: data.peg_ratio != null ? pegSignal(data.peg_ratio).textColor : undefined,
         },
         { label: "EPS Gr 3Y", value: fmtNum(data.eps_growth_3y ?? null, 1, "%") },
         { label: "Beta", value: fmtNum(data.beta ?? null) },
@@ -147,18 +147,18 @@ function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: n
   );
 }
 
-function pegSignal(peg: number): { color: string; label: string } {
-  if (peg < 1.0) return { color: "text-green-400 bg-green-900/30", label: "Undervalued" };
-  if (peg <= 1.5) return { color: "text-yellow-400 bg-yellow-900/30", label: "Fairly valued" };
-  return { color: "text-red-400 bg-red-900/30", label: "Overvalued" };
+function pegSignal(peg: number): { textColor: string; bgColor: string; label: string } {
+  if (peg < 1.0) return { textColor: "text-green-400", bgColor: "bg-green-900/30", label: "Undervalued" };
+  if (peg <= 1.5) return { textColor: "text-yellow-400", bgColor: "bg-yellow-900/30", label: "Fairly valued" };
+  return { textColor: "text-red-400", bgColor: "bg-red-900/30", label: "Overvalued" };
 }
 
 function PegBadge({ peg }: { peg: number | null | undefined }) {
   if (peg != null) {
-    const { color, label } = pegSignal(peg);
+    const { textColor, bgColor, label } = pegSignal(peg);
     return (
       <span
-        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ml-1.5 ${color}`}
+        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ml-1.5 ${textColor} ${bgColor}`}
         title={`PEG ${peg.toFixed(2)} — ${label} relative to growth`}
       >
         PEG {peg.toFixed(2)}

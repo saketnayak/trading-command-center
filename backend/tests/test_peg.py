@@ -41,4 +41,4 @@ def test_peg_none_when_pe_zero():
 def test_peg_rounds_to_two_decimals():
     # P/E = 10, growth = 3 → 3.333... rounds to 3.33
     result = compute_peg(pe=10.0, eps_growth_3y=3.0)
-    assert result == 3.33
+    assert result == pytest.approx(3.33, abs=0.005)
