@@ -1,9 +1,10 @@
 "use client";
-import type { PortfolioHolding } from "@/lib/types";
+import type { PortfolioHolding, FundamentalsData } from "@/lib/types";
 
 interface Props {
   holdings: PortfolioHolding[];
   onAnalyzeStale?: () => void;
+  fundamentals?: Record<string, FundamentalsData>;
 }
 
 const STALE_DAYS = 7;
@@ -12,7 +13,7 @@ function daysAgo(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
 }
 
-export function PortfolioStatsBar({ holdings, onAnalyzeStale }: Props) {
+export function PortfolioStatsBar({ holdings, onAnalyzeStale, fundamentals }: Props) {
   if (holdings.length === 0) return null;
 
   const withPrice = holdings.filter((h) => h.unrealized_pnl_pct != null);
@@ -27,6 +28,13 @@ export function PortfolioStatsBar({ holdings, onAnalyzeStale }: Props) {
 
   const buyCount = holdings.filter((h) => h.last_run?.verdict?.toLowerCase() === "buy").length;
   const sellCount = holdings.filter((h) => h.last_run?.verdict?.toLowerCase() === "sell").length;
+
+  const undervaluedByPeg = fundamentals
+    ? holdings.filter((h) => {
+        const f = fundamentals[h.ticker];
+        return f?.peg_ratio != null && f.peg_ratio < 1.0;
+      }).length
+    : 0;
 
   return (
     <div className="flex flex-wrap items-center gap-3 px-4 py-3 bg-slate-800/40 border border-slate-700/60 rounded-lg text-xs">
@@ -46,6 +54,9 @@ export function PortfolioStatsBar({ holdings, onAnalyzeStale }: Props) {
       )}
       <Stat label="Buy signals" value={String(buyCount)} color="text-green-400" />
       <Stat label="Sell signals" value={String(sellCount)} color="text-red-400" />
+      {undervaluedByPeg > 0 && (
+        <Stat label="Undervalued (PEG < 1)" value={String(undervaluedByPeg)} color="text-green-400" />
+      )}
       <div className="flex items-center gap-2 ml-auto">
         <Stat
           label="Stale / unanalyzed"
