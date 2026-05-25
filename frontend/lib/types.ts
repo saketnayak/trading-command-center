@@ -304,6 +304,8 @@ export interface FundamentalsData {
   dividend_yield?: number | null;
   eps_ttm?: number | null;
   market_cap?: number | null;
+  peg_ratio?: number | null;
+  eps_growth_3y?: number | null;
   // Crypto fields
   volume_24h?: number | null;
   circulating_supply?: number | null;
