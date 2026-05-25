@@ -13,6 +13,7 @@ from app.services.markov_service import (
     _build_transition_matrix,
     _compute_signal,
     _compute_stationary,
+    _walk_forward_stats,
     _regime_cache,
 )
 
@@ -94,8 +95,39 @@ def test_cache_miss_on_expired():
     from app.services import markov_service
     fake_result = {"ticker": "TEST2", "signal": 0.5, "current_regime": "Bull"}
     markov_service._regime_cache["TEST2"] = (fake_result, time.time() - 1)  # expired
-    with patch("app.services.markov_service._compute_regime", return_value=None):
+    with patch("app.services.markov_service._compute_regime", return_value=None) as mock_compute:
         result = asyncio.get_event_loop().run_until_complete(
             markov_service.get_regime("TEST2")
         )
     assert result is None
+    mock_compute.assert_called_once_with("TEST2")
+
+
+def test_walk_forward_stats_returns_sharpe_and_drawdown():
+    # 500 prices with upward trend -> enough Bull regime days for walk-forward to run
+    prices = [100.0 * 1.0005 ** i for i in range(500)]
+    close = make_close(prices)
+    labels = _label_regimes(close, window=20, threshold=0.05)
+    result = _walk_forward_stats(close, labels, min_train=252)
+    assert "sharpe" in result
+    assert "max_drawdown" in result
+    assert isinstance(result["sharpe"], float)
+    assert result["max_drawdown"] <= 0.0
+
+
+def test_walk_forward_stats_returns_none_when_insufficient_data():
+    # Exactly min_train prices -> walk-forward loop has no iterations -> both None
+    min_train = 100
+    prices = [100.0 * 1.0005 ** i for i in range(min_train)]
+    close = make_close(prices)
+    labels = _label_regimes(close, window=20, threshold=0.05)
+    result = _walk_forward_stats(close, labels, min_train=min_train)
+    assert result["sharpe"] is None
+    assert result["max_drawdown"] is None
+
+
+def test_transition_matrix_degenerate_state():
+    # No Sideways (state 1) in the sequence -> state 1 row should get uniform fallback
+    labels = pd.Series([2, 0, 2, 0, 2, 0])
+    P = _build_transition_matrix(labels)
+    assert P[1].sum() == pytest.approx(1.0)
