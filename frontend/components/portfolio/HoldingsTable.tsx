@@ -5,7 +5,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type LatestRunEntry } from "@/lib/api";
 import { fmtMoney, fmtPnl } from "@/lib/currency";
 import { WatchButton } from "@/components/portfolio/WatchButton";
-import type { PortfolioHolding, FundamentalsData } from "@/lib/types";
+import type { PortfolioHolding, FundamentalsData, RegimeData } from "@/lib/types";
 
 interface HoldingsTableProps {
   portfolioId: string;
@@ -13,6 +13,7 @@ interface HoldingsTableProps {
   priceUnavailableReason: string | null;
   displayCurrency: string;
   fundamentals?: Record<string, FundamentalsData>;
+  regime?: Record<string, RegimeData>;
   onTickerClick?: (holding: PortfolioHolding) => void;
 }
 
@@ -175,7 +176,99 @@ function PegBadge({ peg }: { peg: number | null | undefined }) {
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals, onTickerClick }: HoldingsTableProps) {
+function regimeColors(regime: "Bull" | "Sideways" | "Bear"): { text: string; bg: string } {
+  if (regime === "Bull") return { text: "text-green-400", bg: "bg-green-900/30" };
+  if (regime === "Bear") return { text: "text-red-400", bg: "bg-red-900/30" };
+  return { text: "text-yellow-400", bg: "bg-yellow-900/30" };
+}
+
+function RegimeBadge({ data }: { data: RegimeData | undefined | null }) {
+  if (!data) return null;
+  const { text, bg } = regimeColors(data.current_regime);
+  const signStr = data.signal >= 0 ? `+${data.signal.toFixed(2)}` : data.signal.toFixed(2);
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ml-1.5 ${text} ${bg}`}
+      title={`Markov regime: ${data.current_regime} (${(data.persistence * 100).toFixed(0)}% persistence). Signal: ${signStr} (bull_prob − bear_prob). Data via yfinance.`}
+    >
+      ● {data.current_regime} {signStr}
+    </span>
+  );
+}
+
+function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
+  const { text } = regimeColors(data.current_regime);
+  const signStr = data.signal >= 0 ? `+${data.signal.toFixed(2)}` : data.signal.toFixed(2);
+  const sharpeColor = (data.walk_forward.sharpe ?? 0) > 0.5 ? "text-green-400"
+    : (data.walk_forward.sharpe ?? 0) > 0 ? "text-yellow-400" : "text-red-400";
+  const ddColor = (data.walk_forward.max_drawdown ?? 0) < -0.2 ? "text-red-400"
+    : (data.walk_forward.max_drawdown ?? 0) < -0.1 ? "text-yellow-400" : "text-slate-300";
+  const signalColor = data.signal >= 0.3 ? "text-green-400" : data.signal <= -0.3 ? "text-red-400" : "text-yellow-400";
+
+  const statBars: Array<{ label: string; value: number; color: string }> = [
+    { label: "Bull", value: data.stationary.bull, color: "bg-green-500" },
+    { label: "Sidew.", value: data.stationary.sideways, color: "bg-yellow-500" },
+    { label: "Bear", value: data.stationary.bear, color: "bg-red-500" },
+  ];
+
+  return (
+    <tr className="border-t border-slate-700/30 bg-slate-900/30">
+      <td colSpan={colSpan} className="px-6 py-2">
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-4 text-xs">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide">Regime</span>
+              <span className={`font-mono font-semibold ${text}`}>{data.current_regime}</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide">Signal</span>
+              <span className={`font-mono ${signalColor}`}>{signStr}</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide">Persistence</span>
+              <span className="font-mono text-slate-300">{(data.persistence * 100).toFixed(0)}%</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide">Sharpe (WF)</span>
+              <span className={`font-mono ${sharpeColor}`}>
+                {data.walk_forward.sharpe != null ? data.walk_forward.sharpe.toFixed(2) : "—"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide">Max DD</span>
+              <span className={`font-mono ${ddColor}`}>
+                {data.walk_forward.max_drawdown != null
+                  ? `${(data.walk_forward.max_drawdown * 100).toFixed(1)}%`
+                  : "—"}
+              </span>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide">Long-run distribution</span>
+            <div className="space-y-0.5">
+              {statBars.map((b) => (
+                <div key={b.label} className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 w-10">{b.label}</span>
+                  <div className="flex-1 bg-slate-700 rounded h-1.5">
+                    <div
+                      className={`h-1.5 rounded ${b.color}`}
+                      style={{ width: `${(b.value * 100).toFixed(0)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-300 w-8 text-right">
+                    {(b.value * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals, regime, onTickerClick }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "" });
@@ -313,7 +406,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   }
 
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
-  const colSpan = hasFundamentals ? 9 : 8;
+  const hasRegime = regime && Object.keys(regime).length > 0;
+  const colSpan = (hasFundamentals ? 9 : 8) + (hasRegime ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -362,7 +456,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-navy-700 text-slate-400 text-xs uppercase tracking-wider">
             <tr>
-              {hasFundamentals && <th className="w-6 px-2 py-3" />}
+              {(hasFundamentals || hasRegime) && <th className="w-6 px-2 py-3" />}
               <SortableHeader label="Ticker"         colKey="ticker"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="left" />
               <SortableHeader label="Shares"         colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Avg Cost"       colKey="avg_cost"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -370,6 +464,9 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
               <SortableHeader label="Market Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Unrealized P&L" colKey="unrealized_pnl" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Last Analysis</th>
+              {hasRegime && (
+                <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">AI vs Regime</th>
+              )}
               <th className="text-left px-4 py-3">Actions</th>
             </tr>
           </thead>
@@ -398,9 +495,9 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                   <React.Fragment key={h.id}>
                     <tr className={`border-t border-slate-800 hover:bg-slate-800/30 ${rowTint}`}>
                       {/* Expand toggle */}
-                      {hasFundamentals && (
+                      {(hasFundamentals || hasRegime) && (
                         <td className="px-2 py-2">
-                          {fundData && (
+                          {(fundData || regime?.[h.ticker]) && (
                             <button
                               onClick={() => toggleExpand(h.id)}
                               className="text-slate-500 hover:text-slate-300 text-xs transition-colors"
@@ -441,6 +538,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             {fundData && fundData.asset_type === "stock" && (
                               <PegBadge peg={fundData.peg_ratio} />
                             )}
+                            <RegimeBadge data={regime?.[h.ticker]} />
                           </span>
                         )}
                       </td>
@@ -519,6 +617,33 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                         })()}
                       </td>
 
+                      {/* AI vs Regime */}
+                      {hasRegime && (() => {
+                        const r = regime?.[h.ticker];
+                        const verdict = rowEntry?.verdict;
+                        if (!r || !verdict) return <td className="px-4 py-2 text-slate-500 text-xs">—</td>;
+                        const isBull = r.signal >= 0;
+                        const isConflict =
+                          (verdict === "buy" && !isBull) ||
+                          (verdict === "sell" && isBull);
+                        return (
+                          <td className="px-4 py-2 text-xs whitespace-nowrap">
+                            {isConflict ? (
+                              <span
+                                className="text-amber-400"
+                                title={`AI verdict (${verdict}) conflicts with Markov regime (${r.current_regime}, signal ${r.signal >= 0 ? "+" : ""}${r.signal.toFixed(2)}). Consider reviewing.`}
+                              >
+                                ⚠ Conflicts
+                              </span>
+                            ) : (
+                              <span className="text-green-400" title={`AI verdict (${verdict}) aligns with Markov regime (${r.current_regime}).`}>
+                                ✓ Agrees
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })()}
+
                       {/* Actions */}
                       <td className="px-4 py-2">
                         {isEditing ? (
@@ -567,6 +692,11 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                     {isExpanded && fundData && (
                       <FundamentalsRow key={`${h.id}-fund`} data={fundData} colSpan={colSpan} />
                     )}
+
+                    {/* Regime expand row */}
+                    {isExpanded && regime?.[h.ticker] && (
+                      <RegimeRow key={`${h.id}-regime`} data={regime[h.ticker]} colSpan={colSpan} />
+                    )}
                   </React.Fragment>
                 );
               })
@@ -575,7 +705,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
             {/* New row draft */}
             {addingNew && (
               <tr className="border-t border-slate-700 bg-slate-800/20">
-                {hasFundamentals && <td className="px-2 py-2" />}
+                {(hasFundamentals || hasRegime) && <td className="px-2 py-2" />}
                 <td className="px-4 py-2">
                   <EditInput
                     autoFocus

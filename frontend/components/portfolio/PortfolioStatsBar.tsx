@@ -1,10 +1,11 @@
 "use client";
-import type { PortfolioHolding, FundamentalsData } from "@/lib/types";
+import type { PortfolioHolding, FundamentalsData, RegimeData } from "@/lib/types";
 
 interface Props {
   holdings: PortfolioHolding[];
   onAnalyzeStale?: () => void;
   fundamentals?: Record<string, FundamentalsData>;
+  regime?: Record<string, RegimeData>;
 }
 
 const STALE_DAYS = 7;
