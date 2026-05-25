@@ -1,0 +1,101 @@
+import asyncio
+import time
+import numpy as np
+import pandas as pd
+import pytest
+from unittest.mock import patch
+
+pytest.mark.unit
+pytestmark = pytest.mark.unit
+
+from app.services.markov_service import (
+    _label_regimes,
+    _build_transition_matrix,
+    _compute_signal,
+    _compute_stationary,
+    _regime_cache,
+)
+
+
+def make_close(values: list[float]) -> pd.Series:
+    idx = pd.date_range("2020-01-01", periods=len(values), freq="B")
+    return pd.Series(values, index=idx, name="Close")
+
+
+def test_label_regimes_bull():
+    # 21 prices where rolling 20-day return > 5%
+    prices = [100.0] + [100.0 * 1.003 ** i for i in range(1, 21)]
+    close = make_close(prices)
+    labels = _label_regimes(close, window=20, threshold=0.05)
+    assert labels.iloc[-1] == 2  # Bull
+
+
+def test_label_regimes_bear():
+    # 21 prices where rolling 20-day return < -5%
+    prices = [100.0] + [100.0 * 0.997 ** i for i in range(1, 21)]
+    close = make_close(prices)
+    labels = _label_regimes(close, window=20, threshold=0.05)
+    assert labels.iloc[-1] == 0  # Bear
+
+
+def test_label_regimes_sideways():
+    # flat prices -> rolling return ~0 -> Sideways
+    close = make_close([100.0] * 30)
+    labels = _label_regimes(close, window=20, threshold=0.05)
+    assert labels.iloc[-1] == 1  # Sideways
+
+
+def test_transition_matrix_shape_and_rows_sum_to_one():
+    labels = pd.Series([2, 0, 2, 0, 2, 0, 2, 0, 2, 0])
+    P = _build_transition_matrix(labels)
+    assert P.shape == (3, 3)
+    np.testing.assert_allclose(P.sum(axis=1), 1.0, atol=1e-9)
+
+
+def test_transition_matrix_known_transitions():
+    # Only Bull->Bear transitions from Bull rows
+    labels = pd.Series([2, 0, 2, 0, 2, 0])
+    P = _build_transition_matrix(labels)
+    assert P[2, 0] == pytest.approx(1.0)
+    assert P[2, 1] == pytest.approx(0.0)
+    assert P[2, 2] == pytest.approx(0.0)
+
+
+def test_signal_bull():
+    assert _compute_signal(bull_prob=0.8, bear_prob=0.1) == pytest.approx(0.7)
+
+
+def test_signal_bear():
+    assert _compute_signal(bull_prob=0.1, bear_prob=0.8) == pytest.approx(-0.7)
+
+
+def test_stationary_sums_to_one():
+    P = np.array([
+        [0.82, 0.12, 0.06],
+        [0.14, 0.71, 0.15],
+        [0.04, 0.18, 0.78],
+    ])
+    stat = _compute_stationary(P)
+    assert abs(sum(stat.values()) - 1.0) < 1e-6
+    assert all(v >= 0 for v in stat.values())
+
+
+def test_cache_hit_skips_recompute():
+    from app.services import markov_service
+    fake_result = {"ticker": "TEST", "signal": 0.5, "current_regime": "Bull"}
+    markov_service._regime_cache["TEST"] = (fake_result, time.time() + 3600)
+    result = asyncio.get_event_loop().run_until_complete(
+        markov_service.get_regime("TEST")
+    )
+    assert result == fake_result
+
+
+def test_cache_miss_on_expired():
+    from app.services import markov_service
+    fake_result = {"ticker": "TEST2", "signal": 0.5, "current_regime": "Bull"}
+    markov_service._regime_cache["TEST2"] = (fake_result, time.time() - 1)  # expired
+    with patch("app.services.markov_service._compute_regime", return_value=None):
+        result = asyncio.get_event_loop().run_until_complete(
+            markov_service.get_regime("TEST2")
+        )
+    assert result is None
