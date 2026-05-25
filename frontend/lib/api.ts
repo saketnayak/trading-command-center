@@ -1,5 +1,5 @@
 import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -381,6 +381,22 @@ export async function getPortfolioFundamentals(portfolioId: string): Promise<Rec
   const data = await r.json();
   if (data.price_unavailable_reason === "no_finnhub_key") throw new Error("no_finnhub_key");
   return data.data ?? {};
+}
+
+export async function getPortfolioRegime(
+  portfolioId: string
+): Promise<Record<string, RegimeData>> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/regime`);
+  if (!r.ok) return {};
+  const data = await r.json();
+  return data ?? {};
+}
+
+export async function getTickerRegime(ticker: string): Promise<RegimeData | null> {
+  const r = await fetchWithAuth(`/regime/${ticker}`);
+  if (!r.ok) return null;
+  const data = await r.json();
+  return data ?? null;
 }
 
 export async function getPortfolioNews(portfolioId: string, days = 7): Promise<NewsArticle[]> {
