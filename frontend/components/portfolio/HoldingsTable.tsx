@@ -120,14 +120,7 @@ function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: n
         {
           label: "PEG",
           value: fmtNum(data.peg_ratio ?? null),
-          color:
-            data.peg_ratio == null
-              ? undefined
-              : data.peg_ratio < 1.0
-              ? "text-green-400"
-              : data.peg_ratio <= 1.5
-              ? "text-yellow-400"
-              : "text-red-400",
+          color: data.peg_ratio != null ? pegSignal(data.peg_ratio).color.split(" ")[0] : undefined,
         },
         { label: "EPS Gr 3Y", value: fmtNum(data.eps_growth_3y ?? null, 1, "%") },
         { label: "Beta", value: fmtNum(data.beta ?? null) },
@@ -445,7 +438,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             ) : (
                               <span className="font-mono text-purple-400">{h.ticker}</span>
                             )}
-                            {fundData && fundData.asset_type !== "crypto" && (
+                            {fundData && fundData.asset_type === "stock" && (
                               <PegBadge peg={fundData.peg_ratio} />
                             )}
                           </span>
