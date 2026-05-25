@@ -105,7 +105,7 @@ function EditInput({
 }
 
 function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: number }) {
-  const metrics: Array<{ label: string; value: string }> = data.asset_type === "crypto"
+  const metrics: Array<{ label: string; value: string; color?: string }> = data.asset_type === "crypto"
     ? [
         { label: "Mkt Cap", value: fmtLargeNum(data.market_cap ?? null) },
         { label: "Vol 24h", value: fmtLargeNum(data.volume_24h ?? null) },
@@ -117,6 +117,12 @@ function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: n
       ]
     : [
         { label: "P/E", value: fmtNum(data.pe_ratio ?? null) },
+        {
+          label: "PEG",
+          value: fmtNum(data.peg_ratio ?? null),
+          color: data.peg_ratio != null ? pegSignal(data.peg_ratio).textColor : undefined,
+        },
+        { label: "EPS Gr 3Y", value: fmtNum(data.eps_growth_3y ?? null, 1, "%") },
         { label: "Beta", value: fmtNum(data.beta ?? null) },
         { label: "52w High", value: data.week52_high != null ? `$${data.week52_high.toFixed(2)}` : "—" },
         { label: "52w Low", value: data.week52_low != null ? `$${data.week52_low.toFixed(2)}` : "—" },
@@ -132,12 +138,40 @@ function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: n
           {metrics.map((m) => (
             <div key={m.label} className="flex flex-col gap-0.5">
               <span className="text-[10px] text-slate-500 uppercase tracking-wide">{m.label}</span>
-              <span className="text-xs text-slate-300 font-mono">{m.value}</span>
+              <span className={`text-xs font-mono ${m.color ?? "text-slate-300"}`}>{m.value}</span>
             </div>
           ))}
         </div>
       </td>
     </tr>
+  );
+}
+
+function pegSignal(peg: number): { textColor: string; bgColor: string; label: string } {
+  if (peg < 1.0) return { textColor: "text-green-400", bgColor: "bg-green-900/30", label: "Undervalued" };
+  if (peg <= 1.5) return { textColor: "text-yellow-400", bgColor: "bg-yellow-900/30", label: "Fairly valued" };
+  return { textColor: "text-red-400", bgColor: "bg-red-900/30", label: "Overvalued" };
+}
+
+function PegBadge({ peg }: { peg: number | null | undefined }) {
+  if (peg != null) {
+    const { textColor, bgColor, label } = pegSignal(peg);
+    return (
+      <span
+        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ml-1.5 ${textColor} ${bgColor}`}
+        title={`PEG ${peg.toFixed(2)} — ${label} relative to growth`}
+      >
+        PEG {peg.toFixed(2)}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono ml-1.5 text-slate-500 bg-slate-800"
+      title="PEG unavailable — negative earnings or no 3-year growth data from Finnhub"
+    >
+      PEG N/A
+    </span>
   );
 }
 
@@ -388,19 +422,26 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             onKeyDown={handleEditKey}
                             className="w-24 uppercase"
                           />
-                        ) : onTickerClick ? (
-                          <button
-                            onClick={() => onTickerClick(h)}
-                            className="font-mono text-purple-400 hover:text-purple-300 hover:underline transition-colors"
-                          >
-                            {h.ticker}
-                          </button>
-                        ) : h.last_run ? (
-                          <Link href={`/runs/${h.last_run.run_id}`} className="font-mono text-purple-400 hover:underline">
-                            {h.ticker}
-                          </Link>
                         ) : (
-                          <span className="font-mono text-purple-400">{h.ticker}</span>
+                          <span className="inline-flex items-center flex-wrap gap-0.5">
+                            {onTickerClick ? (
+                              <button
+                                onClick={() => onTickerClick(h)}
+                                className="font-mono text-purple-400 hover:text-purple-300 hover:underline transition-colors"
+                              >
+                                {h.ticker}
+                              </button>
+                            ) : h.last_run ? (
+                              <Link href={`/runs/${h.last_run.run_id}`} className="font-mono text-purple-400 hover:underline">
+                                {h.ticker}
+                              </Link>
+                            ) : (
+                              <span className="font-mono text-purple-400">{h.ticker}</span>
+                            )}
+                            {fundData && fundData.asset_type === "stock" && (
+                              <PegBadge peg={fundData.peg_ratio} />
+                            )}
+                          </span>
                         )}
                       </td>
 

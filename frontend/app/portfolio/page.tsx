@@ -413,6 +413,7 @@ export default function PortfolioPage() {
                   <PortfolioStatsBar
                     holdings={current.holdings}
                     onAnalyzeStale={() => setBatchOpen(true)}
+                    fundamentals={fundamentals}
                   />
                 )}
                 <HoldingsTable
