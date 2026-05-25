@@ -1116,7 +1116,7 @@ async def _fetch_fundamentals(ticker: str, api_key: Optional[str]) -> dict:
                 r = await client.get(url)
                 r.raise_for_status()
                 m = r.json().get("metric", {})
-            pe = m.get("peAnnual") or m.get("peTTM")
+            pe = m.get("peAnnual") if m.get("peAnnual") is not None else m.get("peTTM")
             eps_growth_3y = m.get("epsGrowth3Y")
             data = {
                 "asset_type": "stock",
