@@ -324,6 +324,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filterTicker, setFilterTicker] = useState("");
   const [filterSignal, setFilterSignal] = useState("");
+  const [filterPeg, setFilterPeg] = useState("");
+  const [filterRegime, setFilterRegime] = useState("");
   const newTickerRef = useRef<HTMLInputElement>(null);
 
   function handleSort(key: SortKey) {
@@ -344,7 +346,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
     staleTime: 60_000,
   });
 
-  const isFiltered = filterTicker !== "" || filterSignal !== "";
+  const isFiltered = filterTicker !== "" || filterSignal !== "" || filterPeg !== "" || filterRegime !== "";
 
   const filteredHoldings = useMemo(() => {
     let result = holdings;
@@ -357,8 +359,22 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
     } else if (filterSignal) {
       result = result.filter((h) => latestRuns[h.ticker]?.verdict?.toLowerCase() === filterSignal);
     }
+    if (filterPeg === "undervalued") {
+      result = result.filter((h) => { const p = fundamentals?.[h.ticker]?.peg_ratio; return p != null && p < 1; });
+    } else if (filterPeg === "fair") {
+      result = result.filter((h) => { const p = fundamentals?.[h.ticker]?.peg_ratio; return p != null && p >= 1 && p <= 2; });
+    } else if (filterPeg === "overvalued") {
+      result = result.filter((h) => { const p = fundamentals?.[h.ticker]?.peg_ratio; return p != null && p > 2; });
+    } else if (filterPeg === "nodata") {
+      result = result.filter((h) => fundamentals?.[h.ticker]?.peg_ratio == null);
+    }
+    if (filterRegime === "nodata") {
+      result = result.filter((h) => !regime?.[h.ticker]);
+    } else if (filterRegime) {
+      result = result.filter((h) => regime?.[h.ticker]?.current_regime === filterRegime);
+    }
     return result;
-  }, [holdings, filterTicker, filterSignal, latestRuns]);
+  }, [holdings, filterTicker, filterSignal, filterPeg, filterRegime, latestRuns, fundamentals, regime]);
 
   const sortedHoldings = useMemo(() => {
     if (!sortKey) return filteredHoldings;
@@ -463,18 +479,21 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Ticker search */}
         <input
           type="text"
           value={filterTicker}
           onChange={(e) => setFilterTicker(e.target.value)}
-          placeholder="Filter by ticker…"
-          className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-200 w-40 focus:outline-none focus:border-blue-500 placeholder-slate-500"
+          placeholder="Search ticker…"
+          className="bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-slate-200 w-36 focus:outline-none focus:border-blue-500/60 focus:bg-slate-800 placeholder-slate-500 transition-colors"
         />
+
+        {/* Signal filter */}
         <select
           value={filterSignal}
           onChange={(e) => setFilterSignal(e.target.value)}
-          className="bg-slate-800 border border-slate-700 rounded px-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+          className="bg-slate-800/80 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500/60 cursor-pointer transition-colors"
         >
           <option value="">All signals</option>
           <option value="buy">Buy</option>
@@ -482,18 +501,63 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           <option value="hold">Hold</option>
           <option value="none">Not analyzed</option>
         </select>
+
+        {/* PEG filter */}
+        {hasFundamentals && (
+          <select
+            value={filterPeg}
+            onChange={(e) => setFilterPeg(e.target.value)}
+            className="bg-slate-800/80 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500/60 cursor-pointer transition-colors"
+          >
+            <option value="">All PEG</option>
+            <option value="undervalued">Undervalued (&lt; 1)</option>
+            <option value="fair">Fair (1–2)</option>
+            <option value="overvalued">Overvalued (&gt; 2)</option>
+            <option value="nodata">No PEG data</option>
+          </select>
+        )}
+
+        {/* Regime filter — pill toggles */}
+        {hasRegime && (
+          <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800/80 p-0.5 gap-0.5">
+            {(["", "Bull", "Sideways", "Bear"] as const).map((val) => {
+              const isActive = filterRegime === val;
+              const label = val === "" ? "All" : val === "Sideways" ? "Sidew." : val;
+              const activeClass =
+                val === "Bull" ? "bg-green-800/80 text-green-100" :
+                val === "Bear" ? "bg-red-900/80 text-red-100" :
+                val === "Sideways" ? "bg-yellow-800/80 text-yellow-100" :
+                "bg-slate-600 text-white";
+              const idleClass =
+                val === "Bull" ? "text-green-500 hover:text-green-300" :
+                val === "Bear" ? "text-red-500 hover:text-red-300" :
+                val === "Sideways" ? "text-yellow-500 hover:text-yellow-300" :
+                "text-slate-400 hover:text-slate-200";
+              return (
+                <button
+                  key={val}
+                  onClick={() => setFilterRegime(val)}
+                  className={`text-[11px] font-medium px-2.5 py-0.5 rounded-md transition-colors ${isActive ? activeClass : idleClass}`}
+                >
+                  {val ? `● ${label}` : label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {isFiltered && (
-          <>
-            <span className="text-xs text-slate-500">
-              {filteredHoldings.length} of {holdings.length}
+          <div className="flex items-center gap-1.5 ml-1">
+            <span className="text-xs text-slate-500 tabular-nums">
+              {filteredHoldings.length} / {holdings.length}
             </span>
             <button
-              onClick={() => { setFilterTicker(""); setFilterSignal(""); }}
-              className="text-xs text-slate-500 hover:text-slate-300 underline"
+              onClick={() => { setFilterTicker(""); setFilterSignal(""); setFilterPeg(""); setFilterRegime(""); }}
+              className="text-[11px] text-slate-500 hover:text-slate-200 border border-slate-700 hover:border-slate-500 rounded px-1.5 py-0.5 transition-colors"
             >
-              Clear
+              ✕ Clear
             </button>
-          </>
+          </div>
         )}
       </div>
 
@@ -673,18 +737,21 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                         const isNeutral = verdict === "hold" || r.current_regime === "Sideways";
                         const signStr = `${r.signal >= 0 ? "+" : ""}${r.signal.toFixed(2)}`;
                         return (
-                          <td className="px-4 py-2 text-xs whitespace-nowrap">
+                          <td className="px-3 py-2 text-xs whitespace-nowrap">
                             {isConflict ? (
                               <span
-                                className="text-amber-400"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/30"
                                 title={`AI verdict (${verdict}) conflicts with Markov regime (${r.current_regime}, signal ${signStr}). Consider reviewing.`}
                               >
                                 ⚠ Conflicts
                               </span>
                             ) : isNeutral ? (
-                              <span className="text-slate-400">— Neutral</span>
+                              <span className="text-slate-600 text-[11px]">— Neutral</span>
                             ) : (
-                              <span className="text-green-400" title={`AI verdict (${verdict}) aligns with Markov regime (${r.current_regime}).`}>
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-900/30 text-green-400 border border-green-500/30"
+                                title={`AI verdict (${verdict}) aligns with Markov regime (${r.current_regime}).`}
+                              >
                                 ✓ Agrees
                               </span>
                             )}
