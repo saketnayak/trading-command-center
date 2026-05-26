@@ -468,7 +468,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
 
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
   const hasRegime = regime && Object.keys(regime).length > 0;
-  const colSpan = (hasFundamentals ? 9 : 8) + (hasRegime ? 1 : 0);
+  const colSpan = 8 + (hasRegime ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -565,7 +565,6 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-navy-700 text-slate-400 text-xs uppercase tracking-wider">
             <tr>
-              {(hasFundamentals || hasRegime) && <th className="w-6 px-2 py-3" />}
               <SortableHeader label="Ticker"         colKey="ticker"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="left" />
               <SortableHeader label="Shares"         colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Avg Cost"       colKey="avg_cost"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
@@ -603,23 +602,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                 return (
                   <React.Fragment key={h.id}>
                     <tr className={`border-t border-slate-800 hover:bg-slate-800/30 ${rowTint}`}>
-                      {/* Expand toggle */}
-                      {(hasFundamentals || hasRegime) && (
-                        <td className="px-2 py-2">
-                          {(fundData || regime?.[h.ticker]) && (
-                            <button
-                              onClick={() => toggleExpand(h.id)}
-                              className="text-slate-500 hover:text-slate-300 text-xs transition-colors"
-                              title="Show fundamentals"
-                            >
-                              {isExpanded ? "▾" : "▸"}
-                            </button>
-                          )}
-                        </td>
-                      )}
-
-                      {/* Ticker */}
-                      <td className="px-4 py-2">
+                      {/* Ticker + badges (stacked) + expand toggle */}
+                      <td className="px-4 py-2.5">
                         {isEditing ? (
                           <EditInput
                             autoFocus
@@ -629,26 +613,41 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             className="w-24 uppercase"
                           />
                         ) : (
-                          <span className="inline-flex items-center flex-wrap gap-0.5">
-                            {onTickerClick ? (
-                              <button
-                                onClick={() => onTickerClick(h)}
-                                className="font-mono text-purple-400 hover:text-purple-300 hover:underline transition-colors"
-                              >
-                                {h.ticker}
-                              </button>
-                            ) : h.last_run ? (
-                              <Link href={`/runs/${h.last_run.run_id}`} className="font-mono text-purple-400 hover:underline">
-                                {h.ticker}
-                              </Link>
-                            ) : (
-                              <span className="font-mono text-purple-400">{h.ticker}</span>
-                            )}
-                            {fundData && fundData.asset_type === "stock" && (
-                              <PegBadge peg={fundData.peg_ratio} />
-                            )}
-                            <RegimeBadge data={regime?.[h.ticker]} />
-                          </span>
+                          <div className="flex flex-col gap-1 min-w-[120px]">
+                            {/* Row 1: expand toggle + ticker name */}
+                            <div className="flex items-center gap-1.5">
+                              {(hasFundamentals || hasRegime) && (fundData || regime?.[h.ticker]) ? (
+                                <button
+                                  onClick={() => toggleExpand(h.id)}
+                                  className={`flex-shrink-0 w-4 h-4 flex items-center justify-center rounded text-[11px] transition-colors ${isExpanded ? "text-blue-400 bg-blue-900/30" : "text-slate-500 hover:text-slate-200 hover:bg-slate-700"}`}
+                                  title={isExpanded ? "Collapse details" : "Expand for fundamentals & regime analysis"}
+                                >
+                                  {isExpanded ? "▾" : "▸"}
+                                </button>
+                              ) : <span className="w-4 flex-shrink-0" />}
+                              {onTickerClick ? (
+                                <button
+                                  onClick={() => onTickerClick(h)}
+                                  className="font-mono font-semibold text-sm text-purple-400 hover:text-purple-300 hover:underline transition-colors"
+                                >
+                                  {h.ticker}
+                                </button>
+                              ) : h.last_run ? (
+                                <Link href={`/runs/${h.last_run.run_id}`} className="font-mono font-semibold text-sm text-purple-400 hover:underline">
+                                  {h.ticker}
+                                </Link>
+                              ) : (
+                                <span className="font-mono font-semibold text-sm text-purple-400">{h.ticker}</span>
+                              )}
+                            </div>
+                            {/* Row 2: badges */}
+                            <div className="flex items-center flex-wrap gap-1 pl-5">
+                              {fundData && fundData.asset_type === "stock" && (
+                                <PegBadge peg={fundData.peg_ratio} />
+                              )}
+                              {regime?.[h.ticker] && <RegimeBadge data={regime[h.ticker]} />}
+                            </div>
+                          </div>
                         )}
                       </td>
 
@@ -775,7 +774,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center gap-2 whitespace-nowrap">
                             <Link
                               href={`/runs/new?ticker=${encodeURIComponent(h.ticker)}`}
                               className="text-xs text-slate-400 hover:text-blue-400 transition-colors"
@@ -786,7 +785,6 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             <button
                               onClick={() => startEdit(h)}
                               className="text-xs text-slate-500 hover:text-slate-200 transition-colors"
-                              title="Edit"
                             >
                               Edit
                             </button>
@@ -820,7 +818,6 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
             {/* New row draft */}
             {addingNew && (
               <tr className="border-t border-slate-700 bg-slate-800/20">
-                {(hasFundamentals || hasRegime) && <td className="px-2 py-2" />}
                 <td className="px-4 py-2">
                   <EditInput
                     autoFocus
