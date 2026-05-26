@@ -204,8 +204,9 @@ function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
   const [showMatrix, setShowMatrix] = useState(false);
   const { text } = regimeColors(data.current_regime);
   const signStr = data.signal >= 0 ? `+${data.signal.toFixed(2)}` : data.signal.toFixed(2);
-  const sharpeColor = (data.walk_forward.sharpe ?? 0) > 0.5 ? "text-green-400"
-    : (data.walk_forward.sharpe ?? 0) > 0 ? "text-yellow-400" : "text-red-400";
+  const sharpeColor = data.walk_forward.sharpe == null ? "text-slate-500"
+    : data.walk_forward.sharpe > 0.5 ? "text-green-400"
+    : data.walk_forward.sharpe > 0 ? "text-yellow-400" : "text-red-400";
   const ddColor = (data.walk_forward.max_drawdown ?? 0) < -0.2 ? "text-red-400"
     : (data.walk_forward.max_drawdown ?? 0) < -0.1 ? "text-yellow-400" : "text-slate-300";
   const signalColor = data.signal >= 0.3 ? "text-green-400" : data.signal <= -0.3 ? "text-red-400" : "text-yellow-400";

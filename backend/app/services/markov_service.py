@@ -55,8 +55,7 @@ def _compute_stationary(P: np.ndarray) -> dict[str, float]:
     """Compute stationary distribution as left eigenvector of P for eigenvalue 1."""
     eigenvalues, eigenvectors = np.linalg.eig(P.T)
     idx = np.argmin(np.abs(eigenvalues - 1.0))
-    stat_vec = eigenvectors[:, idx].real
-    stat_vec = np.abs(stat_vec)
+    stat_vec = np.abs(eigenvectors[:, idx])
     stat_vec /= stat_vec.sum()
     return {
         "bear": round(float(stat_vec[0]), 4),
@@ -94,7 +93,7 @@ def _walk_forward_stats(close: pd.Series, labels: pd.Series, min_train: int = 25
 
     r = np.array(daily_returns)
     sharpe = float(r.mean() / (r.std() + 1e-9) * np.sqrt(252)) if r.std() > 0 else 0.0
-    cum = np.cumprod(1 + r)
+    cum = np.concatenate(([1.0], np.cumprod(np.maximum(0.0, 1 + r))))
     running_max = np.maximum.accumulate(cum)
     max_dd = float(np.min((cum - running_max) / running_max))
     return {"sharpe": round(sharpe, 4), "max_drawdown": round(max_dd, 4)}
