@@ -84,8 +84,8 @@ export function PortfolioStatsBar({ holdings, onAnalyzeStale, fundamentals, regi
           <span className="text-slate-500 uppercase tracking-wide text-[10px]">Regime</span>
           <span className="font-semibold">
             <span className="text-green-400">{bullCount} Bull</span>
-            {sidewaysCount > 0 && <span className="text-slate-400"> · <span className="text-yellow-400">{sidewaysCount} Sidew.</span></span>}
-            {bearCount > 0 && <span className="text-slate-400"> · <span className="text-red-400">{bearCount} Bear</span></span>}
+            <span className="text-slate-400"> · <span className="text-yellow-400">{sidewaysCount} Sidew.</span></span>
+            <span className="text-slate-400"> · <span className="text-red-400">{bearCount} Bear</span></span>
           </span>
         </div>
       )}

@@ -1,4 +1,3 @@
-import asyncio
 import time
 import numpy as np
 import pandas as pd
@@ -81,24 +80,22 @@ def test_stationary_sums_to_one():
     assert all(v >= 0 for v in stat.values())
 
 
-def test_cache_hit_skips_recompute():
+@pytest.mark.asyncio
+async def test_cache_hit_skips_recompute():
     from app.services import markov_service
     fake_result = {"ticker": "TEST", "signal": 0.5, "current_regime": "Bull"}
     markov_service._regime_cache["TEST"] = (fake_result, time.time() + 3600)
-    result = asyncio.get_event_loop().run_until_complete(
-        markov_service.get_regime("TEST")
-    )
+    result = await markov_service.get_regime("TEST")
     assert result == fake_result
 
 
-def test_cache_miss_on_expired():
+@pytest.mark.asyncio
+async def test_cache_miss_on_expired():
     from app.services import markov_service
     fake_result = {"ticker": "TEST2", "signal": 0.5, "current_regime": "Bull"}
     markov_service._regime_cache["TEST2"] = (fake_result, time.time() - 1)  # expired
     with patch("app.services.markov_service._compute_regime", return_value=None) as mock_compute:
-        result = asyncio.get_event_loop().run_until_complete(
-            markov_service.get_regime("TEST2")
-        )
+        result = await markov_service.get_regime("TEST2")
     assert result is None
     mock_compute.assert_called_once_with("TEST2")
 

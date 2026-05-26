@@ -183,13 +183,17 @@ function regimeColors(regime: "Bull" | "Sideways" | "Bear"): { text: string; bg:
 }
 
 function RegimeBadge({ data }: { data: RegimeData | undefined | null }) {
-  if (!data) return null;
+  if (!data) return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono ml-1.5 text-slate-500 bg-slate-800">
+      ● —
+    </span>
+  );
   const { text, bg } = regimeColors(data.current_regime);
   const signStr = data.signal >= 0 ? `+${data.signal.toFixed(2)}` : data.signal.toFixed(2);
   return (
     <span
       className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ml-1.5 ${text} ${bg}`}
-      title={`Markov regime: ${data.current_regime} (${(data.persistence * 100).toFixed(0)}% persistence). Signal: ${signStr} (bull_prob − bear_prob). Data via yfinance.`}
+      title={`Markov regime: ${data.current_regime} (${(data.persistence * 100).toFixed(0)}% persistence). Signal: ${signStr} (bull_prob − bear_prob). Powered by yfinance 10y daily data.`}
     >
       ● {data.current_regime} {signStr}
     </span>
@@ -197,6 +201,7 @@ function RegimeBadge({ data }: { data: RegimeData | undefined | null }) {
 }
 
 function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
+  const [showMatrix, setShowMatrix] = useState(false);
   const { text } = regimeColors(data.current_regime);
   const signStr = data.signal >= 0 ? `+${data.signal.toFixed(2)}` : data.signal.toFixed(2);
   const sharpeColor = (data.walk_forward.sharpe ?? 0) > 0.5 ? "text-green-400"
@@ -244,7 +249,7 @@ function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
             </div>
           </div>
           <div className="space-y-1">
-            <span className="text-[10px] text-slate-500 uppercase tracking-wide">Long-run distribution</span>
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide" title="Long-run % of time this asset spends in each regime (Markov stationary distribution).">Long-run distribution</span>
             <div className="space-y-0.5">
               {statBars.map((b) => (
                 <div key={b.label} className="flex items-center gap-2">
@@ -261,6 +266,45 @@ function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
                 </div>
               ))}
             </div>
+          </div>
+          <div>
+            <button
+              onClick={() => setShowMatrix((v) => !v)}
+              className="text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2"
+            >
+              {showMatrix ? "Hide matrix" : "Show matrix"}
+            </button>
+            {showMatrix && (() => {
+              const labels = ["Bear", "Sidew.", "Bull"];
+              function matrixCellColor(v: number): string {
+                if (v >= 0.7) return "text-green-300 bg-green-900/40";
+                if (v >= 0.5) return "text-green-400 bg-green-900/20";
+                if (v >= 0.3) return "text-yellow-400 bg-yellow-900/20";
+                return "text-slate-400";
+              }
+              return (
+                <table className="mt-1 text-[10px] font-mono border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="text-slate-600 pr-2" />
+                      {labels.map((l) => <th key={l} className="px-2 py-0.5 text-slate-500 text-center">{l}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.transition_matrix.map((row, i) => (
+                      <tr key={i}>
+                        <td className="pr-2 text-slate-500">{labels[i]}</td>
+                        {row.map((v, j) => (
+                          <td key={j} className={`px-2 py-0.5 text-center rounded ${matrixCellColor(v)}`}>
+                            {(v * 100).toFixed(0)}%
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            })()}
           </div>
         </div>
       </td>
@@ -622,19 +666,22 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                         const r = regime?.[h.ticker];
                         const verdict = rowEntry?.verdict;
                         if (!r || !verdict) return <td className="px-4 py-2 text-slate-500 text-xs">—</td>;
-                        const isBull = r.signal >= 0;
                         const isConflict =
-                          (verdict === "buy" && !isBull) ||
-                          (verdict === "sell" && isBull);
+                          (verdict === "buy" && r.signal < 0) ||
+                          (verdict === "sell" && r.signal > 0);
+                        const isNeutral = verdict === "hold" || r.current_regime === "Sideways";
+                        const signStr = `${r.signal >= 0 ? "+" : ""}${r.signal.toFixed(2)}`;
                         return (
                           <td className="px-4 py-2 text-xs whitespace-nowrap">
                             {isConflict ? (
                               <span
                                 className="text-amber-400"
-                                title={`AI verdict (${verdict}) conflicts with Markov regime (${r.current_regime}, signal ${r.signal >= 0 ? "+" : ""}${r.signal.toFixed(2)}). Consider reviewing.`}
+                                title={`AI verdict (${verdict}) conflicts with Markov regime (${r.current_regime}, signal ${signStr}). Consider reviewing.`}
                               >
                                 ⚠ Conflicts
                               </span>
+                            ) : isNeutral ? (
+                              <span className="text-slate-400">— Neutral</span>
                             ) : (
                               <span className="text-green-400" title={`AI verdict (${verdict}) aligns with Markov regime (${r.current_regime}).`}>
                                 ✓ Agrees

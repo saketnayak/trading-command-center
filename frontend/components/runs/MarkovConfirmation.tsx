@@ -32,15 +32,15 @@ export function MarkovConfirmation({ ticker, verdict }: Props) {
 
   if (!regime) return null;
 
-  const isBull = regime.signal >= 0;
   const isConflict =
     verdict != null &&
     verdict !== "hold" &&
-    ((verdict === "buy" && !isBull) || (verdict === "sell" && isBull));
+    ((verdict === "buy" && regime.signal < 0) || (verdict === "sell" && regime.signal > 0));
+  const isNeutral = !verdict || verdict === "hold" || regime.current_regime === "Sideways";
 
   const signStr = regime.signal >= 0 ? `+${regime.signal.toFixed(2)}` : regime.signal.toFixed(2);
   const signalColor = regime.signal >= 0.3 ? "text-green-400" : regime.signal <= -0.3 ? "text-red-400" : "text-yellow-400";
-  const borderColor = isConflict ? "border-amber-500/40" : verdict && verdict !== "hold" ? "border-green-500/40" : "border-slate-700";
+  const borderColor = isConflict ? "border-amber-500/40" : !isNeutral ? "border-green-500/40" : "border-slate-700";
 
   const statRows: Array<{ label: string; value: number; color: string }> = [
     { label: "Bull", value: regime.stationary.bull, color: "bg-green-500" },
@@ -73,10 +73,10 @@ export function MarkovConfirmation({ ticker, verdict }: Props) {
             <span className="text-amber-400 font-semibold">
               ⚠ Conflicts — regime is {regime.current_regime} (signal {signStr})
             </span>
-          ) : verdict && verdict !== "hold" ? (
-            <span className="text-green-400 font-semibold">✓ Confirms</span>
+          ) : isNeutral ? (
+            <span className="text-slate-400">— Neutral</span>
           ) : (
-            <span className="text-slate-400">—</span>
+            <span className="text-green-400 font-semibold">✓ Confirms</span>
           )}
         </div>
       </div>
