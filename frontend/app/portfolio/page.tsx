@@ -10,11 +10,12 @@ import {
   getPortfolioCurrent,
   exportPortfolioCsv,
   getPortfolioFundamentals,
+  getPortfolioRegime,
   batchAnalyzePortfolio,
   getProviderModels,
   getBehavioralAlerts,
 } from "@/lib/api";
-import type { Portfolio, PortfolioHolding, BehavioralAlertsResponse } from "@/lib/types";
+import type { Portfolio, PortfolioHolding, BehavioralAlertsResponse, RegimeData } from "@/lib/types";
 import { isCrypto } from "@/lib/asset";
 import { PortfolioSwitcher } from "@/components/portfolio/PortfolioSwitcher";
 import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
@@ -227,6 +228,13 @@ export default function PortfolioPage() {
     staleTime: 1000 * 60 * 30,
   });
 
+  const { data: regime = {} } = useQuery<Record<string, RegimeData>>({
+    queryKey: ["portfolio-regime", selectedId],
+    queryFn: () => getPortfolioRegime(selectedId!),
+    enabled: selectedId != null && tab === "holdings",
+    staleTime: 1000 * 60 * 60 * 4,  // 4h — matches backend cache TTL
+  });
+
   const { data: behavioralAlerts } = useQuery<BehavioralAlertsResponse>({
     queryKey: ["behavioralAlerts", selectedId],
     queryFn: () => getBehavioralAlerts(selectedId!),
@@ -414,6 +422,7 @@ export default function PortfolioPage() {
                     holdings={current.holdings}
                     onAnalyzeStale={() => setBatchOpen(true)}
                     fundamentals={fundamentals}
+                    regime={regime}
                   />
                 )}
                 <HoldingsTable
@@ -422,6 +431,7 @@ export default function PortfolioPage() {
                   priceUnavailableReason={current.price_unavailable_reason}
                   displayCurrency={current.display_currency ?? "USD"}
                   fundamentals={fundamentals}
+                  regime={regime}
                   onTickerClick={setDrawerHolding}
                 />
               </div>

@@ -10,6 +10,7 @@ import { BullBearDebate } from "@/components/runs/BullBearDebate";
 import { getRun, getReport, getRunOutcome, updateRun } from "@/lib/api";
 import { DownloadMenu } from "@/components/runs/DownloadMenu";
 import { OutcomeCard } from "@/components/runs/OutcomeCard";
+import { MarkovConfirmation } from "@/components/runs/MarkovConfirmation";
 import type { RunOutcome } from "@/lib/types";
 
 function rerunUrl(run: { ticker: string; llm_provider: string; llm_model: string; depth: string; analysts: string[] }): string {
@@ -201,6 +202,7 @@ export default function RunResultsPage() {
         )}
 
         <TraderDecision run={run} report={report} />
+        {run && <MarkovConfirmation ticker={run.ticker} verdict={run.verdict} />}
         {outcome && <OutcomeCard outcome={outcome} />}
         {run && <NotesEditor id={id} notes={run.notes} />}
         <AnalystReports report={report} analysts={run?.analysts ?? []} />

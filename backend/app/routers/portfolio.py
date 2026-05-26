@@ -1641,3 +1641,31 @@ async def test_webhook_delivery(
         raise HTTPException(status_code=400, detail=f"Webhook delivery failed: {exc}")
 
     return {"sent": True}
+
+
+# ── Regime Analysis ───────────────────────────────────────────────────────────
+
+@router.get("/portfolio/{portfolio_id}/regime")
+async def get_portfolio_regime(
+    portfolio_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Return Markov regime analysis for all tickers in the portfolio's latest snapshot.
+    Returns {} gracefully if no holdings or all tickers fail."""
+    await _verify_portfolio_access(portfolio_id, user.id, db)
+
+    snap_result = await db.execute(
+        select(PortfolioSnapshot)
+        .where(PortfolioSnapshot.portfolio_id == portfolio_id)
+        .options(selectinload(PortfolioSnapshot.holdings))
+        .order_by(desc(PortfolioSnapshot.uploaded_at))
+        .limit(1)
+    )
+    snapshot = snap_result.scalar_one_or_none()
+    if not snapshot or not snapshot.holdings:
+        return {}
+
+    from app.services.markov_service import get_regime_for_portfolio
+    tickers = [h.ticker for h in snapshot.holdings]
+    return await get_regime_for_portfolio(tickers)

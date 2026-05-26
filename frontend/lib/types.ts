@@ -315,6 +315,33 @@ export interface FundamentalsData {
   category?: string | null;
 }
 
+export interface RegimeData {
+  ticker: string;
+  current_regime: "Bull" | "Sideways" | "Bear";
+  signal: number;           // -1.0 to +1.0
+  persistence: number;      // 0.0 to 1.0
+  next_state_probs: {
+    bear: number;
+    sideways: number;
+    bull: number;
+  };
+  stationary: {
+    bear: number;
+    sideways: number;
+    bull: number;
+  };
+  transition_matrix: number[][];   // 3x3, row order: Bear / Sideways / Bull
+  walk_forward: {
+    sharpe: number | null;
+    max_drawdown: number | null;
+  };
+  hmm: {
+    available: boolean;
+    regimes?: Array<{ label: string; mean_return: number }>;
+  } | null;
+  computed_at: string;
+}
+
 export interface NewsArticle {
   ticker: string;
   datetime: number;
