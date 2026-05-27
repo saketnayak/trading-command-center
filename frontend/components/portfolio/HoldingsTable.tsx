@@ -345,6 +345,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   const [filterSignal, setFilterSignal] = useState("");
   const [filterPeg, setFilterPeg] = useState("");
   const [filterRegime, setFilterRegime] = useState("");
+  const [trimOnly, setTrimOnly] = useState(false);
   const newTickerRef = useRef<HTMLInputElement>(null);
 
   function handleSort(key: SortKey) {
@@ -365,7 +366,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
     staleTime: 60_000,
   });
 
-  const isFiltered = filterTicker !== "" || filterSignal !== "" || filterPeg !== "" || filterRegime !== "";
+  const isFiltered = filterTicker !== "" || filterSignal !== "" || filterPeg !== "" || filterRegime !== "" || trimOnly;
 
   const filteredHoldings = useMemo(() => {
     let result = holdings;
@@ -392,8 +393,14 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
     } else if (filterRegime) {
       result = result.filter((h) => regime?.[h.ticker]?.current_regime === filterRegime);
     }
+    if (trimOnly) {
+      result = result.filter((h) => {
+        const lvl = trimSignals?.[h.id]?.level;
+        return lvl && lvl !== "none";
+      });
+    }
     return result;
-  }, [holdings, filterTicker, filterSignal, filterPeg, filterRegime, latestRuns, fundamentals, regime]);
+  }, [holdings, filterTicker, filterSignal, filterPeg, filterRegime, trimOnly, latestRuns, fundamentals, regime, trimSignals]);
 
   const sortedHoldings = useMemo(() => {
     if (!sortKey) return filteredHoldings;
@@ -565,13 +572,25 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           </div>
         )}
 
+        <button
+          type="button"
+          onClick={() => setTrimOnly((v) => !v)}
+          className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+            trimOnly
+              ? "bg-orange-500/20 text-orange-300 border-orange-500/50"
+              : "bg-transparent text-slate-400 border-slate-700 hover:border-slate-500"
+          }`}
+        >
+          Trim signals only
+        </button>
+
         {isFiltered && (
           <div className="flex items-center gap-1.5 ml-1">
             <span className="text-xs text-slate-500 tabular-nums">
               {filteredHoldings.length} / {holdings.length}
             </span>
             <button
-              onClick={() => { setFilterTicker(""); setFilterSignal(""); setFilterPeg(""); setFilterRegime(""); }}
+              onClick={() => { setFilterTicker(""); setFilterSignal(""); setFilterPeg(""); setFilterRegime(""); setTrimOnly(false); }}
               className="text-[11px] text-slate-500 hover:text-slate-200 border border-slate-700 hover:border-slate-500 rounded px-1.5 py-0.5 transition-colors"
             >
               ✕ Clear
