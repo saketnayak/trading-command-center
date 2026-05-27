@@ -1,11 +1,12 @@
 "use client";
-import type { PortfolioHolding, FundamentalsData, RegimeData } from "@/lib/types";
+import type { PortfolioHolding, FundamentalsData, RegimeData, TrimSignalEntry } from "@/lib/types";
 
 interface Props {
   holdings: PortfolioHolding[];
   onAnalyzeStale?: () => void;
   fundamentals?: Record<string, FundamentalsData>;
   regime?: Record<string, RegimeData>;
+  trimSignals?: Record<string, TrimSignalEntry>;
 }
 
 const STALE_DAYS = 7;
@@ -14,7 +15,7 @@ function daysAgo(dateStr: string): number {
   return Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
 }
 
-export function PortfolioStatsBar({ holdings, onAnalyzeStale, fundamentals, regime }: Props) {
+export function PortfolioStatsBar({ holdings, onAnalyzeStale, fundamentals, regime, trimSignals }: Props) {
   if (holdings.length === 0) return null;
 
   const withPrice = holdings.filter((h) => h.unrealized_pnl_pct != null);
@@ -118,6 +119,32 @@ export function PortfolioStatsBar({ holdings, onAnalyzeStale, fundamentals, regi
           </div>
         </>
       )}
+
+      {trimSignals && (() => {
+        const flagged = Object.values(trimSignals).filter((e) => e.level !== "none");
+        if (flagged.length === 0) return null;
+        const strong = flagged.filter((e) => e.level === "strong_trim").length;
+        const consider = flagged.filter((e) => e.level === "consider_trim").length;
+        const watch = flagged.filter((e) => e.level === "watch").length;
+        return (
+          <>
+            <div className="self-stretch w-px bg-slate-700/60" />
+            <div className="flex items-center gap-4 px-4 py-3">
+              <div
+                className="text-xs text-slate-400"
+                title="Holdings flagged for review based on AI verdict, regime, valuation, and concentration."
+              >
+                Trim signals:{" "}
+                {strong > 0 && <span className="text-red-400">{strong} strong</span>}
+                {strong > 0 && (consider > 0 || watch > 0) && " · "}
+                {consider > 0 && <span className="text-orange-400">{consider} consider</span>}
+                {consider > 0 && watch > 0 && " · "}
+                {watch > 0 && <span className="text-yellow-400">{watch} watch</span>}
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Stale group — pushed right */}
       <div className="flex items-center gap-2 ml-auto px-4 py-3">

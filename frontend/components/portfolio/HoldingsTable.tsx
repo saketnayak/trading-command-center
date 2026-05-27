@@ -5,7 +5,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type LatestRunEntry } from "@/lib/api";
 import { fmtMoney, fmtPnl } from "@/lib/currency";
 import { WatchButton } from "@/components/portfolio/WatchButton";
-import type { PortfolioHolding, FundamentalsData, RegimeData } from "@/lib/types";
+import type { PortfolioHolding, FundamentalsData, RegimeData, TrimSignalEntry } from "@/lib/types";
 
 interface HoldingsTableProps {
   portfolioId: string;
@@ -14,6 +14,7 @@ interface HoldingsTableProps {
   displayCurrency: string;
   fundamentals?: Record<string, FundamentalsData>;
   regime?: Record<string, RegimeData>;
+  trimSignals?: Record<string, TrimSignalEntry>;
   onTickerClick?: (holding: PortfolioHolding) => void;
 }
 
@@ -182,6 +183,24 @@ function regimeColors(regime: "Bull" | "Sideways" | "Bear"): { text: string; bg:
   return { text: "text-yellow-400", bg: "bg-yellow-900/30" };
 }
 
+function TrimBadge({ entry }: { entry?: TrimSignalEntry }) {
+  if (!entry || entry.level === "none") return null;
+  const styles: Record<string, { label: string; cls: string }> = {
+    watch: { label: "● Watch", cls: "text-yellow-400 bg-yellow-900/30" },
+    consider_trim: { label: "● Trim", cls: "text-orange-400 bg-orange-900/30" },
+    strong_trim: { label: "● Strong Trim", cls: "text-red-400 bg-red-900/30" },
+  };
+  const s = styles[entry.level];
+  return (
+    <span
+      className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${s.cls}`}
+      title={entry.reasons.join("\n")}
+    >
+      {s.label}
+    </span>
+  );
+}
+
 function RegimeBadge({ data }: { data: RegimeData | undefined | null }) {
   if (!data) return (
     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono ml-1.5 text-slate-500 bg-slate-800">
@@ -313,7 +332,7 @@ function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals, regime, onTickerClick }: HoldingsTableProps) {
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals, regime, trimSignals, onTickerClick }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "" });
@@ -326,6 +345,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   const [filterSignal, setFilterSignal] = useState("");
   const [filterPeg, setFilterPeg] = useState("");
   const [filterRegime, setFilterRegime] = useState("");
+  const [trimOnly, setTrimOnly] = useState(false);
   const newTickerRef = useRef<HTMLInputElement>(null);
 
   function handleSort(key: SortKey) {
@@ -346,7 +366,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
     staleTime: 60_000,
   });
 
-  const isFiltered = filterTicker !== "" || filterSignal !== "" || filterPeg !== "" || filterRegime !== "";
+  const isFiltered = filterTicker !== "" || filterSignal !== "" || filterPeg !== "" || filterRegime !== "" || trimOnly;
 
   const filteredHoldings = useMemo(() => {
     let result = holdings;
@@ -373,8 +393,14 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
     } else if (filterRegime) {
       result = result.filter((h) => regime?.[h.ticker]?.current_regime === filterRegime);
     }
+    if (trimOnly) {
+      result = result.filter((h) => {
+        const lvl = trimSignals?.[h.id]?.level;
+        return lvl && lvl !== "none";
+      });
+    }
     return result;
-  }, [holdings, filterTicker, filterSignal, filterPeg, filterRegime, latestRuns, fundamentals, regime]);
+  }, [holdings, filterTicker, filterSignal, filterPeg, filterRegime, trimOnly, latestRuns, fundamentals, regime, trimSignals]);
 
   const sortedHoldings = useMemo(() => {
     if (!sortKey) return filteredHoldings;
@@ -468,7 +494,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
 
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
   const hasRegime = regime && Object.keys(regime).length > 0;
-  const colSpan = 8 + (hasRegime ? 1 : 0);
+  const colSpan = 9 + (hasRegime ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -546,13 +572,25 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           </div>
         )}
 
+        <button
+          type="button"
+          onClick={() => setTrimOnly((v) => !v)}
+          className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+            trimOnly
+              ? "bg-orange-500/20 text-orange-300 border-orange-500/50"
+              : "bg-transparent text-slate-400 border-slate-700 hover:border-slate-500"
+          }`}
+        >
+          Trim signals only
+        </button>
+
         {isFiltered && (
           <div className="flex items-center gap-1.5 ml-1">
             <span className="text-xs text-slate-500 tabular-nums">
               {filteredHoldings.length} / {holdings.length}
             </span>
             <button
-              onClick={() => { setFilterTicker(""); setFilterSignal(""); setFilterPeg(""); setFilterRegime(""); }}
+              onClick={() => { setFilterTicker(""); setFilterSignal(""); setFilterPeg(""); setFilterRegime(""); setTrimOnly(false); }}
               className="text-[11px] text-slate-500 hover:text-slate-200 border border-slate-700 hover:border-slate-500 rounded px-1.5 py-0.5 transition-colors"
             >
               ✕ Clear
@@ -575,6 +613,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
               {hasRegime && (
                 <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">AI vs Regime</th>
               )}
+              <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Trim</th>
               <th className="text-left px-4 py-3">Actions</th>
             </tr>
           </thead>
@@ -710,6 +749,17 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${verdictColors[entry.verdict] ?? "bg-slate-700 text-slate-200"}`}>
                                 {entry.verdict.toUpperCase()}
                               </span>
+                              {h.last_run?.previous_verdict && h.last_run?.previous_run_id && (
+                                <a
+                                  href={`/runs/compare?a=${h.last_run.previous_run_id}&b=${h.last_run.run_id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-1 text-amber-400 hover:text-amber-300"
+                                  title={`Verdict changed from ${h.last_run.previous_verdict} on ${h.last_run.previous_analysis_date} → ${h.last_run.verdict} on ${h.last_run.analysis_date}. Click to compare.`}
+                                >
+                                  ↺ changed
+                                </a>
+                              )}
                               <span className={`text-xs ${stale ? "text-amber-400" : "text-slate-500"}`}>
                                 {days === 0 ? "today" : `${days}d ago`}{stale ? " ⚠" : ""}
                               </span>
@@ -757,6 +807,11 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                           </td>
                         );
                       })()}
+
+                      {/* Trim */}
+                      <td className="px-4 py-2">
+                        <TrimBadge entry={trimSignals?.[h.id]} />
+                      </td>
 
                       {/* Actions */}
                       <td className="px-4 py-2">

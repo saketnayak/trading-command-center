@@ -23,6 +23,8 @@ from app.models.report import Report
 from app.models.api_key import ApiKey
 from app.services.encryption import decrypt_key
 from app.services.portfolio_parser import parse_portfolio_csv
+from app.services.trim_signal_service import score_trim_signal
+from app.services.markov_service import get_regime_for_portfolio
 from app.schemas.portfolio_delivery_settings import UpdateDeliverySettingsRequest
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
@@ -66,6 +68,26 @@ class LastRun(BaseModel):
     suggested_entry: Optional[str] = None
     suggested_stop: Optional[str] = None
     suggested_target: Optional[str] = None
+    previous_run_id: Optional[UUID] = None
+    previous_verdict: Optional[str] = None
+    previous_analysis_date: Optional[str] = None
+
+
+class TrimSignalEntry(BaseModel):
+    holding_id: UUID
+    ticker: str
+    level: str  # "none" | "watch" | "consider_trim" | "strong_trim"
+    score: int
+    reasons: list[str]
+    unrealized_pnl_pct: Optional[float] = None
+    current_verdict: Optional[str] = None
+    regime: Optional[str] = None
+    regime_signal: Optional[float] = None
+
+
+class TrimSignalsResponse(BaseModel):
+    entries: list[TrimSignalEntry]
+    computed_at: str
 
 
 class HoldingResponse(BaseModel):
@@ -299,6 +321,63 @@ async def upload_snapshot(
     return snapshot
 
 
+# ── Last-runs query helper ────────────────────────────────────────────────────
+
+async def _get_last_runs_for_holdings(
+    tickers: list[str],
+    user_id,
+    db: AsyncSession,
+) -> dict[str, "LastRun"]:
+    """Fetch the two most-recent completed runs per ticker for this user.
+    Populates previous_* fields when the latest run's verdict differs from
+    the previous one. Returns empty dict for tickers with no runs."""
+    if not tickers:
+        return {}
+
+    rows = (await db.execute(
+        select(Run, Report)
+        .outerjoin(Report, Report.run_id == Run.id)
+        .where(
+            Run.created_by == user_id,
+            Run.ticker.in_(tickers),
+            Run.status == RunStatus.completed,
+            Run.verdict.isnot(None),
+        )
+        .order_by(Run.ticker, desc(Run.created_at))
+    )).all()
+
+    grouped: dict[str, list[tuple]] = {}
+    for run, report in rows:
+        bucket = grouped.setdefault(run.ticker, [])
+        if len(bucket) < 2:
+            bucket.append((run, report))
+
+    last_runs: dict[str, LastRun] = {}
+    for ticker, ticker_rows in grouped.items():
+        latest_run, latest_report = ticker_rows[0]
+        prev_run_id: Optional[UUID] = None
+        prev_verdict: Optional[str] = None
+        prev_date: Optional[str] = None
+        if len(ticker_rows) > 1:
+            prev_run, _ = ticker_rows[1]
+            if prev_run.verdict and prev_run.verdict.value != latest_run.verdict.value:
+                prev_run_id = prev_run.id
+                prev_verdict = prev_run.verdict.value
+                prev_date = str(prev_run.analysis_date)
+        last_runs[ticker] = LastRun(
+            run_id=latest_run.id,
+            verdict=latest_run.verdict.value,
+            analysis_date=str(latest_run.analysis_date),
+            suggested_entry=latest_report.suggested_entry if latest_report else None,
+            suggested_stop=latest_report.suggested_stop if latest_report else None,
+            suggested_target=latest_report.suggested_target if latest_report else None,
+            previous_run_id=prev_run_id,
+            previous_verdict=prev_verdict,
+            previous_analysis_date=prev_date,
+        )
+    return last_runs
+
+
 # ── Current holdings (enriched) ───────────────────────────────────────────────
 
 @router.get("/portfolio/{portfolio_id}/current", response_model=CurrentResponse)
@@ -337,26 +416,7 @@ async def get_current_holdings(
         price_unavailable_reason = "no_finnhub_key"
 
     # Fetch last run verdict per ticker (most recent completed run for this user)
-    last_runs: dict[str, LastRun] = {}
-    if tickers:
-        for ticker in tickers:
-            row = (await db.execute(
-                select(Run, Report)
-                .outerjoin(Report, Report.run_id == Run.id)
-                .where(Run.created_by == user.id, Run.ticker == ticker, Run.status == RunStatus.completed, Run.verdict.isnot(None))
-                .order_by(desc(Run.created_at))
-                .limit(1)
-            )).first()
-            if row:
-                run, report = row
-                last_runs[ticker] = LastRun(
-                    run_id=run.id,
-                    verdict=run.verdict.value,
-                    analysis_date=str(run.analysis_date),
-                    suggested_entry=report.suggested_entry if report else None,
-                    suggested_stop=report.suggested_stop if report else None,
-                    suggested_target=report.suggested_target if report else None,
-                )
+    last_runs = await _get_last_runs_for_holdings(tickers, user.id, db)
 
     # Fetch all prices — crypto batched into one CoinGecko call, stocks via Finnhub
     price_map = await _fetch_prices_bulk(tickers, av_key)
@@ -1666,6 +1726,112 @@ async def get_portfolio_regime(
     if not snapshot or not snapshot.holdings:
         return {}
 
-    from app.services.markov_service import get_regime_for_portfolio
     tickers = [h.ticker for h in snapshot.holdings]
     return await get_regime_for_portfolio(tickers)
+
+
+# ── Trim Signals ──────────────────────────────────────────────────────────────
+
+@router.get("/portfolio/{portfolio_id}/trim-signals", response_model=TrimSignalsResponse)
+async def get_portfolio_trim_signals(
+    portfolio_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    p_result = await db.execute(
+        select(Portfolio).where(Portfolio.id == portfolio_id, Portfolio.user_id == user.id)
+    )
+    if not p_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Portfolio not found")
+
+    snap_result = await db.execute(
+        select(PortfolioSnapshot)
+        .where(PortfolioSnapshot.portfolio_id == portfolio_id)
+        .options(selectinload(PortfolioSnapshot.holdings))
+        .order_by(desc(PortfolioSnapshot.uploaded_at))
+        .limit(1)
+    )
+    snapshot = snap_result.scalar_one_or_none()
+    if not snapshot or not snapshot.holdings:
+        return TrimSignalsResponse(entries=[], computed_at=datetime.utcnow().isoformat() + "Z")
+
+    tickers = [h.ticker for h in snapshot.holdings]
+
+    av_key = await _get_finnhub_key(db)
+    last_runs, regime_map, price_map = await asyncio.gather(
+        _get_last_runs_for_holdings(tickers, user.id, db),
+        get_regime_for_portfolio(tickers),
+        _fetch_prices_bulk(tickers, av_key),
+    )
+
+    fundamentals_map: dict[str, dict] = {}
+    if av_key:
+        fundamentals_list = await asyncio.gather(
+            *[_fetch_fundamentals(ticker, av_key) for ticker in tickers]
+        )
+        fundamentals_map = dict(zip(tickers, fundamentals_list))
+
+    total_value_usd = 0.0
+    holding_values: dict[str, float] = {}
+    for h in snapshot.holdings:
+        price = price_map.get(h.ticker)
+        if price is not None:
+            v = h.shares * price
+            holding_values[str(h.id)] = v
+            total_value_usd += v
+
+    entries: list[TrimSignalEntry] = []
+    for h in snapshot.holdings:
+        price = price_map.get(h.ticker)
+        pnl_pct: Optional[float] = None
+        if price is not None and h.avg_cost is not None and h.avg_cost != 0:
+            pnl_pct = (price / h.avg_cost - 1) * 100
+
+        weight_pct: Optional[float] = None
+        v = holding_values.get(str(h.id))
+        if v is not None and total_value_usd > 0:
+            weight_pct = v / total_value_usd * 100
+
+        last_run = last_runs.get(h.ticker)
+        # Backend stores verdict in lowercase ("buy"/"sell"/"hold"); the scoring
+        # function expects uppercase for human-readable reason strings.
+        current_verdict_raw = last_run.verdict if last_run else None
+        previous_verdict_raw = last_run.previous_verdict if last_run else None
+        current_verdict = current_verdict_raw.upper() if current_verdict_raw else None
+        previous_verdict = previous_verdict_raw.upper() if previous_verdict_raw else None
+
+        regime_data = regime_map.get(h.ticker)
+        regime = regime_data.get("current_regime") if regime_data else None
+        regime_signal = regime_data.get("signal") if regime_data else None
+
+        fund = fundamentals_map.get(h.ticker, {})
+        peg = fund.get("peg_ratio")
+
+        signal = score_trim_signal(
+            ticker=h.ticker,
+            unrealized_pnl_pct=pnl_pct,
+            current_verdict=current_verdict,
+            previous_verdict=previous_verdict,
+            regime=regime,
+            regime_signal=regime_signal,
+            peg=peg,
+            portfolio_weight_pct=weight_pct,
+        )
+
+        entries.append(TrimSignalEntry(
+            holding_id=h.id,
+            ticker=h.ticker,
+            level=signal.level,
+            score=signal.score,
+            reasons=signal.reasons,
+            unrealized_pnl_pct=pnl_pct,
+            current_verdict=current_verdict,
+            regime=regime,
+            regime_signal=regime_signal,
+        ))
+
+    entries.sort(key=lambda e: e.score, reverse=True)
+    return TrimSignalsResponse(
+        entries=entries,
+        computed_at=datetime.utcnow().isoformat() + "Z",
+    )

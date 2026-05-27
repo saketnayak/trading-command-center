@@ -175,6 +175,28 @@ export interface PortfolioHoldingLastRun {
   suggested_entry: string | null;
   suggested_stop: string | null;
   suggested_target: string | null;
+  previous_run_id?: string | null;
+  previous_verdict?: string | null;
+  previous_analysis_date?: string | null;
+}
+
+export type TrimLevel = "none" | "watch" | "consider_trim" | "strong_trim";
+
+export interface TrimSignalEntry {
+  holding_id: string;
+  ticker: string;
+  level: TrimLevel;
+  score: number;
+  reasons: string[];
+  unrealized_pnl_pct: number | null;
+  current_verdict: string | null;
+  regime: "Bull" | "Sideways" | "Bear" | null;
+  regime_signal: number | null;
+}
+
+export interface TrimSignalsResponse {
+  entries: TrimSignalEntry[];
+  computed_at: string;
 }
 
 export interface TickerChart {
