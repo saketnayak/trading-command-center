@@ -132,3 +132,70 @@ async def test_last_run_previous_none_when_verdicts_match():
     last_run = r.json()["holdings"][0]["last_run"]
     assert last_run["verdict"] == "buy"
     assert last_run.get("previous_verdict") is None
+
+
+@pytest.mark.asyncio
+async def test_trim_signals_empty_when_no_snapshot():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        token, user_id = await _register_and_token(c, "nosnap@test.com")
+        r0 = await c.post("/portfolio", json={"name": "Empty"}, headers={"Authorization": f"Bearer {token}"})
+        portfolio_id = r0.json()["id"]
+
+        r = await c.get(
+            f"/portfolio/{portfolio_id}/trim-signals",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["entries"] == []
+
+
+@pytest.mark.asyncio
+async def test_trim_signals_level_none_for_holding_without_run():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        token, user_id = await _register_and_token(c, "norun@test.com")
+        portfolio_id = await _create_portfolio_with_holding(c, token, ticker="GOOG")
+
+        r = await c.get(
+            f"/portfolio/{portfolio_id}/trim-signals",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 200, r.text
+    entries = r.json()["entries"]
+    assert len(entries) == 1
+    assert entries[0]["ticker"] == "GOOG"
+    assert entries[0]["level"] == "none"
+    assert "No analysis yet" in entries[0]["reasons"]
+
+
+@pytest.mark.asyncio
+async def test_trim_signals_returns_strong_trim_when_verdict_sell():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        token, user_id = await _register_and_token(c, "sellverdict@test.com")
+        portfolio_id = await _create_portfolio_with_holding(c, token, ticker="TSLA")
+        await _insert_run(user_id, "TSLA", RunVerdict.sell, days_ago=1)
+
+        r = await c.get(
+            f"/portfolio/{portfolio_id}/trim-signals",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 200, r.text
+    entries = r.json()["entries"]
+    assert len(entries) == 1
+    assert entries[0]["ticker"] == "TSLA"
+    assert entries[0]["level"] == "strong_trim"
+    assert any("AI verdict: SELL" in reason for reason in entries[0]["reasons"])
+
+
+@pytest.mark.asyncio
+async def test_trim_signals_unauthorized_for_other_user_portfolio():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        owner_token, _ = await _register_and_token(c, "owner@test.com")
+        intruder_token, _ = await _register_and_token(c, "intruder@test.com")
+        portfolio_id = await _create_portfolio_with_holding(c, owner_token, ticker="AMD")
+
+        r = await c.get(
+            f"/portfolio/{portfolio_id}/trim-signals",
+            headers={"Authorization": f"Bearer {intruder_token}"},
+        )
+    assert r.status_code == 404
