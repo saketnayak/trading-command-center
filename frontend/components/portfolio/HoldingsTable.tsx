@@ -730,6 +730,17 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${verdictColors[entry.verdict] ?? "bg-slate-700 text-slate-200"}`}>
                                 {entry.verdict.toUpperCase()}
                               </span>
+                              {h.last_run?.previous_verdict && h.last_run?.previous_run_id && (
+                                <a
+                                  href={`/runs/compare?a=${h.last_run.previous_run_id}&b=${h.last_run.run_id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-1 text-amber-400 hover:text-amber-300"
+                                  title={`Verdict changed from ${h.last_run.previous_verdict} on ${h.last_run.previous_analysis_date} → ${h.last_run.verdict} on ${h.last_run.analysis_date}. Click to compare.`}
+                                >
+                                  ↺ changed
+                                </a>
+                              )}
                               <span className={`text-xs ${stale ? "text-amber-400" : "text-slate-500"}`}>
                                 {days === 0 ? "today" : `${days}d ago`}{stale ? " ⚠" : ""}
                               </span>
