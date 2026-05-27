@@ -437,6 +437,7 @@ export default function PortfolioPage() {
                     onAnalyzeStale={() => setBatchOpen(true)}
                     fundamentals={fundamentals}
                     regime={regime}
+                    trimSignals={trimByHoldingId}
                   />
                 )}
                 <SellCandidatesPanel
