@@ -331,23 +331,35 @@ async def _get_last_runs_for_holdings(
     """Fetch the two most-recent completed runs per ticker for this user.
     Populates previous_* fields when the latest run's verdict differs from
     the previous one. Returns empty dict for tickers with no runs."""
+    if not tickers:
+        return {}
+
+    rows = (await db.execute(
+        select(Run, Report)
+        .outerjoin(Report, Report.run_id == Run.id)
+        .where(
+            Run.created_by == user_id,
+            Run.ticker.in_(tickers),
+            Run.status == RunStatus.completed,
+            Run.verdict.isnot(None),
+        )
+        .order_by(Run.ticker, desc(Run.created_at))
+    )).all()
+
+    grouped: dict[str, list[tuple]] = {}
+    for run, report in rows:
+        bucket = grouped.setdefault(run.ticker, [])
+        if len(bucket) < 2:
+            bucket.append((run, report))
+
     last_runs: dict[str, LastRun] = {}
-    for ticker in tickers:
-        rows = (await db.execute(
-            select(Run, Report)
-            .outerjoin(Report, Report.run_id == Run.id)
-            .where(Run.created_by == user_id, Run.ticker == ticker, Run.status == RunStatus.completed, Run.verdict.isnot(None))
-            .order_by(desc(Run.created_at))
-            .limit(2)
-        )).all()
-        if not rows:
-            continue
-        latest_run, latest_report = rows[0]
+    for ticker, ticker_rows in grouped.items():
+        latest_run, latest_report = ticker_rows[0]
         prev_run_id: Optional[UUID] = None
         prev_verdict: Optional[str] = None
         prev_date: Optional[str] = None
-        if len(rows) > 1:
-            prev_run, _ = rows[1]
+        if len(ticker_rows) > 1:
+            prev_run, _ = ticker_rows[1]
             if prev_run.verdict and prev_run.verdict.value != latest_run.verdict.value:
                 prev_run_id = prev_run.id
                 prev_verdict = prev_run.verdict.value
@@ -1754,8 +1766,10 @@ async def get_portfolio_trim_signals(
 
     fundamentals_map: dict[str, dict] = {}
     if av_key:
-        for ticker in tickers:
-            fundamentals_map[ticker] = await _fetch_fundamentals(ticker, av_key)
+        fundamentals_list = await asyncio.gather(
+            *[_fetch_fundamentals(ticker, av_key) for ticker in tickers]
+        )
+        fundamentals_map = dict(zip(tickers, fundamentals_list))
 
     total_value_usd = 0.0
     holding_values: dict[str, float] = {}
