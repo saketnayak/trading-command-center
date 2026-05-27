@@ -32,6 +32,7 @@ import { TrendingPanel } from "@/components/portfolio/TrendingPanel";
 import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 import { DiscoverPanel } from "@/components/portfolio/DiscoverPanel";
 import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsModal";
+import { SellCandidatesPanel } from "@/components/portfolio/SellCandidatesPanel";
 
 type Tab = "holdings" | "insights" | "earnings" | "news" | "trending" | "discover" | "chat" | "thesis";
 
@@ -438,6 +439,10 @@ export default function PortfolioPage() {
                     regime={regime}
                   />
                 )}
+                <SellCandidatesPanel
+                  entries={trimSignals?.entries ?? []}
+                  computedAt={trimSignals?.computed_at}
+                />
                 <HoldingsTable
                   portfolioId={selectedId}
                   holdings={current.holdings}
