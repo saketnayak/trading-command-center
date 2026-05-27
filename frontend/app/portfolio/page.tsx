@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TopNav } from "@/components/layout/TopNav";
 import {
@@ -11,11 +11,12 @@ import {
   exportPortfolioCsv,
   getPortfolioFundamentals,
   getPortfolioRegime,
+  getPortfolioTrimSignals,
   batchAnalyzePortfolio,
   getProviderModels,
   getBehavioralAlerts,
 } from "@/lib/api";
-import type { Portfolio, PortfolioHolding, BehavioralAlertsResponse, RegimeData } from "@/lib/types";
+import type { Portfolio, PortfolioHolding, BehavioralAlertsResponse, RegimeData, TrimSignalEntry, TrimSignalsResponse } from "@/lib/types";
 import { isCrypto } from "@/lib/asset";
 import { PortfolioSwitcher } from "@/components/portfolio/PortfolioSwitcher";
 import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
@@ -235,6 +236,18 @@ export default function PortfolioPage() {
     staleTime: 1000 * 60 * 60 * 4,  // 4h — matches backend cache TTL
   });
 
+  const { data: trimSignals } = useQuery<TrimSignalsResponse>({
+    queryKey: ["portfolio-trim-signals", selectedId],
+    queryFn: () => getPortfolioTrimSignals(selectedId!),
+    enabled: selectedId != null && tab === "holdings",
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const trimByHoldingId = useMemo<Record<string, TrimSignalEntry>>(
+    () => Object.fromEntries((trimSignals?.entries ?? []).map((e) => [e.holding_id, e])),
+    [trimSignals]
+  );
+
   const { data: behavioralAlerts } = useQuery<BehavioralAlertsResponse>({
     queryKey: ["behavioralAlerts", selectedId],
     queryFn: () => getBehavioralAlerts(selectedId!),
@@ -432,6 +445,7 @@ export default function PortfolioPage() {
                   displayCurrency={current.display_currency ?? "USD"}
                   fundamentals={fundamentals}
                   regime={regime}
+                  trimSignals={trimByHoldingId}
                   onTickerClick={setDrawerHolding}
                 />
               </div>
