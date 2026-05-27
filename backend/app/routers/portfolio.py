@@ -66,6 +66,9 @@ class LastRun(BaseModel):
     suggested_entry: Optional[str] = None
     suggested_stop: Optional[str] = None
     suggested_target: Optional[str] = None
+    previous_run_id: Optional[UUID] = None
+    previous_verdict: Optional[str] = None
+    previous_analysis_date: Optional[str] = None
 
 
 class HoldingResponse(BaseModel):
@@ -340,23 +343,36 @@ async def get_current_holdings(
     last_runs: dict[str, LastRun] = {}
     if tickers:
         for ticker in tickers:
-            row = (await db.execute(
+            rows = (await db.execute(
                 select(Run, Report)
                 .outerjoin(Report, Report.run_id == Run.id)
                 .where(Run.created_by == user.id, Run.ticker == ticker, Run.status == RunStatus.completed, Run.verdict.isnot(None))
                 .order_by(desc(Run.created_at))
-                .limit(1)
-            )).first()
-            if row:
-                run, report = row
-                last_runs[ticker] = LastRun(
-                    run_id=run.id,
-                    verdict=run.verdict.value,
-                    analysis_date=str(run.analysis_date),
-                    suggested_entry=report.suggested_entry if report else None,
-                    suggested_stop=report.suggested_stop if report else None,
-                    suggested_target=report.suggested_target if report else None,
-                )
+                .limit(2)
+            )).all()
+            if not rows:
+                continue
+            latest_run, latest_report = rows[0]
+            prev_run_id: Optional[UUID] = None
+            prev_verdict: Optional[str] = None
+            prev_date: Optional[str] = None
+            if len(rows) > 1:
+                prev_run, _ = rows[1]
+                if prev_run.verdict and prev_run.verdict.value != latest_run.verdict.value:
+                    prev_run_id = prev_run.id
+                    prev_verdict = prev_run.verdict.value
+                    prev_date = str(prev_run.analysis_date)
+            last_runs[ticker] = LastRun(
+                run_id=latest_run.id,
+                verdict=latest_run.verdict.value,
+                analysis_date=str(latest_run.analysis_date),
+                suggested_entry=latest_report.suggested_entry if latest_report else None,
+                suggested_stop=latest_report.suggested_stop if latest_report else None,
+                suggested_target=latest_report.suggested_target if latest_report else None,
+                previous_run_id=prev_run_id,
+                previous_verdict=prev_verdict,
+                previous_analysis_date=prev_date,
+            )
 
     # Fetch all prices — crypto batched into one CoinGecko call, stocks via Finnhub
     price_map = await _fetch_prices_bulk(tickers, av_key)
