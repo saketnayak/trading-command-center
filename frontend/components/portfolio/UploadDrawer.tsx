@@ -1,5 +1,11 @@
 "use client";
-import { useState, useRef, useEffect, DragEvent } from "react";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Importer, ImporterField, type ImportInfo } from "react-csv-importer";
+import {
+  type MappedImportRow,
+  mappedRowsToPortfolioCsvFile,
+} from "@/lib/portfolioCsvFromImport";
 
 interface UploadDrawerProps {
   open: boolean;
@@ -8,71 +14,49 @@ interface UploadDrawerProps {
   uploading: boolean;
 }
 
-const BROKER_BADGES = [
-  { label: "Moomoo", className: "bg-purple-500/20 text-purple-300" },
-  { label: "Fidelity", className: "bg-blue-500/20 text-blue-300" },
-  { label: "Schwab", className: "bg-green-500/20 text-green-300" },
-  { label: "Generic", className: "bg-pink-500/20 text-pink-300" },
-] as const;
-
 export function UploadDrawer({ open, onClose, onUpload, uploading }: UploadDrawerProps) {
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const rowsBuffer = useRef<MappedImportRow[]>([]);
+  const onUploadRef = useRef(onUpload);
+  onUploadRef.current = onUpload;
 
   useEffect(() => {
     if (open) {
-      setPendingFile(null);
-      setError(null);
-      setDragging(false);
+      setImportError(null);
+      rowsBuffer.current = [];
     }
   }, [open]);
 
-  if (!open) return null;
+  const handleStart = useCallback(() => {
+    rowsBuffer.current = [];
+    setImportError(null);
+  }, []);
 
-  function handleFile(file: File) {
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      setError("Please upload a CSV file.");
-      setPendingFile(null);
+  const dataHandler = useCallback(async (rows: MappedImportRow[]) => {
+    rowsBuffer.current.push(...rows);
+  }, []);
+
+  const handleComplete = useCallback((info: ImportInfo) => {
+    const base =
+      (info.file.name || "portfolio-import").replace(/\.[^/.]+$/, "") || "portfolio-import";
+    const result = mappedRowsToPortfolioCsvFile(rowsBuffer.current, `${base}.csv`);
+    rowsBuffer.current = [];
+    if ("error" in result) {
+      setImportError(result.error);
       return;
     }
-    setError(null);
-    setPendingFile(file);
-  }
+    setImportError(null);
+    onUploadRef.current(result.file);
+  }, []);
 
-  function handleDragOver(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault();
-    setDragging(true);
-  }
-
-  function handleDragLeave(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault();
-    setDragging(false);
-  }
-
-  function handleDrop(e: DragEvent<HTMLDivElement>) {
-    e.preventDefault();
-    setDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  }
-
-  function handleInputChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
-  }
-
-  function handleUpload() {
-    if (pendingFile) onUpload(pendingFile);
-  }
+  if (!open) return null;
 
   return (
-    <div className="bg-[#181825] border border-slate-700 rounded-sm mt-2 p-4 transition-all">
-      {/* Header */}
+    <div className="bg-[#181825] border border-slate-700 rounded-sm mt-2 p-4 transition-all relative">
       <div className="flex items-center justify-between mb-3">
         <span className="text-slate-300 text-sm font-medium">Upload broker CSV</span>
         <button
+          type="button"
           onClick={onClose}
           className="text-slate-500 hover:text-slate-200 text-sm leading-none transition-colors"
           aria-label="Close"
@@ -81,69 +65,32 @@ export function UploadDrawer({ open, onClose, onUpload, uploading }: UploadDrawe
         </button>
       </div>
 
-      {/* Broker badges */}
-      <div className="flex items-center gap-2 mb-3">
-        {BROKER_BADGES.map((b) => (
-          <span
-            key={b.label}
-            className={`rounded-sm px-2 py-0.5 text-xs font-medium ${b.className}`}
-          >
-            {b.label}
-          </span>
-        ))}
+      <p className="text-slate-500 text-xs mb-2">
+        Pick your CSV, map columns to Ticker and Shares (Average Cost optional), then start import. We upload a
+        normalized snapshot to the server.
+      </p>
+
+      <div className="upload-drawer-csv-importer relative rounded-sm overflow-hidden">
+        <Importer<MappedImportRow>
+          dataHandler={dataHandler}
+          onStart={handleStart}
+          onComplete={handleComplete}
+          restartable
+          defaultNoHeader={false}
+        >
+          <ImporterField name="ticker" label="Ticker / Symbol" />
+          <ImporterField name="shares" label="Shares / Quantity" />
+          <ImporterField name="avg_cost" label="Average Cost" optional />
+        </Importer>
+
+        {uploading ? (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#181825]/85 backdrop-blur-[2px] rounded-sm">
+            <span className="text-slate-200 text-sm font-medium">Uploading snapshot…</span>
+          </div>
+        ) : null}
       </div>
 
-      {/* Drop zone */}
-      <div
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        className={`border-2 border-dashed rounded p-6 text-center transition-colors ${
-          dragging
-            ? "border-purple-500 bg-purple-500/5"
-            : "border-slate-600 bg-slate-900/80"
-        }`}
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".csv"
-          className="hidden"
-          onChange={handleInputChange}
-        />
-        {pendingFile ? (
-          <span className="text-slate-300 text-sm">{pendingFile.name}</span>
-        ) : (
-          <span className="text-slate-500 text-sm">
-            Drag &amp; drop your broker CSV here, or{" "}
-            <button
-              type="button"
-              onClick={() => inputRef.current?.click()}
-              className="text-purple-400 hover:text-purple-300 font-semibold underline underline-offset-2 transition-colors"
-            >
-              browse
-            </button>
-          </span>
-        )}
-      </div>
-
-      {/* Error */}
-      {error && (
-        <p className="text-red-400 text-xs mt-2">{error}</p>
-      )}
-
-      {/* Upload button */}
-      {pendingFile && (
-        <div className="flex justify-end mt-3">
-          <button
-            onClick={handleUpload}
-            disabled={uploading}
-            className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-sm font-medium rounded-sm px-4 py-1.5 transition-colors"
-          >
-            {uploading ? "Uploading..." : "Upload"}
-          </button>
-        </div>
-      )}
+      {importError ? <p className="text-red-400 text-xs mt-2">{importError}</p> : null}
     </div>
   );
 }

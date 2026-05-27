@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import 'react-csv-importer/dist/index.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -51,4 +52,86 @@
     background: var(--background);
     font-family: Arial, Helvetica, sans-serif;
   }
+}
+
+/* react-csv-importer — dark drawer shell (portfolio upload) */
+.upload-drawer-csv-importer .CSVImporter_ImporterFrame {
+  border-color: rgb(51 65 85);
+  background: rgb(15 23 42 / 0.85);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ImporterFrame__headerTitle,
+.upload-drawer-csv-importer .CSVImporter_ImporterFrame__headerSubtitle {
+  color: rgb(226 232 240);
+}
+
+.upload-drawer-csv-importer .CSVImporter_FileSelector {
+  border-color: rgb(71 85 105);
+  background: rgb(15 23 42 / 0.6);
+  color: rgb(203 213 225);
+}
+
+.upload-drawer-csv-importer .CSVImporter_FileSelector[data-active='true'] {
+  background: rgb(88 28 135 / 0.15);
+}
+
+.upload-drawer-csv-importer .CSVImporter_FileStep__header {
+  color: rgb(148 163 184);
+}
+
+.upload-drawer-csv-importer .CSVImporter_FileStep__headerToggle {
+  color: rgb(203 213 225);
+}
+
+.upload-drawer-csv-importer .CSVImporter_TextButton {
+  border-color: rgb(71 85 105);
+  background: rgb(51 65 85);
+  color: rgb(241 245 249);
+}
+
+.upload-drawer-csv-importer .CSVImporter_TextButton:hover:not(:disabled) {
+  background: rgb(71 85 105);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ColumnDragCard {
+  background: rgb(30 41 59);
+  color: rgb(226 232 240);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ColumnDragCard__cardHeader {
+  color: rgb(148 163 184);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ColumnDragCard__cardHeader > b {
+  background: rgb(51 65 85);
+  color: rgb(203 213 225);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ColumnDragTargetArea__boxLabel {
+  color: rgb(203 213 225);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ColumnDragTargetArea__boxLabel > b {
+  color: rgb(248 113 113);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ProgressDisplay__status {
+  color: rgb(226 232 240);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ProgressDisplay__status.-pending {
+  color: rgb(148 163 184);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ProgressDisplay__count {
+  color: rgb(148 163 184);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ProgressDisplay__progressBar {
+  background: rgb(51 65 85);
+}
+
+.upload-drawer-csv-importer .CSVImporter_ProgressDisplay__progressBarIndicator {
+  background: rgb(168 85 247);
 }
