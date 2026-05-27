@@ -5,7 +5,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type LatestRunEntry } from "@/lib/api";
 import { fmtMoney, fmtPnl } from "@/lib/currency";
 import { WatchButton } from "@/components/portfolio/WatchButton";
-import type { PortfolioHolding, FundamentalsData, RegimeData } from "@/lib/types";
+import type { PortfolioHolding, FundamentalsData, RegimeData, TrimSignalEntry } from "@/lib/types";
 
 interface HoldingsTableProps {
   portfolioId: string;
@@ -14,6 +14,7 @@ interface HoldingsTableProps {
   displayCurrency: string;
   fundamentals?: Record<string, FundamentalsData>;
   regime?: Record<string, RegimeData>;
+  trimSignals?: Record<string, TrimSignalEntry>;
   onTickerClick?: (holding: PortfolioHolding) => void;
 }
 
@@ -182,6 +183,24 @@ function regimeColors(regime: "Bull" | "Sideways" | "Bear"): { text: string; bg:
   return { text: "text-yellow-400", bg: "bg-yellow-900/30" };
 }
 
+function TrimBadge({ entry }: { entry?: TrimSignalEntry }) {
+  if (!entry || entry.level === "none") return null;
+  const styles: Record<string, { label: string; cls: string }> = {
+    watch: { label: "● Watch", cls: "text-yellow-400 bg-yellow-900/30" },
+    consider_trim: { label: "● Trim", cls: "text-orange-400 bg-orange-900/30" },
+    strong_trim: { label: "● Strong Trim", cls: "text-red-400 bg-red-900/30" },
+  };
+  const s = styles[entry.level];
+  return (
+    <span
+      className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${s.cls}`}
+      title={entry.reasons.join("\n")}
+    >
+      {s.label}
+    </span>
+  );
+}
+
 function RegimeBadge({ data }: { data: RegimeData | undefined | null }) {
   if (!data) return (
     <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono ml-1.5 text-slate-500 bg-slate-800">
@@ -313,7 +332,7 @@ function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals, regime, onTickerClick }: HoldingsTableProps) {
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals, regime, trimSignals, onTickerClick }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "" });
@@ -468,7 +487,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
 
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
   const hasRegime = regime && Object.keys(regime).length > 0;
-  const colSpan = 8 + (hasRegime ? 1 : 0);
+  const colSpan = 9 + (hasRegime ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -575,6 +594,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
               {hasRegime && (
                 <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">AI vs Regime</th>
               )}
+              <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Trim</th>
               <th className="text-left px-4 py-3">Actions</th>
             </tr>
           </thead>
@@ -757,6 +777,11 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                           </td>
                         );
                       })()}
+
+                      {/* Trim */}
+                      <td className="px-4 py-2">
+                        <TrimBadge entry={trimSignals?.[h.id]} />
+                      </td>
 
                       {/* Actions */}
                       <td className="px-4 py-2">
