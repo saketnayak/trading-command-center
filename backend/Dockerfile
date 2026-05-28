@@ -14,17 +14,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends postgresql-clie
 #    && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency metadata first for better layer caching
-COPY pyproject.toml ./
+COPY pyproject.toml uv.lock ./
 
 # Install dependencies into /app/.venv
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev
+    uv sync --no-dev --frozen
 
 RUN uv pip install --system -e ".[dev]"
-
-# Patch TradingAgents to add technical analyst support
-COPY patches/ /tmp/tradingagents_patches/
-#RUN python /tmp/tradingagents_patches/apply_patches.py
 
 COPY . .
 

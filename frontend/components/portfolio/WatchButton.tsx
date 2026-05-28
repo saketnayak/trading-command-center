@@ -44,8 +44,8 @@ export function WatchButton({ ticker }: { ticker: string }) {
         llm_model: draft.llm_model || (models[0] ?? ""),
         depth: draft.depth,
         analysts: isCrypto(ticker)
-          ? ["market", "social", "news", "technical"]
-          : ["market", "social", "news", "fundamentals", "technical"],
+          ? ["market", "social", "news"]
+          : ["market", "social", "news", "fundamentals"],
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["watchlist"] });

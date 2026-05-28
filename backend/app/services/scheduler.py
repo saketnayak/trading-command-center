@@ -42,7 +42,7 @@ async def _fire_watchlist_item(item_id: str) -> None:
             llm_provider=item.llm_provider,
             llm_model=item.llm_model,
             depth=item.depth,
-            analysts=_crypto_safe_analysts(item.ticker, item.analysts or ["market", "social", "news", "fundamentals", "technical"]),
+            analysts=_crypto_safe_analysts(item.ticker, item.analysts or ["market", "social", "news", "fundamentals"]),
             label=f"Scheduled: {item.ticker}",
         )
         db.add(run)

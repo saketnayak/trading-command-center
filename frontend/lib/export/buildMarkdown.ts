@@ -1,4 +1,5 @@
 import type { Run, Report } from "../types";
+import { getAnalystReportContent } from "@/lib/analystReports";
 import { normalizeMarkdown } from "@/lib/normalizeMarkdown";
 
 /** "fundamental_analysis" → "Fundamental Analysis" */
@@ -55,9 +56,11 @@ export function buildMarkdown(run: Run, report: Report): string {
     ` · **Depth:** ${String(run.depth)}\n\n` +
     `**Analysts:** ${run.analysts.map((a) => humanize(a)).join(", ")}\n\n`;
 
+  const situationSummary = (raw?.situation_summary as string | undefined)?.trim() ?? "";
+
   const analystSections = run.analysts
     .map((analyst) => {
-      const content = (raw?.[`${analyst}_report`] as string | undefined) ?? (raw?.[analyst] as string | undefined) ?? "";
+      const content = getAnalystReportContent(raw, analyst);
       if (!content.trim()) return "";
       // Wrap in a fenced block to prevent heading bleed; or strip leading #s:
       // Cap at h6 (or just strip headings entirely from analyst content)
@@ -87,6 +90,7 @@ export function buildMarkdown(run: Run, report: Report): string {
   const markdown = joinSections(
     header,
     mdSection("Trader Decision", report.trader_decision),
+    mdSection("Situation Summary", situationSummary || undefined),
     analystBlock,
     debateBlock,
     mdSection("Investment Plan", raw?.investment_plan as string | undefined),

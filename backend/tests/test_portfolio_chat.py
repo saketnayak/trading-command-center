@@ -58,7 +58,7 @@ async def test_chat_happy_path_returns_response_shape():
         portfolio_id = await _create_portfolio_with_holding(c, token)
 
         with patch(
-            "app.services.portfolio_chat_service._call_llm",
+            "app.services.portfolio_chat_service._call_llm_chat",
             new=AsyncMock(return_value="AAPL is your largest position."),
         ):
             r = await c.post(
@@ -85,13 +85,16 @@ async def test_chat_passes_conversation_history():
         token = await _register_and_token(c, "chathistory@example.com")
         portfolio_id = await _create_portfolio_with_holding(c, token)
 
-        captured: list[str] = []
+        captured_messages: list[list[dict]] = []
 
-        async def _capture(provider, model, api_key, prompt):
-            captured.append(prompt)
+        async def _capture(provider, model, api_key, system, messages):
+            captured_messages.append(messages)
             return "Noted."
 
-        with patch("app.services.portfolio_chat_service._call_llm", new=AsyncMock(side_effect=_capture)):
+        with patch(
+            "app.services.portfolio_chat_service._call_llm_chat",
+            new=AsyncMock(side_effect=_capture),
+        ):
             await c.post(
                 f"/portfolio/{portfolio_id}/chat",
                 json={
@@ -106,7 +109,9 @@ async def test_chat_passes_conversation_history():
                 headers={"Authorization": f"Bearer {token}"},
             )
 
-        assert len(captured) == 1
-        assert "Where am I most overexposed?" in captured[0]
-        assert "You are overexposed to tech." in captured[0]
-        assert "What about my tech exposure?" in captured[0]
+        assert len(captured_messages) == 1
+        messages = captured_messages[0]
+        contents = [m["content"] for m in messages]
+        assert any("Where am I most overexposed?" in c for c in contents)
+        assert any("You are overexposed to tech." in c for c in contents)
+        assert any("What about my tech exposure?" in c for c in contents)

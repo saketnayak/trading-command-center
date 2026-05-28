@@ -4,7 +4,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createRun, getProviderModels } from "@/lib/api";
 import { isCrypto } from "@/lib/asset";
 
-const ANALYSTS = ["market", "social", "news", "fundamentals", "technical"];
+import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
+
+const ANALYSTS = ANALYST_OPTIONS;
 const LOCAL_PROVIDERS = ["ollama", "vllm"];
 
 const PLACEHOLDERS: Record<string, string> = {
@@ -51,7 +53,7 @@ export function RunForm({ onSuccess, initialValues }: Props) {
   const [label, setLabel] = useState(initialValues?.label ?? "");
   const [analysisDate, setAnalysisDate] = useState(new Date().toISOString().slice(0, 10));
   const [analysts, setAnalysts] = useState<string[]>(
-    initialValues?.analysts ?? ["market", "social", "news", "fundamentals", "technical"]
+    initialValues?.analysts ?? DEFAULT_ANALYSTS
   );
   const [provider, setProvider] = useState(initialValues?.provider ?? "ionos");
   const [model, setModel] = useState(initialValues?.model ?? "");

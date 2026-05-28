@@ -1,21 +1,26 @@
 import asyncio
 import os
-import re
 from queue import Queue as SyncQueue
 from datetime import datetime, timezone
 from langchain_core.callbacks import BaseCallbackHandler
-from decimal import Decimal
-from typing import Optional
 
 # Serializes env-var patching so concurrent local-inference runs don't race on os.environ.
 _env_fallback_lock = asyncio.Lock()
 
+# LangGraph node names emitted by TradingAgents v0.7 (callback `name` is lower_snake).
 AGENT_NODES = {
-    "market_analyst", "social_analyst", "news_analyst",
-    "fundamentals_analyst", "technical_analyst",
-    "bull_researcher", "bear_researcher",
+    "market_analyst",
+    "social_analyst",
+    "news_analyst",
+    "fundamentals_analyst",
+    "situation_summariser",
+    "bull_researcher",
+    "bear_researcher",
+    "research_manager",
     "trader",
-    "aggressive_analyst", "conservative_analyst", "neutral_analyst",
+    "aggressive_analyst",
+    "conservative_analyst",
+    "neutral_analyst",
     "risk_judge",
 }
 
@@ -30,15 +35,14 @@ _PROVIDER_MAP: dict[str, str] = {
     "ionos": "openai",  # IONOS is OpenAI-compatible
 }
 
+# max_recur_limit floor is 30 in tradingagents>=0.7 (Situation Summariser node).
 _DEPTH_PARAMS: dict[str, dict] = {
-    "quick":    {"max_debate_rounds": 1, "max_risk_discuss_rounds": 1, "max_recur_limit": 75},
+    "quick": {"max_debate_rounds": 1, "max_risk_discuss_rounds": 1, "max_recur_limit": 75},
     "standard": {"max_debate_rounds": 2, "max_risk_discuss_rounds": 2, "max_recur_limit": 150},
-    "deep":     {"max_debate_rounds": 3, "max_risk_discuss_rounds": 3, "max_recur_limit": 200},
+    "deep": {"max_debate_rounds": 3, "max_risk_discuss_rounds": 3, "max_recur_limit": 200},
 }
 
-def _to_decimal(value: str) -> Decimal:
-    return Decimal(value.replace(",", ""))
-        
+
 class _SyncEmitter(BaseCallbackHandler):
     """Sync LangChain callback that enqueues events into a thread-safe queue."""
 
@@ -97,6 +101,8 @@ async def execute_run(run_id: str, config: dict) -> None:
     from app.models.agent_event import AgentEvent, EventType
     from app.models.report import Report
     from app.services.websocket_manager import ws_manager
+    from app.utils.asset_type import is_crypto as _is_crypto
+    from app.utils.tradingagents_analysts import normalize_analysts
 
     sync_q: SyncQueue = SyncQueue()
     async_q: asyncio.Queue = asyncio.Queue()
@@ -154,10 +160,11 @@ async def execute_run(run_id: str, config: dict) -> None:
         provider = config.get("llm_provider", "openai")
         model = config.get("llm_model", "")
         depth = config.get("depth", "standard")
-        from app.utils.asset_type import is_crypto as _is_crypto
-        analysts = config.get("analysts") or ["market", "social", "news", "fundamentals", "technical"]
-        if _is_crypto(config.get("ticker", "")):
-            analysts = [a for a in analysts if a != "fundamentals"]
+        ticker = config.get("ticker", "")
+        analysts = normalize_analysts(
+            config.get("analysts"),
+            exclude_fundamentals=_is_crypto(ticker),
+        )
         depth_params = _DEPTH_PARAMS.get(depth, _DEPTH_PARAMS["standard"])
         ta_provider = _PROVIDER_MAP.get(provider, provider)
 
@@ -167,6 +174,7 @@ async def execute_run(run_id: str, config: dict) -> None:
             llm_provider=ta_provider,
             deep_think_llm=model,
             quick_think_llm=model,
+            response_language="en-US",
             **depth_params,
         )
 
@@ -174,11 +182,9 @@ async def execute_run(run_id: str, config: dict) -> None:
         # server URLs for local inference.
         env_patch: dict[str, str] = {}
         if provider == "ionos" and stored_key:
-            # Groq uses OpenAI-compatible API at a different base URL
             env_patch["OPENAI_BASE_URL"] = "https://openai.inference.de-txl.ionos.com/v1"
             env_patch["OPENAI_API_KEY"] = stored_key
         elif provider == "groq" and stored_key:
-            # Groq uses OpenAI-compatible API at a different base URL
             env_patch["OPENAI_BASE_URL"] = "https://api.groq.com/openai/v1"
             env_patch["OPENAI_API_KEY"] = stored_key
         elif provider in _CLOUD_KEY_ENV and stored_key:
@@ -208,7 +214,7 @@ async def execute_run(run_id: str, config: dict) -> None:
                 final_state, recommendation = await asyncio.wait_for(
                     asyncio.to_thread(
                         graph.propagate,
-                        config["ticker"],
+                        ticker,
                         config["analysis_date"],
                     ),
                     timeout=_settings.run_timeout_seconds,
@@ -305,51 +311,6 @@ def _extract_risk_assessment(state) -> str:
     return "\n\n".join(parts)
 
 
-def _extract_prices(text: str) -> tuple[str | None, str | None, str | None]:
-    """Regex-parse entry, stop-loss, and price target from free-form LLM text."""
-    def _find(patterns: list[str]) -> Optional[Decimal]:
-        for pat in patterns:
-            m = re.search(pat, text, re.IGNORECASE)
-            if m:
-                return _to_decimal(m.group(1))
-        return None
-
-    number = r"([\d,]+(?:\.\d+)?)"
-
-    entry = _find([
-        rf"entry\s+price\s*[:=]\s*\$?{number}",
-        rf"entry\s*[:=]\s*\$?{number}",
-        rf"buy\s+at\s*[:=]\s*\$?{number}",
-        rf"entry\s+(?:at|around|near|@)\s*\$?{number}",
-        rf"(?:initial|suggested)\s+entry\s*[:=]?\s*(?:at\s+)?\$?{number}",
-        rf"enter\s+(?:at|around|near)\s*\$?{number}",
-        rf"(?:buy|initiate|open)\s+(?:a?\s*(?:long|position|trade)\s+)?(?:at|near|around|@)\s*\$?{number}",
-    ])
-
-    stop = _find([
-        rf"stop[\s-]*loss\s*[:=]\s*\$?{number}",
-        rf"stop\s+at\s*[:=]\s*\$?{number}",
-        rf"stop\s*[:=]\s*\$?{number}",
-        rf"stop[\s-]*loss\s+(?:at|below|above|near|around|@)\s*\$?{number}",
-        rf"stop\s+(?:below|above|near|around|@)\s*\$?{number}",
-        rf"trailing\s+stop\s*[:=]?\s*(?:at\s+)?\$?{number}",
-        rf"stop\s+(?:price\s+)?(?:at|below|above)\s*\$?{number}",
-    ])
-
-    target = _find([
-        rf"price\s+target\s*[:=]\s*\$?{number}",
-        rf"take[\s-]*profit\s*[:=]\s*\$?{number}",
-        rf"profit\s+target\s*[:=]\s*\$?{number}",
-        rf"target\s*[:=]\s*\$?{number}",
-        rf"(?:price\s+)?target\s+(?:at|near|of|around|@)\s*\$?{number}",
-        rf"target\s+\${number}",
-        rf"(?:take[\s-]*profit|tp)\s*[:=]?\s*(?:at\s+)?\$?{number}",
-        rf"(?:first\s+)?(?:profit\s+)?target\s*:\s*\$?{number}",
-        rf"(?:exit|close)\s+(?:at|near|around)\s*\$?{number}",
-    ])
-    return str(entry), str(stop), str(target)
-
-
 def _normalize_price(value) -> str | None:
     if value is None:
         return None
@@ -378,8 +339,8 @@ def _parse_verdict(recommendation) -> "RunVerdict":
     from app.models.run import RunVerdict
 
     signal = str(getattr(recommendation, "signal", "")).strip().lower()
-    if signal == "buy":
+    if signal in ("buy", "b"):
         return RunVerdict.buy
-    if signal == "sell":
+    if signal in ("sell", "s"):
         return RunVerdict.sell
     return RunVerdict.hold

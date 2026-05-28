@@ -13,7 +13,9 @@ import {
 } from "@/lib/api";
 import type { WatchlistItem, AddWatchlistItemRequest } from "@/lib/types";
 
-const ANALYSTS = ["market", "social", "news", "fundamentals", "technical"];
+import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
+
+const ANALYSTS = ANALYST_OPTIONS;
 const LOCAL_PROVIDERS = ["ollama", "vllm"];
 const PLACEHOLDERS: Record<string, string> = {
   openai: "gpt-4o-mini",
@@ -208,7 +210,7 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
   const [provider, setProvider] = useState("ionos");
   const [model, setModel] = useState("");
   const [depth, setDepth] = useState<"quick" | "standard" | "deep">("standard");
-  const [analysts, setAnalysts] = useState<string[]>(["market", "social", "news", "fundamentals", "technical"]);
+  const [analysts, setAnalysts] = useState<string[]>(DEFAULT_ANALYSTS);
   const [cron, setCron] = useState<string | null>("0 9 * * 1");
 
   const isLocal = LOCAL_PROVIDERS.includes(provider);

@@ -9,8 +9,10 @@ interface PipelinePanelProps {
 type StageStatus = "waiting" | "running" | "done" | "error";
 
 const DOWNSTREAM_STAGES = [
+  { key: "situation_summariser", label: "Situation Summary" },
   { key: "bull_researcher", label: "Bull Research" },
   { key: "bear_researcher", label: "Bear Research" },
+  { key: "research_manager", label: "Research Manager" },
   { key: "trader", label: "Trader" },
   { key: "aggressive_analyst", label: "Risk: Aggressive" },
   { key: "conservative_analyst", label: "Risk: Conservative" },

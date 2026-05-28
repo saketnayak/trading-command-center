@@ -69,7 +69,7 @@ requires-dist = [
     { name = "pytest-httpx", marker = "extra == 'dev'", specifier = ">=0.30" },
     { name = "python-multipart", specifier = ">=0.0.9" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "tradingagents", specifier = ">=0.6.0" },
+    { name = "tradingagents", specifier = ">=0.7.0,<0.8.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
 provides-extras = ["dev"]

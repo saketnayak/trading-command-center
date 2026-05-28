@@ -1,6 +1,7 @@
 import React from "react";
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import type { Run, Report } from "../types";
+import { getAnalystReportContent } from "@/lib/analystReports";
 import { parseMdForPdf, type MdSegment } from "./parseMdForPdf";
 
 const HEADER_HEIGHT = 36;
@@ -401,13 +402,11 @@ export function ReportDocument({ run, report }: { run: Run; report: Report }) {
   const raw = report.raw_report;
   const hasPrices = report.suggested_entry || report.suggested_stop || report.suggested_target;
 
-  const analysts = run.analysts.filter((analyst) => {
-    const content =
-      (raw?.[`${analyst}_report`] as string | undefined) ??
-      (raw?.[analyst] as string | undefined) ?? "";
-    return content.trim().length > 0;
-  });
+  const analysts = run.analysts.filter(
+    (analyst) => getAnalystReportContent(raw, analyst).trim().length > 0,
+  );
 
+  const situationSummary = (raw?.situation_summary as string | undefined)?.trim() ?? "";
   const debateHistory = extractHistory(raw?.investment_debate_state);
   const riskHistory = extractHistory(raw?.risk_debate_state);
   const investmentPlan = raw?.investment_plan as string | undefined;
@@ -477,11 +476,16 @@ export function ReportDocument({ run, report }: { run: Run; report: Report }) {
           </View>
         )}
 
+        {situationSummary && (
+          <View break>
+            <SectionTitle title="Situation Summary" accent={ACCENT.trader} />
+            <MdContent text={situationSummary} />
+          </View>
+        )}
+
         {/* ── Per-analyst sections ── */}
         {analysts.map((analyst) => {
-          const content =
-            (raw?.[`${analyst}_report`] as string) ??
-            (raw?.[analyst] as string) ?? "";
+          const content = getAnalystReportContent(raw, analyst);
           return (
             <View key={analyst} break>
               <SectionTitle

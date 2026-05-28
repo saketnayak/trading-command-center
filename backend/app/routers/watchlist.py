@@ -13,7 +13,7 @@ from app.dependencies import get_current_user
 router = APIRouter()
 
 
-_DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals", "technical"]
+_DEFAULT_ANALYSTS = ["market", "social", "news", "fundamentals"]
 
 
 class WatchlistItemCreate(BaseModel):
@@ -98,13 +98,18 @@ async def add_watchlist_item(
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, f"{req.ticker.upper()} already in watchlist")
+    from app.utils.asset_type import is_crypto
+    from app.utils.tradingagents_analysts import normalize_analysts
+
+    ticker = req.ticker.upper()
+    analysts = normalize_analysts(req.analysts, exclude_fundamentals=is_crypto(ticker))
     item = WatchlistItem(
         watchlist_id=wl.id,
-        ticker=req.ticker.upper(),
+        ticker=ticker,
         llm_provider=req.llm_provider,
         llm_model=req.llm_model,
         depth=req.depth,
-        analysts=req.analysts,
+        analysts=analysts,
         schedule_cron=req.schedule_cron,
     )
     db.add(item)
@@ -187,9 +192,12 @@ async def trigger_watchlist_run(
     from app.models.run import Run
     from app.services.job_manager import start_run
     from app.utils.asset_type import is_crypto as _is_crypto
-    analysts = item.analysts or _DEFAULT_ANALYSTS
-    if _is_crypto(item.ticker):
-        analysts = [a for a in analysts if a != "fundamentals"]
+    from app.utils.tradingagents_analysts import normalize_analysts
+
+    analysts = normalize_analysts(
+        item.analysts or _DEFAULT_ANALYSTS,
+        exclude_fundamentals=_is_crypto(item.ticker),
+    )
     run = Run(
         created_by=user.id,
         ticker=item.ticker,

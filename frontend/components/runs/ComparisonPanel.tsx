@@ -1,5 +1,6 @@
 "use client";
 import type { RunWithReport } from "@/lib/types";
+import { getAnalystReportContent } from "@/lib/analystReports";
 
 const VERDICT_COLOR: Record<string, string> = {
   buy: "text-green-400",
@@ -65,17 +66,13 @@ function RunColumn({ side, data }: { side: "A" | "B"; data: RunWithReport }) {
         </div>
       )}
 
-      {raw && run.analysts.map((analyst) => {
-        const key = `${analyst}_report`;
-        const content = (raw[key] as string | undefined) ?? (raw[analyst] as string | undefined);
-        return (
-          <AnalystSection
-            key={analyst}
-            label={analyst.charAt(0).toUpperCase() + analyst.slice(1) + " Analyst"}
-            content={content}
-          />
-        );
-      })}
+      {raw && run.analysts.map((analyst) => (
+        <AnalystSection
+          key={analyst}
+          label={analyst.charAt(0).toUpperCase() + analyst.slice(1) + " Analyst"}
+          content={getAnalystReportContent(raw, analyst) || undefined}
+        />
+      ))}
     </div>
   );
 }

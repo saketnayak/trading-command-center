@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { Report } from "@/lib/types";
+import { getAnalystReportContent } from "@/lib/analystReports";
 import { Markdown } from "@/components/ui/Markdown";
 import { normalizeMarkdown } from "@/lib/normalizeMarkdown";
 
@@ -26,16 +27,7 @@ export function AnalystReports({ report, analysts }: Props) {
   }
 
   const activeAnalyst = activeTab || analysts[0] || "";
-  // TradingAgents writes "sentiment_report" for the social analyst; all others follow the {name}_report pattern.
-  const RAW_KEY: Record<string, string> = { social: "sentiment_report" };
-  const rawKey = RAW_KEY[activeAnalyst] ?? `${activeAnalyst}_report`;
-  const content = report.raw_report?.[rawKey] ?? report.raw_report?.[activeAnalyst];
-  const display =
-    content === undefined || content === null
-      ? null
-      : typeof content === "string"
-      ? content
-      : JSON.stringify(content, null, 2);
+  const display = getAnalystReportContent(report.raw_report, activeAnalyst) || null;
 
   return (
     <div className="bg-navy-700 border border-slate-800 rounded-lg p-6">

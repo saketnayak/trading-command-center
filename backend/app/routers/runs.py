@@ -111,14 +111,19 @@ async def create_run(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    from app.utils.asset_type import is_crypto
+    from app.utils.tradingagents_analysts import normalize_analysts
+
+    ticker = req.ticker.upper()
+    analysts = normalize_analysts(req.analysts, exclude_fundamentals=is_crypto(ticker))
     run = Run(
         created_by=user.id,
-        ticker=req.ticker.upper(),
+        ticker=ticker,
         analysis_date=req.analysis_date,
         llm_provider=req.llm_provider,
         llm_model=req.llm_model,
         depth=req.depth,
-        analysts=req.analysts,
+        analysts=analysts,
         label=req.label,
     )
     db.add(run)

@@ -9,7 +9,7 @@ class RunCreateRequest(BaseModel):
     llm_provider: str
     llm_model: str
     depth: str  # quick|standard|deep
-    analysts: list[str] = ["market", "social", "news", "fundamentals", "technical"]
+    analysts: list[str] = ["market", "social", "news", "fundamentals"]
     label: str | None = None
 
     @field_validator('depth')

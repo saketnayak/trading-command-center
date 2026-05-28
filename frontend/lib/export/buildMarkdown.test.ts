@@ -87,3 +87,29 @@ test("omits section when field is absent", () => {
   assert.ok(!md.includes("Investment Debate"));
   assert.ok(!md.includes("Investment Plan"));
 });
+
+test("maps social analyst to sentiment_report", () => {
+  const socialRun = { ...run, analysts: ["social"] } as const;
+  const socialReport = {
+    ...report,
+    raw_report: {
+      sentiment_report: "Retail sentiment is improving.",
+    },
+  };
+  const md = buildMarkdown(socialRun as never, socialReport as never);
+  assert.ok(md.includes("### Social Analyst"));
+  assert.ok(md.includes("Retail sentiment is improving."));
+});
+
+test("includes situation summary when present", () => {
+  const withSummary = {
+    ...report,
+    raw_report: {
+      ...report.raw_report,
+      situation_summary: "Condensed cross-analyst snapshot.",
+    },
+  };
+  const md = buildMarkdown(run as never, withSummary as never);
+  assert.ok(md.includes("## Situation Summary"));
+  assert.ok(md.includes("Condensed cross-analyst snapshot."));
+});
