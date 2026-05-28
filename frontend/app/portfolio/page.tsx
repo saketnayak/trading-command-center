@@ -212,7 +212,7 @@ export default function PortfolioPage() {
     queryFn: listPortfolios,
   });
 
-  const { data: current, isLoading: loadingCurrent } = useQuery({
+  const { data: current, isLoading: loadingCurrent, isFetching: fetchingCurrent, refetch: refetchCurrent } = useQuery({
     queryKey: ["portfolio-current", selectedId],
     queryFn: () => getPortfolioCurrent(selectedId!),
     enabled: selectedId != null,
@@ -308,6 +308,10 @@ export default function PortfolioPage() {
     URL.revokeObjectURL(url);
   }
 
+  const hasMissingPrices = (current?.holdings ?? []).some(
+    (h) => h.current_price == null && current?.price_unavailable_reason !== "no_finnhub_key"
+  );
+
   const TABS: Array<{ id: Tab; label: string; badge?: string; alertCount?: number }> = [
     { id: "holdings", label: "Holdings" },
     { id: "insights", label: "AI Insights", badge: "✦", alertCount: alertCount > 0 ? alertCount : undefined },
@@ -341,9 +345,12 @@ export default function PortfolioPage() {
             displayCurrency={current?.display_currency ?? "USD"}
             snapshotDate={current?.snapshot?.uploaded_at ?? null}
             broker={current?.snapshot?.broker ?? null}
+            hasMissingPrices={hasMissingPrices}
+            isRefreshing={fetchingCurrent}
             onUploadClick={() => setUploadOpen(true)}
             onExportClick={handleExport}
             onDeliveryClick={() => setDeliveryOpen(true)}
+            onRefreshClick={() => refetchCurrent()}
           />
         )}
 

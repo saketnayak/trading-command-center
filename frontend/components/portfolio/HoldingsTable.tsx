@@ -702,7 +702,10 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             <EditInput
                               value={editDraft.avg_cost}
                               onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setEditDraft((d) => ({ ...d, avg_cost: v })); }}
-                              onKeyDown={handleEditKey}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && editDraft.avg_cost.trim() === ".") return;
+                                handleEditKey(e);
+                              }}
                               placeholder="avg cost"
                               className="w-24 text-right"
                             />
@@ -893,7 +896,10 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                     <EditInput
                       value={newDraft.avg_cost}
                       onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setNewDraft((d) => ({ ...d, avg_cost: v })); }}
-                      onKeyDown={handleNewKey}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newDraft.avg_cost.trim() === ".") return;
+                        handleNewKey(e);
+                      }}
                       placeholder="avg cost"
                       className="w-24 text-right"
                     />
