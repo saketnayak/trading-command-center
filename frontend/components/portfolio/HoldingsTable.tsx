@@ -869,7 +869,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
             {/* New row draft */}
             {addingNew && (
               <tr className="border-t border-slate-700 bg-slate-800/20">
-                <td className="px-4 py-2">
+                <td className="px-3 py-2">
                   <EditInput
                     autoFocus
                     value={newDraft.ticker}
@@ -879,23 +879,23 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                     className="w-24 uppercase"
                   />
                 </td>
-                <td className="px-4 py-2 text-right">
-                  <EditInput
-                    value={newDraft.shares}
-                    onChange={(v) => setNewDraft((d) => ({ ...d, shares: v }))}
-                    onKeyDown={handleNewKey}
-                    placeholder="0"
-                    className="w-24 text-right"
-                  />
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <EditInput
-                    value={newDraft.avg_cost}
-                    onChange={(v) => setNewDraft((d) => ({ ...d, avg_cost: v }))}
-                    onKeyDown={handleNewKey}
-                    placeholder="0.00"
-                    className="w-24 text-right"
-                  />
+                <td className="px-3 py-2 text-right">
+                  <div className="flex flex-col gap-1 items-end">
+                    <EditInput
+                      value={newDraft.shares}
+                      onChange={(v) => setNewDraft((d) => ({ ...d, shares: v }))}
+                      onKeyDown={handleNewKey}
+                      placeholder="shares"
+                      className="w-24 text-right"
+                    />
+                    <EditInput
+                      value={newDraft.avg_cost}
+                      onChange={(v) => setNewDraft((d) => ({ ...d, avg_cost: v }))}
+                      onKeyDown={handleNewKey}
+                      placeholder="avg cost"
+                      className="w-24 text-right"
+                    />
+                  </div>
                 </td>
                 <td colSpan={3} />
                 <td />
