@@ -825,24 +825,26 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
                             <Link
                               href={`/runs/new?ticker=${encodeURIComponent(h.ticker)}`}
-                              className="text-xs text-slate-400 hover:text-blue-400 transition-colors"
+                              className="text-slate-500 hover:text-blue-400 transition-colors leading-none"
+                              title="Analyze"
                             >
-                              Analyze
+                              ⚡
                             </Link>
                             <WatchButton ticker={h.ticker} />
                             <button
                               onClick={() => startEdit(h)}
-                              className="text-xs text-slate-500 hover:text-slate-200 transition-colors"
+                              className="text-slate-500 hover:text-slate-200 transition-colors leading-none"
+                              title="Edit"
                             >
-                              Edit
+                              ✎
                             </button>
                             <button
                               onClick={() => deleteMutation.mutate(h.id)}
                               disabled={deleteMutation.isPending}
-                              className="text-xs text-slate-600 hover:text-red-400 transition-colors disabled:opacity-50"
+                              className="text-slate-600 hover:text-red-400 transition-colors disabled:opacity-50 leading-none"
                               title="Delete"
                             >
                               ✕
