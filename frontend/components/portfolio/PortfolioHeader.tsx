@@ -102,6 +102,7 @@ export function PortfolioHeader({
             onClick={onRefreshClick}
             disabled={isRefreshing}
             title={hasMissingPrices ? "Retry fetching missing prices" : "Refresh prices"}
+            aria-label={hasMissingPrices ? "Retry fetching missing prices" : "Refresh prices"}
             className="flex items-center gap-1 text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <span className={isRefreshing ? "animate-spin inline-block" : ""}
