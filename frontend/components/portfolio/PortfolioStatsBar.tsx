@@ -80,8 +80,14 @@ export function PortfolioStatsBar({ holdings, onAnalyzeStale, fundamentals, regi
 
       {/* Signals + PEG group */}
       <div className="flex items-center gap-4 px-4 py-3">
-        <Stat label="Buy signals" value={String(buyCount)} color="text-green-400" />
-        <Stat label="Sell signals" value={String(sellCount)} color="text-red-400" />
+        <div className="flex flex-col gap-0.5 min-w-[64px]">
+          <span className="text-slate-500 uppercase tracking-wide text-[10px] whitespace-nowrap">AI Signals</span>
+          <span className="font-semibold whitespace-nowrap">
+            <span className="text-green-400">{buyCount} buy</span>
+            <span className="text-slate-600"> · </span>
+            <span className="text-red-400">{sellCount} sell</span>
+          </span>
+        </div>
         {undervaluedByPeg > 0 && (
           <Stat label="Undervalued (PEG &lt; 1)" value={String(undervaluedByPeg)} color="text-emerald-400" />
         )}
