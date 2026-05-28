@@ -7,9 +7,12 @@ interface PortfolioHeaderProps {
   displayCurrency: string;
   snapshotDate: string | null;
   broker: string | null;
+  hasMissingPrices?: boolean;
+  isRefreshing?: boolean;
   onUploadClick: () => void;
   onExportClick: () => void;
   onDeliveryClick: () => void;
+  onRefreshClick?: () => void;
 }
 
 function fmtPct(n: number | null | undefined): string {
@@ -23,9 +26,12 @@ export function PortfolioHeader({
   displayCurrency,
   snapshotDate,
   broker,
+  hasMissingPrices,
+  isRefreshing,
   onUploadClick,
   onExportClick,
   onDeliveryClick,
+  onRefreshClick,
 }: PortfolioHeaderProps) {
   const hasData = totals !== null;
   const pnl = totals?.unrealized_pnl ?? null;
@@ -91,6 +97,21 @@ export function PortfolioHeader({
 
       {/* Action buttons */}
       <div className="flex items-center gap-1 shrink-0">
+        {onRefreshClick && (
+          <button
+            onClick={onRefreshClick}
+            disabled={isRefreshing}
+            title={hasMissingPrices ? "Retry fetching missing prices" : "Refresh prices"}
+            className="flex items-center gap-1 text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <span className={isRefreshing ? "animate-spin inline-block" : ""}
+              style={{ display: "inline-block" }}
+            >↻</span>
+            {hasMissingPrices && !isRefreshing && (
+              <span className="text-amber-400">Retry</span>
+            )}
+          </button>
+        )}
         <button
           onClick={onUploadClick}
           className="flex items-center gap-1 text-slate-400 hover:text-slate-200 text-xs px-2 py-1 rounded hover:bg-slate-700 transition-colors"
