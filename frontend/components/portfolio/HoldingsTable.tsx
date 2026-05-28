@@ -494,7 +494,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
 
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
   const hasRegime = regime && Object.keys(regime).length > 0;
-  const colSpan = 9 + (hasRegime ? 1 : 0);
+  const colSpan = 8 + (hasRegime ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -604,8 +604,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           <thead className="sticky top-0 bg-navy-700 text-slate-400 text-xs uppercase tracking-wider">
             <tr>
               <SortableHeader label="Ticker"         colKey="ticker"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="left" />
-              <SortableHeader label="Shares"         colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <SortableHeader label="Avg Cost"       colKey="avg_cost"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Position"       colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Current Price"  colKey="current_price"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Market Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Unrealized P&L" colKey="unrealized_pnl" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
