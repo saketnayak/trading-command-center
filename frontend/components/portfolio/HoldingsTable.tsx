@@ -46,7 +46,7 @@ function SortableHeader({
   const arrow = active ? (sortDir === "asc" ? " ↑" : " ↓") : "";
   return (
     <th
-      className={`px-4 py-3 text-${align} cursor-pointer select-none group whitespace-nowrap`}
+      className={`px-3 py-3 text-${align} cursor-pointer select-none group whitespace-nowrap`}
       onClick={() => onSort(colKey)}
     >
       <span className={active ? "text-blue-400" : "group-hover:text-slate-200 transition-colors"}>
@@ -608,12 +608,12 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
               <SortableHeader label="Current Price"  colKey="current_price"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Market Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Unrealized P&L" colKey="unrealized_pnl" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Last Analysis</th>
+              <th className="text-left px-3 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Last Analysis</th>
               {hasRegime && (
-                <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">AI vs Regime</th>
+                <th className="text-left px-3 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">AI vs Regime</th>
               )}
-              <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Trim</th>
-              <th className="text-left px-4 py-3">Actions</th>
+              <th className="text-left px-3 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Trim</th>
+              <th className="text-left px-3 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -641,7 +641,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                   <React.Fragment key={h.id}>
                     <tr className={`border-t border-slate-800 hover:bg-slate-800/30 ${rowTint}`}>
                       {/* Ticker + badges (stacked) + expand toggle */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-3 py-2">
                         {isEditing ? (
                           <EditInput
                             autoFocus
@@ -716,14 +716,14 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       </td>
 
                       {/* Current Price (read-only) */}
-                      <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{fmtMoney(h.current_price, displayCurrency)}</td>
+                      <td className="px-3 py-2 text-right text-slate-300 tabular-nums font-mono text-xs">{fmtMoney(h.current_price, displayCurrency)}</td>
 
                       {/* Market Value (read-only) */}
-                      <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{fmtMoney(h.market_value, displayCurrency)}</td>
+                      <td className="px-3 py-2 text-right text-slate-300 tabular-nums font-mono text-xs">{fmtMoney(h.market_value, displayCurrency)}</td>
 
                       {/* Unrealized P&L (read-only) */}
-                      <td className={`px-4 py-2 text-right tabular-nums ${pnlColor}`}>
-                        {fmtPnl(pnl, h.unrealized_pnl_pct, displayCurrency)}
+                      <td className={`px-3 py-2 text-right tabular-nums ${pnlColor}`}>
+                        <div className="font-semibold font-mono text-xs">{fmtPnl(pnl, h.unrealized_pnl_pct, displayCurrency)}</div>
                       </td>
 
                       {/* Last Analysis */}
@@ -775,7 +775,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       {hasRegime && (() => {
                         const r = regime?.[h.ticker];
                         const verdict = rowEntry?.verdict;
-                        if (!r || !verdict) return <td className="px-4 py-2 text-slate-500 text-xs">—</td>;
+                        if (!r || !verdict) return <td className="px-3 py-2 text-slate-500 text-xs">—</td>;
                         const isConflict =
                           (verdict === "buy" && r.signal < 0) ||
                           (verdict === "sell" && r.signal > 0);
@@ -805,12 +805,12 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       })()}
 
                       {/* Trim */}
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-2">
                         <TrimBadge entry={trimSignals?.[h.id]} />
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-2">
                         {isEditing ? (
                           <div className="flex items-center gap-2">
                             <button
@@ -901,7 +901,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                 </td>
                 <td colSpan={3} />
                 <td />
-                <td className="px-4 py-2">
+                <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={saveNew}
