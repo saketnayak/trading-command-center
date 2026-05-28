@@ -321,7 +321,7 @@ export default function PortfolioPage() {
   return (
     <div className="min-h-screen bg-navy-900">
       <TopNav />
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-4">
+      <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-4">
         <h1 className="text-lg font-semibold text-white">Portfolio</h1>
 
         <div className="flex items-center gap-4">
