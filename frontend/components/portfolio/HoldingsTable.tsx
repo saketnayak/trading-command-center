@@ -689,32 +689,29 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                         )}
                       </td>
 
-                      {/* Shares */}
-                      <td className="px-4 py-2 text-right tabular-nums">
+                      {/* Position: shares + avg cost stacked */}
+                      <td className="px-3 py-2 text-right tabular-nums">
                         {isEditing ? (
-                          <EditInput
-                            value={editDraft.shares}
-                            onChange={(v) => setEditDraft((d) => ({ ...d, shares: v }))}
-                            onKeyDown={handleEditKey}
-                            className="w-24 text-right"
-                          />
+                          <div className="flex flex-col gap-1 items-end">
+                            <EditInput
+                              value={editDraft.shares}
+                              onChange={(v) => setEditDraft((d) => ({ ...d, shares: v }))}
+                              onKeyDown={handleEditKey}
+                              className="w-24 text-right"
+                            />
+                            <EditInput
+                              value={editDraft.avg_cost}
+                              onChange={(v) => setEditDraft((d) => ({ ...d, avg_cost: v }))}
+                              onKeyDown={handleEditKey}
+                              placeholder="avg cost"
+                              className="w-24 text-right"
+                            />
+                          </div>
                         ) : (
-                          <span className="text-slate-300">{h.shares.toLocaleString("en-US")}</span>
-                        )}
-                      </td>
-
-                      {/* Avg Cost */}
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {isEditing ? (
-                          <EditInput
-                            value={editDraft.avg_cost}
-                            onChange={(v) => setEditDraft((d) => ({ ...d, avg_cost: v }))}
-                            onKeyDown={handleEditKey}
-                            placeholder="—"
-                            className="w-24 text-right"
-                          />
-                        ) : (
-                          <span className="text-slate-400">{fmtMoney(h.avg_cost, displayCurrency)}</span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-slate-300 font-mono text-xs">{h.shares.toLocaleString("en-US")} sh</span>
+                            <span className="text-slate-500 font-mono text-[10px]">@ {fmtMoney(h.avg_cost, displayCurrency)}</span>
+                          </div>
                         )}
                       </td>
 
