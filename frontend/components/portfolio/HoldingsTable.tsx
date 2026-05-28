@@ -845,7 +845,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                               onClick={() => deleteMutation.mutate(h.id)}
                               disabled={deleteMutation.isPending}
                               className="text-slate-600 hover:text-red-400 transition-colors disabled:opacity-50 leading-none"
-                              title="Delete"
+                              title="Delete holding"
                             >
                               ✕
                             </button>
@@ -899,8 +899,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                     />
                   </div>
                 </td>
-                <td colSpan={3} />
-                <td />
+                <td colSpan={colSpan - 3} />
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
                     <button
