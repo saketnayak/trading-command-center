@@ -46,7 +46,7 @@ function SortableHeader({
   const arrow = active ? (sortDir === "asc" ? " ↑" : " ↓") : "";
   return (
     <th
-      className={`px-4 py-3 text-${align} cursor-pointer select-none group whitespace-nowrap`}
+      className={`px-3 py-3 text-${align} cursor-pointer select-none group whitespace-nowrap`}
       onClick={() => onSort(colKey)}
     >
       <span className={active ? "text-blue-400" : "group-hover:text-slate-200 transition-colors"}>
@@ -494,7 +494,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
 
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
   const hasRegime = regime && Object.keys(regime).length > 0;
-  const colSpan = 9 + (hasRegime ? 1 : 0);
+  const colSpan = 8 + (hasRegime ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -604,17 +604,16 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           <thead className="sticky top-0 bg-navy-700 text-slate-400 text-xs uppercase tracking-wider">
             <tr>
               <SortableHeader label="Ticker"         colKey="ticker"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="left" />
-              <SortableHeader label="Shares"         colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <SortableHeader label="Avg Cost"       colKey="avg_cost"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Position"       colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Current Price"  colKey="current_price"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Market Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Unrealized P&L" colKey="unrealized_pnl" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Last Analysis</th>
+              <th className="text-left px-3 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Last Analysis</th>
               {hasRegime && (
-                <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">AI vs Regime</th>
+                <th className="text-left px-3 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">AI vs Regime</th>
               )}
-              <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Trim</th>
-              <th className="text-left px-4 py-3">Actions</th>
+              <th className="text-left px-3 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Trim</th>
+              <th className="text-left px-3 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -642,7 +641,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                   <React.Fragment key={h.id}>
                     <tr className={`border-t border-slate-800 hover:bg-slate-800/30 ${rowTint}`}>
                       {/* Ticker + badges (stacked) + expand toggle */}
-                      <td className="px-4 py-2.5">
+                      <td className="px-3 py-2">
                         {isEditing ? (
                           <EditInput
                             autoFocus
@@ -690,44 +689,41 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                         )}
                       </td>
 
-                      {/* Shares */}
-                      <td className="px-4 py-2 text-right tabular-nums">
+                      {/* Position: shares + avg cost stacked */}
+                      <td className="px-3 py-2 text-right tabular-nums">
                         {isEditing ? (
-                          <EditInput
-                            value={editDraft.shares}
-                            onChange={(v) => setEditDraft((d) => ({ ...d, shares: v }))}
-                            onKeyDown={handleEditKey}
-                            className="w-24 text-right"
-                          />
+                          <div className="flex flex-col gap-1 items-end">
+                            <EditInput
+                              value={editDraft.shares}
+                              onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setEditDraft((d) => ({ ...d, shares: v })); }}
+                              onKeyDown={handleEditKey}
+                              className="w-24 text-right"
+                            />
+                            <EditInput
+                              value={editDraft.avg_cost}
+                              onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setEditDraft((d) => ({ ...d, avg_cost: v })); }}
+                              onKeyDown={handleEditKey}
+                              placeholder="avg cost"
+                              className="w-24 text-right"
+                            />
+                          </div>
                         ) : (
-                          <span className="text-slate-300">{h.shares.toLocaleString("en-US")}</span>
-                        )}
-                      </td>
-
-                      {/* Avg Cost */}
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {isEditing ? (
-                          <EditInput
-                            value={editDraft.avg_cost}
-                            onChange={(v) => setEditDraft((d) => ({ ...d, avg_cost: v }))}
-                            onKeyDown={handleEditKey}
-                            placeholder="—"
-                            className="w-24 text-right"
-                          />
-                        ) : (
-                          <span className="text-slate-400">{fmtMoney(h.avg_cost, displayCurrency)}</span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-slate-300 font-mono text-xs">{h.shares.toLocaleString("en-US")} sh</span>
+                            <span className="text-slate-500 font-mono text-[10px]">@ {fmtMoney(h.avg_cost, displayCurrency)}</span>
+                          </div>
                         )}
                       </td>
 
                       {/* Current Price (read-only) */}
-                      <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{fmtMoney(h.current_price, displayCurrency)}</td>
+                      <td className="px-3 py-2 text-right text-slate-300 tabular-nums font-mono text-xs">{fmtMoney(h.current_price, displayCurrency)}</td>
 
                       {/* Market Value (read-only) */}
-                      <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{fmtMoney(h.market_value, displayCurrency)}</td>
+                      <td className="px-3 py-2 text-right text-slate-300 tabular-nums font-mono text-xs">{fmtMoney(h.market_value, displayCurrency)}</td>
 
                       {/* Unrealized P&L (read-only) */}
-                      <td className={`px-4 py-2 text-right tabular-nums ${pnlColor}`}>
-                        {fmtPnl(pnl, h.unrealized_pnl_pct, displayCurrency)}
+                      <td className={`px-3 py-2 text-right tabular-nums ${pnlColor}`}>
+                        <div className="font-semibold font-mono text-xs">{fmtPnl(pnl, h.unrealized_pnl_pct, displayCurrency)}</div>
                       </td>
 
                       {/* Last Analysis */}
@@ -779,7 +775,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       {hasRegime && (() => {
                         const r = regime?.[h.ticker];
                         const verdict = rowEntry?.verdict;
-                        if (!r || !verdict) return <td className="px-4 py-2 text-slate-500 text-xs">—</td>;
+                        if (!r || !verdict) return <td className="px-3 py-2 text-slate-500 text-xs">—</td>;
                         const isConflict =
                           (verdict === "buy" && r.signal < 0) ||
                           (verdict === "sell" && r.signal > 0);
@@ -809,12 +805,12 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       })()}
 
                       {/* Trim */}
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-2">
                         <TrimBadge entry={trimSignals?.[h.id]} />
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-2">
                         {isEditing ? (
                           <div className="flex items-center gap-2">
                             <button
@@ -829,25 +825,27 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-2 whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
                             <Link
                               href={`/runs/new?ticker=${encodeURIComponent(h.ticker)}`}
-                              className="text-xs text-slate-400 hover:text-blue-400 transition-colors"
+                              className="text-slate-500 hover:text-blue-400 transition-colors leading-none"
+                              title="Analyze"
                             >
-                              Analyze
+                              ⚡
                             </Link>
                             <WatchButton ticker={h.ticker} />
                             <button
                               onClick={() => startEdit(h)}
-                              className="text-xs text-slate-500 hover:text-slate-200 transition-colors"
+                              className="text-slate-500 hover:text-slate-200 transition-colors leading-none"
+                              title="Edit"
                             >
-                              Edit
+                              ✎
                             </button>
                             <button
                               onClick={() => deleteMutation.mutate(h.id)}
                               disabled={deleteMutation.isPending}
-                              className="text-xs text-slate-600 hover:text-red-400 transition-colors disabled:opacity-50"
-                              title="Delete"
+                              className="text-slate-600 hover:text-red-400 transition-colors disabled:opacity-50 leading-none"
+                              title="Delete holding"
                             >
                               ✕
                             </button>
@@ -873,7 +871,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
             {/* New row draft */}
             {addingNew && (
               <tr className="border-t border-slate-700 bg-slate-800/20">
-                <td className="px-4 py-2">
+                <td className="px-3 py-2">
                   <EditInput
                     autoFocus
                     value={newDraft.ticker}
@@ -883,27 +881,26 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                     className="w-24 uppercase"
                   />
                 </td>
-                <td className="px-4 py-2 text-right">
-                  <EditInput
-                    value={newDraft.shares}
-                    onChange={(v) => setNewDraft((d) => ({ ...d, shares: v }))}
-                    onKeyDown={handleNewKey}
-                    placeholder="0"
-                    className="w-24 text-right"
-                  />
+                <td className="px-3 py-2 text-right">
+                  <div className="flex flex-col gap-1 items-end">
+                    <EditInput
+                      value={newDraft.shares}
+                      onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setNewDraft((d) => ({ ...d, shares: v })); }}
+                      onKeyDown={handleNewKey}
+                      placeholder="shares"
+                      className="w-24 text-right"
+                    />
+                    <EditInput
+                      value={newDraft.avg_cost}
+                      onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setNewDraft((d) => ({ ...d, avg_cost: v })); }}
+                      onKeyDown={handleNewKey}
+                      placeholder="avg cost"
+                      className="w-24 text-right"
+                    />
+                  </div>
                 </td>
-                <td className="px-4 py-2 text-right">
-                  <EditInput
-                    value={newDraft.avg_cost}
-                    onChange={(v) => setNewDraft((d) => ({ ...d, avg_cost: v }))}
-                    onKeyDown={handleNewKey}
-                    placeholder="0.00"
-                    className="w-24 text-right"
-                  />
-                </td>
-                <td colSpan={3} />
-                <td />
-                <td className="px-4 py-2">
+                <td colSpan={colSpan - 3} />
+                <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={saveNew}
