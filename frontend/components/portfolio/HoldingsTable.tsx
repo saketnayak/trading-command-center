@@ -695,13 +695,13 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                           <div className="flex flex-col gap-1 items-end">
                             <EditInput
                               value={editDraft.shares}
-                              onChange={(v) => setEditDraft((d) => ({ ...d, shares: v }))}
+                              onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setEditDraft((d) => ({ ...d, shares: v })); }}
                               onKeyDown={handleEditKey}
                               className="w-24 text-right"
                             />
                             <EditInput
                               value={editDraft.avg_cost}
-                              onChange={(v) => setEditDraft((d) => ({ ...d, avg_cost: v }))}
+                              onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setEditDraft((d) => ({ ...d, avg_cost: v })); }}
                               onKeyDown={handleEditKey}
                               placeholder="avg cost"
                               className="w-24 text-right"
@@ -885,14 +885,14 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                   <div className="flex flex-col gap-1 items-end">
                     <EditInput
                       value={newDraft.shares}
-                      onChange={(v) => setNewDraft((d) => ({ ...d, shares: v }))}
+                      onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setNewDraft((d) => ({ ...d, shares: v })); }}
                       onKeyDown={handleNewKey}
                       placeholder="shares"
                       className="w-24 text-right"
                     />
                     <EditInput
                       value={newDraft.avg_cost}
-                      onChange={(v) => setNewDraft((d) => ({ ...d, avg_cost: v }))}
+                      onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setNewDraft((d) => ({ ...d, avg_cost: v })); }}
                       onKeyDown={handleNewKey}
                       placeholder="avg cost"
                       className="w-24 text-right"
