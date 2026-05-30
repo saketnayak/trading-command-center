@@ -1,8 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Check, LoaderCircle, Star, X } from "lucide-react";
 import { addWatchlistItem, getWatchlist, getProviderModels } from "@/lib/api";
 import { isCrypto } from "@/lib/asset";
+import { IconButton } from "@/components/ui/IconButton";
 
 interface WatchDraft {
   llm_provider: string;
@@ -15,7 +17,7 @@ const DEPTHS = ["quick", "standard", "deep"] as const;
 
 export type { WatchDraft };
 
-export function WatchButton({ ticker }: { ticker: string }) {
+export function WatchButton({ ticker, compact = false }: { ticker: string; compact?: boolean }) {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<WatchDraft>({ llm_provider: "openai", llm_model: "", depth: "standard" });
@@ -56,6 +58,18 @@ export function WatchButton({ ticker }: { ticker: string }) {
   });
 
   if (watched || success) {
+    if (compact) {
+      return (
+        <span
+          className="inline-flex h-7 w-7 items-center justify-center rounded-sm text-yellow-400"
+          title="Already on watchlist"
+          aria-label={`${ticker} is already on watchlist`}
+        >
+          <Star className="h-4 w-4 fill-current" aria-hidden="true" />
+        </span>
+      );
+    }
+
     return (
       <span className="text-xs text-yellow-400 cursor-default" title="Already on watchlist">
         ★ Watching
@@ -64,6 +78,18 @@ export function WatchButton({ ticker }: { ticker: string }) {
   }
 
   if (!open) {
+    if (compact) {
+      return (
+        <IconButton
+          icon={Star}
+          label={`Add ${ticker} to watchlist`}
+          title="Add to watchlist"
+          tone="warning"
+          onClick={() => setOpen(true)}
+        />
+      );
+    }
+
     return (
       <button
         onClick={() => setOpen(true)}
@@ -103,11 +129,24 @@ export function WatchButton({ ticker }: { ticker: string }) {
       <button
         onClick={() => addMutation.mutate()}
         disabled={addMutation.isPending}
-        className="text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
+        aria-label={`Add ${ticker} to watchlist`}
+        title="Add"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-green-400 hover:text-green-300 hover:bg-green-950/30 disabled:opacity-50"
       >
-        {addMutation.isPending ? "Adding…" : "Add"}
+        {addMutation.isPending ? (
+          <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+        ) : (
+          <Check className="h-3.5 w-3.5" aria-hidden="true" />
+        )}
       </button>
-      <button onClick={() => setOpen(false)} className="text-xs text-muted hover:text-fg-secondary">✕</button>
+      <button
+        onClick={() => setOpen(false)}
+        aria-label="Cancel adding to watchlist"
+        title="Cancel"
+        className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted hover:text-fg-secondary hover:bg-muted-surface"
+      >
+        <X className="h-3.5 w-3.5" aria-hidden="true" />
+      </button>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Pause, Play, Trash2 } from "lucide-react";
 import {
   getWatchlist,
   addWatchlistItem,
@@ -11,6 +12,7 @@ import {
   getProviderModels,
 } from "@/lib/api";
 import type { WatchlistItem, AddWatchlistItemRequest } from "@/lib/types";
+import { IconButton } from "@/components/ui/IconButton";
 
 import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
 
@@ -353,12 +355,28 @@ function ItemRow({ item, onRemove, onToggle, onRunNow }: {
         </span>
       </td>
       <td className="px-4 py-3">
-        <div className="flex gap-2">
-          <button onClick={onRunNow} className="text-xs text-blue-400 hover:text-blue-300 px-2 py-1 border border-blue-800 rounded-sm">Run now</button>
-          <button onClick={onToggle} className="text-xs text-muted hover:text-fg-secondary px-2 py-1 border border-input-border rounded-sm">
-            {item.enabled ? "Pause" : "Resume"}
-          </button>
-          <button onClick={onRemove} className="text-xs text-red-400 hover:text-red-300 px-2 py-1 border border-red-900 rounded-sm">Remove</button>
+        <div className="flex gap-1.5">
+          <IconButton
+            icon={Play}
+            label={`Run ${item.ticker} now`}
+            title="Run now"
+            tone="primary"
+            onClick={onRunNow}
+          />
+          <IconButton
+            icon={item.enabled ? Pause : Play}
+            label={item.enabled ? `Pause ${item.ticker} schedule` : `Resume ${item.ticker} schedule`}
+            title={item.enabled ? "Pause" : "Resume"}
+            tone="default"
+            onClick={onToggle}
+          />
+          <IconButton
+            icon={Trash2}
+            label={`Remove ${item.ticker} from watchlist`}
+            title="Remove"
+            tone="danger"
+            onClick={onRemove}
+          />
         </div>
       </td>
     </tr>

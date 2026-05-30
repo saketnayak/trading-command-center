@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
-import Link from "next/link";
 import { useMutation } from "@tanstack/react-query";
+import { Archive, ArchiveRestore, Check, Eye, LoaderCircle, RefreshCcw, Trash2, X } from "lucide-react";
 import { archiveRun, deleteRun } from "@/lib/api";
+import { IconButton, IconLink } from "@/components/ui/IconButton";
 import type { Run } from "@/lib/types";
 
 function rerunUrl(run: Run): string {
@@ -130,46 +131,58 @@ function RunRow({
       </td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">{formatDuration(run.started_at, run.completed_at)}</td>
       <td className="px-4 py-3">
-        <div className="flex items-center gap-3">
-          <Link href={`/runs/${run.id}`} className="text-blue-400 hover:underline text-xs">
-            View
-          </Link>
-          <Link href={rerunUrl(run)} className="text-muted hover:text-blue-400 text-xs">
-            Re-run
-          </Link>
-          <button
+        <div className="flex items-center gap-1.5">
+          <IconLink
+            href={`/runs/${run.id}`}
+            icon={Eye}
+            label={`View ${run.ticker} run`}
+            title="View"
+            tone="primary"
+          />
+          <IconLink
+            href={rerunUrl(run)}
+            icon={RefreshCcw}
+            label={`Re-run ${run.ticker} analysis`}
+            title="Re-run"
+            tone="primary"
+          />
+          <IconButton
+            icon={archiveMutation.isPending ? LoaderCircle : archived ? ArchiveRestore : Archive}
+            label={archived ? `Unarchive ${run.ticker} run` : `Archive ${run.ticker} run`}
+            title={isRunning ? "Cannot archive a running run" : archived ? "Unarchive" : "Archive"}
+            tone="default"
             onClick={() => archiveMutation.mutate()}
             disabled={archiveMutation.isPending || isRunning}
-            className="text-xs text-muted hover:text-fg disabled:opacity-40 disabled:cursor-not-allowed"
-            title={isRunning ? "Cannot archive a running run" : archived ? "Unarchive" : "Archive"}
-          >
-            {archiveMutation.isPending ? "…" : archived ? "Unarchive" : "Archive"}
-          </button>
+            iconClassName={archiveMutation.isPending ? "animate-spin" : undefined}
+          />
           {confirmDelete ? (
             <span className="flex items-center gap-1">
-              <button
+              <IconButton
+                icon={deleteMutation.isPending ? LoaderCircle : Check}
+                label={`Confirm deleting ${run.ticker} run`}
+                title="Confirm delete"
+                tone="danger"
                 onClick={() => deleteMutation.mutate()}
                 disabled={deleteMutation.isPending}
-                className="text-xs text-red-400 hover:text-red-300 disabled:opacity-40"
-              >
-                {deleteMutation.isPending ? "…" : "Confirm"}
-              </button>
-              <button
+                iconClassName={deleteMutation.isPending ? "animate-spin" : undefined}
+              />
+              <IconButton
+                icon={X}
+                label={`Cancel deleting ${run.ticker} run`}
+                title="Cancel"
+                tone="default"
                 onClick={() => setConfirmDelete(false)}
-                className="text-xs text-muted hover:text-fg-secondary"
-              >
-                Cancel
-              </button>
+              />
             </span>
           ) : (
-            <button
+            <IconButton
+              icon={Trash2}
+              label={`Delete ${run.ticker} run`}
+              title={isRunning ? "Abort the run before deleting" : "Delete permanently"}
+              tone="danger"
               onClick={() => setConfirmDelete(true)}
               disabled={isRunning}
-              className="text-xs text-muted hover:text-red-400 disabled:opacity-40 disabled:cursor-not-allowed"
-              title={isRunning ? "Abort the run before deleting" : "Delete permanently"}
-            >
-              Delete
-            </button>
+            />
           )}
         </div>
       </td>

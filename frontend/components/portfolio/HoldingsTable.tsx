@@ -2,9 +2,11 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { Check, LoaderCircle, Pencil, Play, Plus, Trash2, X } from "lucide-react";
 import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type LatestRunEntry } from "@/lib/api";
 import { fmtMoney, fmtPnl } from "@/lib/currency";
 import { WatchButton } from "@/components/portfolio/WatchButton";
+import { IconButton, IconLink } from "@/components/ui/IconButton";
 import type { PortfolioHolding, FundamentalsData, RegimeData, TrimSignalEntry } from "@/lib/types";
 
 interface HoldingsTableProps {
@@ -817,43 +819,50 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       {/* Actions */}
                       <td className="px-3 py-2">
                         {isEditing ? (
-                          <div className="flex items-center gap-2">
-                            <button
+                          <div className="flex items-center gap-1.5">
+                            <IconButton
+                              icon={updateMutation.isPending ? LoaderCircle : Check}
+                              label={`Save ${h.ticker} holding`}
+                              title="Save"
+                              tone="success"
                               onClick={saveEdit}
                               disabled={updateMutation.isPending}
-                              className="text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
-                            >
-                              {updateMutation.isPending ? "Saving…" : "Save"}
-                            </button>
-                            <button onClick={cancelEdit} className="text-xs text-muted hover:text-fg-secondary">
-                              Cancel
-                            </button>
+                              iconClassName={updateMutation.isPending ? "animate-spin" : undefined}
+                            />
+                            <IconButton
+                              icon={X}
+                              label={`Cancel editing ${h.ticker} holding`}
+                              title="Cancel"
+                              tone="default"
+                              onClick={cancelEdit}
+                            />
                           </div>
                         ) : (
                           <div className="flex items-center gap-1.5">
-                            <Link
+                            <IconLink
                               href={`/runs/new?ticker=${encodeURIComponent(h.ticker)}`}
-                              className="text-muted hover:text-blue-400 transition-colors leading-none"
+                              icon={Play}
+                              label={`Analyze ${h.ticker}`}
                               title="Analyze"
-                            >
-                              ⚡
-                            </Link>
-                            <WatchButton ticker={h.ticker} />
-                            <button
-                              onClick={() => startEdit(h)}
-                              className="text-muted hover:text-fg transition-colors leading-none"
+                              tone="primary"
+                            />
+                            <WatchButton ticker={h.ticker} compact />
+                            <IconButton
+                              icon={Pencil}
+                              label={`Edit ${h.ticker} holding`}
                               title="Edit"
-                            >
-                              ✎
-                            </button>
-                            <button
+                              tone="default"
+                              onClick={() => startEdit(h)}
+                            />
+                            <IconButton
+                              icon={deleteMutation.isPending ? LoaderCircle : Trash2}
+                              label={`Delete ${h.ticker} holding`}
+                              title="Delete holding"
+                              tone="danger"
                               onClick={() => deleteMutation.mutate(h.id)}
                               disabled={deleteMutation.isPending}
-                              className="text-subtle hover:text-red-400 transition-colors disabled:opacity-50 leading-none"
-                              title="Delete holding"
-                            >
-                              ✕
-                            </button>
+                              iconClassName={deleteMutation.isPending ? "animate-spin" : undefined}
+                            />
                           </div>
                         )}
                       </td>
@@ -909,20 +918,23 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                 </td>
                 <td colSpan={colSpan - 3} />
                 <td className="px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <button
+                  <div className="flex items-center gap-1.5">
+                    <IconButton
+                      icon={addMutation.isPending ? LoaderCircle : Check}
+                      label="Add holding"
+                      title="Add"
+                      tone="success"
                       onClick={saveNew}
                       disabled={addMutation.isPending}
-                      className="text-xs text-green-400 hover:text-green-300 disabled:opacity-50"
-                    >
-                      {addMutation.isPending ? "Adding…" : "Add"}
-                    </button>
-                    <button
+                      iconClassName={addMutation.isPending ? "animate-spin" : undefined}
+                    />
+                    <IconButton
+                      icon={X}
+                      label="Cancel adding holding"
+                      title="Cancel"
+                      tone="default"
                       onClick={() => { setAddingNew(false); setNewDraft({ ticker: "", shares: "", avg_cost: "" }); }}
-                      className="text-xs text-muted hover:text-fg-secondary"
-                    >
-                      Cancel
-                    </button>
+                    />
                   </div>
                 </td>
               </tr>
@@ -934,9 +946,10 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
       {!addingNew && (
         <button
           onClick={() => setAddingNew(true)}
-          className="text-xs text-muted hover:text-fg-secondary border border-dashed border-input-border hover:border-border-strong rounded-sm px-3 py-1.5 transition-colors"
+          className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg-secondary border border-dashed border-input-border hover:border-border-strong rounded-sm px-3 py-1.5 transition-colors"
         >
-          + Add row
+          <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+          Add row
         </button>
       )}
     </div>
