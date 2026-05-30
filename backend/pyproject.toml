@@ -55,5 +55,7 @@ markers = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "pytest-asyncio>=0.23",
+    "pytest-httpx>=0.30",
     "ruff>=0.15.13",
 ]

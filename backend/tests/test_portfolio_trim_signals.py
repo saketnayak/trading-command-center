@@ -12,12 +12,16 @@ from app.database import AsyncSessionLocal
 from app.models.user import User
 from app.models.portfolio import Portfolio, PortfolioSnapshot, PortfolioHolding
 from app.models.run import Run, RunStatus, RunVerdict
+from app.services.auth import create_invite_token
 
 
-async def _register_and_token(client: AsyncClient, email: str) -> tuple[str, str]:
+async def _register_and_token(client: AsyncClient, email: str, invite_token: str | None = None) -> tuple[str, str]:
+    payload = {"email": email, "password": "pass1234", "name": "Test"}
+    if invite_token:
+        payload["invite_token"] = invite_token
     r = await client.post(
         "/auth/register",
-        json={"email": email, "password": "pass1234", "name": "Test"},
+        json=payload,
     )
     assert r.status_code == 200, r.text
     body = r.json()
@@ -191,7 +195,11 @@ async def test_trim_signals_returns_strong_trim_when_verdict_sell():
 async def test_trim_signals_unauthorized_for_other_user_portfolio():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         owner_token, _ = await _register_and_token(c, "owner@test.com")
-        intruder_token, _ = await _register_and_token(c, "intruder@test.com")
+        intruder_token, _ = await _register_and_token(
+            c,
+            "intruder@test.com",
+            invite_token=create_invite_token("intruder@test.com"),
+        )
         portfolio_id = await _create_portfolio_with_holding(c, owner_token, ticker="AMD")
 
         r = await c.get(

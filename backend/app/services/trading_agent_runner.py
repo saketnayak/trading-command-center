@@ -4,7 +4,6 @@ import re
 from queue import Queue as SyncQueue
 from datetime import datetime, timezone
 from langchain_core.callbacks import BaseCallbackHandler
-from decimal import Decimal
 from typing import Optional
 
 # Serializes env-var patching so concurrent local-inference runs don't race on os.environ.
@@ -36,9 +35,6 @@ _DEPTH_PARAMS: dict[str, dict] = {
     "deep":     {"max_debate_rounds": 3, "max_risk_discuss_rounds": 3, "max_recur_limit": 200},
 }
 
-def _to_decimal(value: str) -> Decimal:
-    return Decimal(value.replace(",", ""))
-        
 class _SyncEmitter(BaseCallbackHandler):
     """Sync LangChain callback that enqueues events into a thread-safe queue."""
 
@@ -305,11 +301,11 @@ def _extract_risk_assessment(state) -> str:
 
 def _extract_prices(text: str) -> tuple[str | None, str | None, str | None]:
     """Regex-parse entry, stop-loss, and price target from free-form LLM text."""
-    def _find(patterns: list[str]) -> Optional[Decimal]:
+    def _find(patterns: list[str]) -> Optional[str]:
         for pat in patterns:
             m = re.search(pat, text, re.IGNORECASE)
             if m:
-                return _to_decimal(m.group(1))
+                return m.group(1)
         return None
 
     number = r"([\d,]+(?:\.\d+)?)"
@@ -345,7 +341,7 @@ def _extract_prices(text: str) -> tuple[str | None, str | None, str | None]:
         rf"(?:first\s+)?(?:profit\s+)?target\s*:\s*\$?{number}",
         rf"(?:exit|close)\s+(?:at|near|around)\s*\$?{number}",
     ])
-    return str(entry), str(stop), str(target)
+    return entry, stop, target
 
 
 def _parse_verdict(signal: str) -> "RunVerdict":
