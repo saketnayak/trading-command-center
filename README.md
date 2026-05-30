@@ -15,9 +15,17 @@
 
 ## See it in action
 
+*Portfolio command center — live prices, unrealized P&L, per-holding market regime, and sell-side trim signals.*
 ![Portfolio dashboard](docs/screenshots/portfolio.png)
+
+*AI morning briefing — health score, action items, and risk alerts generated for your whole portfolio.*
 ![AI morning briefing](docs/screenshots/briefing.png)
+
+*Live agent analysis — watch the analyst team, bull/bear researchers, and risk desk work in real time.*
 ![Live agent analysis](docs/screenshots/analysis.png)
+
+*Final verdict — BUY / SELL / HOLD with the reasoning behind every call.*
+![Analysis verdict](docs/screenshots/verdict.png)
 
 ---
 
@@ -85,6 +93,7 @@ Import your holdings from any broker CSV or add tickers manually. Once a [free F
 | **Key fundamentals** | Expandable row per holding: P/E, Beta, 52-week range, dividend yield, EPS (TTM), market cap |
 | **News feed** | Merged, time-sorted company news for all holdings; per-ticker color badges |
 | **Market regime detection** | Per-holding Markov regime badge (Bull / Sideways / Bear) with directional signal and Sharpe ratio; portfolio-wide regime distribution in the stats bar; filter holdings by regime; expandable 3×3 transition matrix |
+| **Sell-side signals** | Holdings are flagged as trim candidates and surfaced as a "Sell Candidates" banner, combining valuation, regime, and the latest AI verdict |
 | **Analyze all stale** | One click to batch-queue AI analysis for every holding not reviewed in the last 7 days |
 | **Multi-currency** | Display in USD, EUR, GBP, AUD, JPY, CAD, CHF, CNY, INR, or SGD with live ECB rates |
 | **CSV export** | Download current holdings with live prices and P&L included |
