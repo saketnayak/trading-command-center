@@ -183,4 +183,36 @@ if "indicators.extend" not in content:
 else:
     print("  · technical_indicators_tools.py already patched")
 
+# ── 8. Patch dataflows/yfinance.py — normalize date column after reset_index ──
+# yfinance 1.4+ returns an unnamed DatetimeIndex; after reset_index() the column
+# becomes "index" instead of "Date", causing KeyError: 'Date' downstream.
+yf_path = os.path.join(pkg, "dataflows/yfinance.py")
+with open(yf_path) as f:
+    content = f.read()
+
+old_reset = (
+    "            candidate_data = candidate_data.reset_index()\n"
+    "            candidate_data.to_csv(data_file, index=False)"
+)
+new_reset = (
+    "            candidate_data = candidate_data.reset_index()\n"
+    "            # Normalize date column across yfinance versions (1.4+ gives unnamed index)\n"
+    "            for _col in (\"Datetime\", \"index\"):\n"
+    "                if _col in candidate_data.columns and \"Date\" not in candidate_data.columns:\n"
+    "                    candidate_data = candidate_data.rename(columns={_col: \"Date\"})\n"
+    "                    break\n"
+    "            candidate_data.to_csv(data_file, index=False)"
+)
+
+if "Normalize date column across yfinance versions" not in content:
+    new_content = content.replace(old_reset, new_reset)
+    if new_content == content:
+        print("  ✗ WARNING: dataflows/yfinance.py date-column patch did not match — check library version")
+    else:
+        with open(yf_path, "w") as f:
+            f.write(new_content)
+        print("  ✓ Patched dataflows/yfinance.py — normalize date column after reset_index")
+else:
+    print("  · dataflows/yfinance.py date-column patch already applied")
+
 print("All patches applied successfully.")

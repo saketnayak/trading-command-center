@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     smtp_from: str = "noreply@agentfloor.local"
     frontend_url: str = "http://localhost:3000"
     run_timeout_seconds: int = 3600
+    trim_gain_threshold_pct: float = 30.0
+    trim_peg_threshold: float = 3.0
+    trim_concentration_threshold_pct: float = 15.0
+    trim_regime_signal_weak_threshold: float = -0.1
 
     @model_validator(mode="after")
     def validate_secrets(self) -> "Settings":

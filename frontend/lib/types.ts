@@ -175,6 +175,28 @@ export interface PortfolioHoldingLastRun {
   suggested_entry: string | null;
   suggested_stop: string | null;
   suggested_target: string | null;
+  previous_run_id?: string | null;
+  previous_verdict?: string | null;
+  previous_analysis_date?: string | null;
+}
+
+export type TrimLevel = "none" | "watch" | "consider_trim" | "strong_trim";
+
+export interface TrimSignalEntry {
+  holding_id: string;
+  ticker: string;
+  level: TrimLevel;
+  score: number;
+  reasons: string[];
+  unrealized_pnl_pct: number | null;
+  current_verdict: string | null;
+  regime: "Bull" | "Sideways" | "Bear" | null;
+  regime_signal: number | null;
+}
+
+export interface TrimSignalsResponse {
+  entries: TrimSignalEntry[];
+  computed_at: string;
 }
 
 export interface TickerChart {
@@ -304,6 +326,8 @@ export interface FundamentalsData {
   dividend_yield?: number | null;
   eps_ttm?: number | null;
   market_cap?: number | null;
+  peg_ratio?: number | null;
+  eps_growth_3y?: number | null;
   // Crypto fields
   volume_24h?: number | null;
   circulating_supply?: number | null;
@@ -311,6 +335,33 @@ export interface FundamentalsData {
   price_change_24h_pct?: number | null;
   price_change_7d_pct?: number | null;
   category?: string | null;
+}
+
+export interface RegimeData {
+  ticker: string;
+  current_regime: "Bull" | "Sideways" | "Bear";
+  signal: number;           // -1.0 to +1.0
+  persistence: number;      // 0.0 to 1.0
+  next_state_probs: {
+    bear: number;
+    sideways: number;
+    bull: number;
+  };
+  stationary: {
+    bear: number;
+    sideways: number;
+    bull: number;
+  };
+  transition_matrix: number[][];   // 3x3, row order: Bear / Sideways / Bull
+  walk_forward: {
+    sharpe: number | null;
+    max_drawdown: number | null;
+  };
+  hmm: {
+    available: boolean;
+    regimes?: Array<{ label: string; mean_return: number }>;
+  } | null;
+  computed_at: string;
 }
 
 export interface NewsArticle {

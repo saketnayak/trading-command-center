@@ -22,9 +22,15 @@ dependencies = [
     "apscheduler>=4.0.0a5",
     # in version 0.6.0 the function extract_trade_signalhas changed
     "tradingagents>=0.3.2,<0.6.0",
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "yfinance>=1.3.0",  # tradingagents requires >=1.3.0; older versions name the index 'Datetime' causing KeyError: 'Date' in get_stock_stats_indicators_window
 ]
 
 [project.optional-dependencies]
+markov-hmm = [
+    "hmmlearn>=0.3",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -42,6 +48,9 @@ packages = ["app"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
+markers = [
+    "unit: mark test as a unit test (no database)",
+]
 
 [dependency-groups]
 dev = [
