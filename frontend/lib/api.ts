@@ -1,12 +1,12 @@
-import { getSession } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest } from "./types";
+import { getSession, signOut } from "next-auth/react";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, TrimSignalsResponse } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Response> {
   const session = await getSession();
   const token = (session as { accessToken?: string })?.accessToken;
-  return fetch(`${BASE}${path}`, {
+  const r = await fetch(`${BASE}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -14,6 +14,11 @@ async function fetchWithAuth(path: string, init: RequestInit = {}): Promise<Resp
       ...(init.headers ?? {}),
     },
   });
+  if (r.status === 401) {
+    // Token expired or invalid — clear the stale session and send to login
+    signOut({ callbackUrl: "/login" });
+  }
+  return r;
 }
 
 export async function getRuns(params?: { ticker?: string; status?: string; verdict?: string; archived?: boolean; date_from?: string; date_to?: string; limit?: number; offset?: number }): Promise<Run[]> {
@@ -381,6 +386,31 @@ export async function getPortfolioFundamentals(portfolioId: string): Promise<Rec
   const data = await r.json();
   if (data.price_unavailable_reason === "no_finnhub_key") throw new Error("no_finnhub_key");
   return data.data ?? {};
+}
+
+export async function getPortfolioRegime(
+  portfolioId: string
+): Promise<Record<string, RegimeData>> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/regime`);
+  if (!r.ok) return {};
+  const data = await r.json();
+  return data ?? {};
+}
+
+export async function getTickerRegime(ticker: string): Promise<RegimeData | null> {
+  const r = await fetchWithAuth(`/regime/${ticker}`);
+  if (!r.ok) return null;
+  const data = await r.json();
+  return data ?? null;
+}
+
+export async function getPortfolioTrimSignals(
+  portfolioId: string
+): Promise<TrimSignalsResponse> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/trim-signals`);
+  if (!r.ok) return { entries: [], computed_at: "" };
+  const data = await r.json();
+  return data ?? { entries: [], computed_at: "" };
 }
 
 export async function getPortfolioNews(portfolioId: string, days = 7): Promise<NewsArticle[]> {

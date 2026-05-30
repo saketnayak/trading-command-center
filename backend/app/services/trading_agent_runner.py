@@ -42,7 +42,6 @@ _DEPTH_PARAMS: dict[str, dict] = {
     "deep": {"max_debate_rounds": 3, "max_risk_discuss_rounds": 3, "max_recur_limit": 200},
 }
 
-
 class _SyncEmitter(BaseCallbackHandler):
     """Sync LangChain callback that enqueues events into a thread-safe queue."""
 

@@ -20,6 +20,7 @@
     "react-dom": "^19",
     "react-dropzone": "^15.0.0",
     "react-markdown": "^10.1.0",
+    "react-pdf": "^10.4.1",
     "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",

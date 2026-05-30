@@ -6,7 +6,7 @@ from sqlalchemy import update
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.run import Run, RunStatus
-from app.routers import auth, runs, api_keys, users, llm_providers, watchlist, portfolio, ticker, admin, market, investor_profile
+from app.routers import auth, runs, api_keys, users, llm_providers, watchlist, portfolio, ticker, admin, market, investor_profile, regime
 from app.services.scheduler import start_scheduler, stop_scheduler
 
 
@@ -45,6 +45,7 @@ app.include_router(ticker.router, tags=["ticker"])
 app.include_router(market.router, tags=["market"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])
 app.include_router(investor_profile.router, prefix="/investor-profile", tags=["investor-profile"])
+app.include_router(regime.router, tags=["regime"])
 
 
 @app.get("/health")

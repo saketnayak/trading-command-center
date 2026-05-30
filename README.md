@@ -84,6 +84,7 @@ Import your holdings from any broker CSV or add tickers manually. Once a [free F
 | **Earnings calendar** | 60-day upcoming earnings for all holdings; days-away urgency coloring; EPS beat/miss |
 | **Key fundamentals** | Expandable row per holding: P/E, Beta, 52-week range, dividend yield, EPS (TTM), market cap |
 | **News feed** | Merged, time-sorted company news for all holdings; per-ticker color badges |
+| **Market regime detection** | Per-holding Markov regime badge (Bull / Sideways / Bear) with directional signal and Sharpe ratio; portfolio-wide regime distribution in the stats bar; filter holdings by regime; expandable 3×3 transition matrix |
 | **Analyze all stale** | One click to batch-queue AI analysis for every holding not reviewed in the last 7 days |
 | **Multi-currency** | Display in USD, EUR, GBP, AUD, JPY, CAD, CHF, CNY, INR, or SGD with live ECB rates |
 | **CSV export** | Download current holdings with live prices and P&L included |
@@ -304,10 +305,11 @@ npx tsx --test lib/export/parseMdForPdf.test.ts
 backend/
   main.py                  # FastAPI app, router mounts, lifespan
   app/
-    routers/               # auth, runs, api_keys, users, llm_providers, watchlist, portfolio
+    routers/               # auth, runs, api_keys, users, llm_providers, watchlist, portfolio, regime
     models/                # SQLAlchemy models
     services/              # auth, encryption, websocket, job_manager, scheduler,
-                           #   trading_agent_runner, outcome_service, portfolio_insight_runner
+                           #   trading_agent_runner, outcome_service, portfolio_insight_runner,
+                           #   markov_service (Markov regime detection)
     schemas/               # Pydantic request/response models
     config.py              # pydantic-settings (all env vars)
   tests/
@@ -319,7 +321,7 @@ frontend/
     runs/                  # RunTable, RunForm, AnalystReports, BullBearDebate,
                            #   DownloadMenu, ComparisonPanel, OutcomeCard, PipelinePanel
     portfolio/             # HoldingsTable, InsightsDashboard, EarningsPanel, NewsPanel,
-                           #   PortfolioSwitcher, PortfolioStatsBar
+                           #   PortfolioSwitcher, PortfolioStatsBar, MarkovConfirmation
   lib/
     api.ts                 # typed API client
     websocket.ts           # useAgentStream hook

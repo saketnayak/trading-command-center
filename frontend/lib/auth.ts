@@ -5,7 +5,7 @@ const API = process.env.INTERNAL_API_URL ?? "http://localhost:8000";
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
-  session: { strategy: "jwt" },
+  session: { strategy: "jwt", maxAge: 24 * 60 * 60 }, // 24h — matches backend JWT TTL
   providers: [
     CredentialsProvider({
       name: "Email",

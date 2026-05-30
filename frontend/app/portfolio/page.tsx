@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TopNav } from "@/components/layout/TopNav";
 import {
@@ -10,11 +10,13 @@ import {
   getPortfolioCurrent,
   exportPortfolioCsv,
   getPortfolioFundamentals,
+  getPortfolioRegime,
+  getPortfolioTrimSignals,
   batchAnalyzePortfolio,
   getProviderModels,
   getBehavioralAlerts,
 } from "@/lib/api";
-import type { Portfolio, PortfolioHolding, BehavioralAlertsResponse } from "@/lib/types";
+import type { Portfolio, PortfolioHolding, BehavioralAlertsResponse, RegimeData, TrimSignalEntry, TrimSignalsResponse } from "@/lib/types";
 import { isCrypto } from "@/lib/asset";
 import { PortfolioSwitcher } from "@/components/portfolio/PortfolioSwitcher";
 import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
@@ -30,6 +32,7 @@ import { TrendingPanel } from "@/components/portfolio/TrendingPanel";
 import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 import { DiscoverPanel } from "@/components/portfolio/DiscoverPanel";
 import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsModal";
+import { SellCandidatesPanel } from "@/components/portfolio/SellCandidatesPanel";
 
 type Tab = "holdings" | "insights" | "earnings" | "news" | "trending" | "discover" | "chat" | "thesis";
 
@@ -209,7 +212,7 @@ export default function PortfolioPage() {
     queryFn: listPortfolios,
   });
 
-  const { data: current, isLoading: loadingCurrent } = useQuery({
+  const { data: current, isLoading: loadingCurrent, isFetching: fetchingCurrent, refetch: refetchCurrent } = useQuery({
     queryKey: ["portfolio-current", selectedId],
     queryFn: () => getPortfolioCurrent(selectedId!),
     enabled: selectedId != null,
@@ -226,6 +229,25 @@ export default function PortfolioPage() {
     enabled: selectedId != null && tab === "holdings" && (allCrypto || current?.price_unavailable_reason !== "no_finnhub_key"),
     staleTime: 1000 * 60 * 30,
   });
+
+  const { data: regime = {} } = useQuery<Record<string, RegimeData>>({
+    queryKey: ["portfolio-regime", selectedId],
+    queryFn: () => getPortfolioRegime(selectedId!),
+    enabled: selectedId != null && tab === "holdings",
+    staleTime: 1000 * 60 * 60 * 4,  // 4h — matches backend cache TTL
+  });
+
+  const { data: trimSignals } = useQuery<TrimSignalsResponse>({
+    queryKey: ["portfolio-trim-signals", selectedId],
+    queryFn: () => getPortfolioTrimSignals(selectedId!),
+    enabled: selectedId != null && tab === "holdings",
+    staleTime: 1000 * 60 * 30,
+  });
+
+  const trimByHoldingId = useMemo<Record<string, TrimSignalEntry>>(
+    () => Object.fromEntries((trimSignals?.entries ?? []).map((e) => [e.holding_id, e])),
+    [trimSignals]
+  );
 
   const { data: behavioralAlerts } = useQuery<BehavioralAlertsResponse>({
     queryKey: ["behavioralAlerts", selectedId],
@@ -286,6 +308,10 @@ export default function PortfolioPage() {
     URL.revokeObjectURL(url);
   }
 
+  const hasMissingPrices = (current?.holdings ?? []).some(
+    (h) => h.current_price == null && current?.price_unavailable_reason !== "no_finnhub_key"
+  );
+
   const TABS: Array<{ id: Tab; label: string; badge?: string; alertCount?: number }> = [
     { id: "holdings", label: "Holdings" },
     { id: "insights", label: "AI Insights", badge: "✦", alertCount: alertCount > 0 ? alertCount : undefined },
@@ -299,7 +325,7 @@ export default function PortfolioPage() {
   return (
     <div className="min-h-screen bg-navy-900">
       <TopNav />
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-4">
+      <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-4">
         <h1 className="text-lg font-semibold text-white">Portfolio</h1>
 
         <div className="flex items-center gap-4">
@@ -319,9 +345,12 @@ export default function PortfolioPage() {
             displayCurrency={current?.display_currency ?? "USD"}
             snapshotDate={current?.snapshot?.uploaded_at ?? null}
             broker={current?.snapshot?.broker ?? null}
+            hasMissingPrices={hasMissingPrices}
+            isRefreshing={fetchingCurrent}
             onUploadClick={() => setUploadOpen(true)}
             onExportClick={handleExport}
             onDeliveryClick={() => setDeliveryOpen(true)}
+            onRefreshClick={() => refetchCurrent()}
           />
         )}
 
@@ -413,14 +442,23 @@ export default function PortfolioPage() {
                   <PortfolioStatsBar
                     holdings={current.holdings}
                     onAnalyzeStale={() => setBatchOpen(true)}
+                    fundamentals={fundamentals}
+                    regime={regime}
+                    trimSignals={trimByHoldingId}
                   />
                 )}
+                <SellCandidatesPanel
+                  entries={trimSignals?.entries ?? []}
+                  computedAt={trimSignals?.computed_at}
+                />
                 <HoldingsTable
                   portfolioId={selectedId}
                   holdings={current.holdings}
                   priceUnavailableReason={current.price_unavailable_reason}
                   displayCurrency={current.display_currency ?? "USD"}
                   fundamentals={fundamentals}
+                  regime={regime}
+                  trimSignals={trimByHoldingId}
                   onTickerClick={setDrawerHolding}
                 />
               </div>

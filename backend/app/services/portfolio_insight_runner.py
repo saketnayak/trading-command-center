@@ -302,6 +302,7 @@ def _build_prompt(
     total_pnl_pct: Optional[float],
     holdings: list[dict],
     investor_profile=None,
+    regime_map: Optional[dict] = None,
 ) -> str:
     rows = []
     for h in holdings:
@@ -349,6 +350,46 @@ def _build_prompt(
         if serialized:
             profile_block = f"\n{serialized}\n"
 
+    # Build optional regime context block
+    regime_block = ""
+    if regime_map:
+        regime_lines = []
+        bull_count = sideways_count = bear_count = 0
+        signals = []
+        for h in holdings:
+            r = regime_map.get(h["ticker"])
+            if r:
+                regime = r.get("current_regime", "Unknown")
+                signal = r.get("signal", 0.0)
+                persistence = r.get("persistence", 0.0)
+                stat = r.get("stationary", {})
+                wf = r.get("walk_forward", {})
+                sharpe = wf.get("sharpe")
+                sharpe_str = f"WF Sharpe {sharpe:.2f}" if sharpe is not None else "WF Sharpe N/A"
+                regime_lines.append(
+                    f"  {h['ticker']}: {regime}  signal {signal:+.2f}  "
+                    f"persistence {persistence:.0%}  "
+                    f"long-run Bull {stat.get('bull', 0):.0%}  {sharpe_str}"
+                )
+                if regime == "Bull":
+                    bull_count += 1
+                elif regime == "Bear":
+                    bear_count += 1
+                else:
+                    sideways_count += 1
+                signals.append(signal)
+
+        if regime_lines:
+            avg_signal = sum(signals) / len(signals) if signals else 0.0
+            direction = "bullish" if avg_signal > 0.1 else "bearish" if avg_signal < -0.1 else "neutral"
+            regime_block = (
+                f"\nREGIME CONTEXT (Markov chain analysis, yfinance 10y daily):\n"
+                + "\n".join(regime_lines)
+                + f"\n\nPortfolio regime distribution: {bull_count} Bull · {sideways_count} Sideways · {bear_count} Bear"
+                + f"\nPortfolio avg signal: {avg_signal:+.2f} ({direction})"
+                + "\nNote: Markov regime reflects statistical price history only. Weight alongside fundamental analysis.\n"
+            )
+
     return f"""You are a professional portfolio analyst AI. Analyze the following investment portfolio and provide structured daily insights.
 
 Date: {analysis_date}
@@ -360,7 +401,7 @@ Number of holdings: {len(holdings)}
 {profile_block}
 Holdings:
 {holdings_text}
-
+{regime_block}
 Your analysis should:
 1. Identify concentration risk (positions >20% of portfolio)
 2. Flag significant unrealized losses (>15% drawdown)
@@ -370,6 +411,7 @@ Your analysis should:
 6. Consider overall market positioning; for crypto note 24/7 trading and higher volatility
 7. Respect the investor's anti-portfolio rules — never recommend buying excluded sectors/assets
 8. Frame urgency and risk relative to the investor's stated time horizon and risk tolerance
+9. Where regime data is provided, note regime-conflicted positions (e.g. AI said Buy but regime is Bear) and regime-supported positions
 
 Respond ONLY with a single valid JSON object matching this exact schema (no markdown, no explanation):
 {{
@@ -474,6 +516,13 @@ async def generate_portfolio_insight(insight_id: str) -> None:
             sectors = await asyncio.gather(*[_fetch_sector(t, finnhub_key) for t in tickers])
             sector_map: dict[str, str] = dict(zip(tickers, sectors))
 
+            # Fetch Markov regime context — uses 4h in-process cache
+            from app.services.markov_service import get_regime_for_portfolio as _get_regime
+            try:
+                regime_map = await _get_regime(tickers)
+            except Exception:
+                regime_map = {}
+
             # Fetch last run verdict per ticker
             today = date.today()
             last_verdicts: dict[str, tuple[str, int]] = {}  # ticker → (verdict, days_ago)
@@ -542,6 +591,7 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                 total_pnl_pct=total_pnl_pct,
                 holdings=enriched,
                 investor_profile=investor_profile,
+                regime_map=regime_map,
             )
 
             raw_response = await _call_llm(llm_provider, llm_model, llm_key, prompt)

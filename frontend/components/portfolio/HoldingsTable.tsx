@@ -5,7 +5,7 @@ import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type LatestRunEntry } from "@/lib/api";
 import { fmtMoney, fmtPnl } from "@/lib/currency";
 import { WatchButton } from "@/components/portfolio/WatchButton";
-import type { PortfolioHolding, FundamentalsData } from "@/lib/types";
+import type { PortfolioHolding, FundamentalsData, RegimeData, TrimSignalEntry } from "@/lib/types";
 
 interface HoldingsTableProps {
   portfolioId: string;
@@ -13,6 +13,8 @@ interface HoldingsTableProps {
   priceUnavailableReason: string | null;
   displayCurrency: string;
   fundamentals?: Record<string, FundamentalsData>;
+  regime?: Record<string, RegimeData>;
+  trimSignals?: Record<string, TrimSignalEntry>;
   onTickerClick?: (holding: PortfolioHolding) => void;
 }
 
@@ -44,7 +46,7 @@ function SortableHeader({
   const arrow = active ? (sortDir === "asc" ? " ↑" : " ↓") : "";
   return (
     <th
-      className={`px-4 py-3 text-${align} cursor-pointer select-none group whitespace-nowrap`}
+      className={`px-3 py-3 text-${align} cursor-pointer select-none group whitespace-nowrap`}
       onClick={() => onSort(colKey)}
     >
       <span className={active ? "text-blue-400" : "group-hover:text-slate-200 transition-colors"}>
@@ -105,7 +107,7 @@ function EditInput({
 }
 
 function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: number }) {
-  const metrics: Array<{ label: string; value: string }> = data.asset_type === "crypto"
+  const metrics: Array<{ label: string; value: string; color?: string }> = data.asset_type === "crypto"
     ? [
         { label: "Mkt Cap", value: fmtLargeNum(data.market_cap ?? null) },
         { label: "Vol 24h", value: fmtLargeNum(data.volume_24h ?? null) },
@@ -117,6 +119,12 @@ function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: n
       ]
     : [
         { label: "P/E", value: fmtNum(data.pe_ratio ?? null) },
+        {
+          label: "PEG",
+          value: fmtNum(data.peg_ratio ?? null),
+          color: data.peg_ratio != null ? pegSignal(data.peg_ratio).textColor : undefined,
+        },
+        { label: "EPS Gr 3Y", value: fmtNum(data.eps_growth_3y ?? null, 1, "%") },
         { label: "Beta", value: fmtNum(data.beta ?? null) },
         { label: "52w High", value: data.week52_high != null ? `$${data.week52_high.toFixed(2)}` : "—" },
         { label: "52w Low", value: data.week52_low != null ? `$${data.week52_low.toFixed(2)}` : "—" },
@@ -132,7 +140,7 @@ function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: n
           {metrics.map((m) => (
             <div key={m.label} className="flex flex-col gap-0.5">
               <span className="text-[10px] text-slate-500 uppercase tracking-wide">{m.label}</span>
-              <span className="text-xs text-slate-300 font-mono">{m.value}</span>
+              <span className={`text-xs font-mono ${m.color ?? "text-slate-300"}`}>{m.value}</span>
             </div>
           ))}
         </div>
@@ -141,7 +149,190 @@ function FundamentalsRow({ data, colSpan }: { data: FundamentalsData; colSpan: n
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals, onTickerClick }: HoldingsTableProps) {
+function pegSignal(peg: number): { textColor: string; bgColor: string; label: string } {
+  if (peg < 1.0) return { textColor: "text-green-400", bgColor: "bg-green-900/30", label: "Undervalued" };
+  if (peg <= 1.5) return { textColor: "text-yellow-400", bgColor: "bg-yellow-900/30", label: "Fairly valued" };
+  return { textColor: "text-red-400", bgColor: "bg-red-900/30", label: "Overvalued" };
+}
+
+function PegBadge({ peg }: { peg: number | null | undefined }) {
+  if (peg != null) {
+    const { textColor, bgColor, label } = pegSignal(peg);
+    return (
+      <span
+        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ml-1.5 ${textColor} ${bgColor}`}
+        title={`PEG ${peg.toFixed(2)} — ${label} relative to growth`}
+      >
+        PEG {peg.toFixed(2)}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono ml-1.5 text-slate-500 bg-slate-800"
+      title="PEG unavailable — negative earnings or no 3-year growth data from Finnhub"
+    >
+      PEG N/A
+    </span>
+  );
+}
+
+function regimeColors(regime: "Bull" | "Sideways" | "Bear"): { text: string; bg: string } {
+  if (regime === "Bull") return { text: "text-green-400", bg: "bg-green-900/30" };
+  if (regime === "Bear") return { text: "text-red-400", bg: "bg-red-900/30" };
+  return { text: "text-yellow-400", bg: "bg-yellow-900/30" };
+}
+
+function TrimBadge({ entry }: { entry?: TrimSignalEntry }) {
+  if (!entry || entry.level === "none") return null;
+  const styles: Record<string, { label: string; cls: string }> = {
+    watch: { label: "● Watch", cls: "text-yellow-400 bg-yellow-900/30" },
+    consider_trim: { label: "● Trim", cls: "text-orange-400 bg-orange-900/30" },
+    strong_trim: { label: "● Strong Trim", cls: "text-red-400 bg-red-900/30" },
+  };
+  const s = styles[entry.level];
+  return (
+    <span
+      className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${s.cls}`}
+      title={entry.reasons.join("\n")}
+    >
+      {s.label}
+    </span>
+  );
+}
+
+function RegimeBadge({ data }: { data: RegimeData | undefined | null }) {
+  if (!data) return (
+    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono ml-1.5 text-slate-500 bg-slate-800">
+      ● —
+    </span>
+  );
+  const { text, bg } = regimeColors(data.current_regime);
+  const signStr = data.signal >= 0 ? `+${data.signal.toFixed(2)}` : data.signal.toFixed(2);
+  return (
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold ml-1.5 ${text} ${bg}`}
+      title={`Markov regime: ${data.current_regime} (${(data.persistence * 100).toFixed(0)}% persistence). Signal: ${signStr} (bull_prob − bear_prob). Powered by yfinance 10y daily data.`}
+    >
+      ● {data.current_regime} {signStr}
+    </span>
+  );
+}
+
+function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
+  const [showMatrix, setShowMatrix] = useState(false);
+  const { text } = regimeColors(data.current_regime);
+  const signStr = data.signal >= 0 ? `+${data.signal.toFixed(2)}` : data.signal.toFixed(2);
+  const sharpeColor = data.walk_forward.sharpe == null ? "text-slate-500"
+    : data.walk_forward.sharpe > 0.5 ? "text-green-400"
+    : data.walk_forward.sharpe > 0 ? "text-yellow-400" : "text-red-400";
+  const ddColor = (data.walk_forward.max_drawdown ?? 0) < -0.2 ? "text-red-400"
+    : (data.walk_forward.max_drawdown ?? 0) < -0.1 ? "text-yellow-400" : "text-slate-300";
+  const signalColor = data.signal >= 0.3 ? "text-green-400" : data.signal <= -0.3 ? "text-red-400" : "text-yellow-400";
+
+  const statBars: Array<{ label: string; value: number; color: string }> = [
+    { label: "Bull", value: data.stationary.bull, color: "bg-green-500" },
+    { label: "Sidew.", value: data.stationary.sideways, color: "bg-yellow-500" },
+    { label: "Bear", value: data.stationary.bear, color: "bg-red-500" },
+  ];
+
+  return (
+    <tr className="border-t border-slate-700/30 bg-slate-900/30">
+      <td colSpan={colSpan} className="px-6 py-2">
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-4 text-xs">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide">Regime</span>
+              <span className={`font-mono font-semibold ${text}`}>{data.current_regime}</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide">Signal</span>
+              <span className={`font-mono ${signalColor}`}>{signStr}</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide">Persistence</span>
+              <span className="font-mono text-slate-300">{(data.persistence * 100).toFixed(0)}%</span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide">Sharpe (WF)</span>
+              <span className={`font-mono ${sharpeColor}`}>
+                {data.walk_forward.sharpe != null ? data.walk_forward.sharpe.toFixed(2) : "—"}
+              </span>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[10px] text-slate-500 uppercase tracking-wide">Max DD</span>
+              <span className={`font-mono ${ddColor}`}>
+                {data.walk_forward.max_drawdown != null
+                  ? `${(data.walk_forward.max_drawdown * 100).toFixed(1)}%`
+                  : "—"}
+              </span>
+            </div>
+          </div>
+          <div className="space-y-1">
+            <span className="text-[10px] text-slate-500 uppercase tracking-wide" title="Long-run % of time this asset spends in each regime (Markov stationary distribution).">Long-run distribution</span>
+            <div className="space-y-0.5">
+              {statBars.map((b) => (
+                <div key={b.label} className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 w-10">{b.label}</span>
+                  <div className="flex-1 bg-slate-700 rounded h-1.5">
+                    <div
+                      className={`h-1.5 rounded ${b.color}`}
+                      style={{ width: `${(b.value * 100).toFixed(0)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] font-mono text-slate-300 w-8 text-right">
+                    {(b.value * 100).toFixed(0)}%
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <button
+              onClick={() => setShowMatrix((v) => !v)}
+              className="text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2"
+            >
+              {showMatrix ? "Hide matrix" : "Show matrix"}
+            </button>
+            {showMatrix && (() => {
+              const labels = ["Bear", "Sidew.", "Bull"];
+              function matrixCellColor(v: number): string {
+                if (v >= 0.7) return "text-green-300 bg-green-900/40";
+                if (v >= 0.5) return "text-green-400 bg-green-900/20";
+                if (v >= 0.3) return "text-yellow-400 bg-yellow-900/20";
+                return "text-slate-400";
+              }
+              return (
+                <table className="mt-1 text-[10px] font-mono border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="text-slate-600 pr-2" />
+                      {labels.map((l) => <th key={l} className="px-2 py-0.5 text-slate-500 text-center">{l}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.transition_matrix.map((row, i) => (
+                      <tr key={i}>
+                        <td className="pr-2 text-slate-500">{labels[i]}</td>
+                        {row.map((v, j) => (
+                          <td key={j} className={`px-2 py-0.5 text-center rounded ${matrixCellColor(v)}`}>
+                            {(v * 100).toFixed(0)}%
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              );
+            })()}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals, regime, trimSignals, onTickerClick }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "" });
@@ -152,6 +343,9 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [filterTicker, setFilterTicker] = useState("");
   const [filterSignal, setFilterSignal] = useState("");
+  const [filterPeg, setFilterPeg] = useState("");
+  const [filterRegime, setFilterRegime] = useState("");
+  const [trimOnly, setTrimOnly] = useState(false);
   const newTickerRef = useRef<HTMLInputElement>(null);
 
   function handleSort(key: SortKey) {
@@ -172,7 +366,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
     staleTime: 60_000,
   });
 
-  const isFiltered = filterTicker !== "" || filterSignal !== "";
+  const isFiltered = filterTicker !== "" || filterSignal !== "" || filterPeg !== "" || filterRegime !== "" || trimOnly;
 
   const filteredHoldings = useMemo(() => {
     let result = holdings;
@@ -185,8 +379,28 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
     } else if (filterSignal) {
       result = result.filter((h) => latestRuns[h.ticker]?.verdict?.toLowerCase() === filterSignal);
     }
+    if (filterPeg === "undervalued") {
+      result = result.filter((h) => { const p = fundamentals?.[h.ticker]?.peg_ratio; return p != null && p < 1; });
+    } else if (filterPeg === "fair") {
+      result = result.filter((h) => { const p = fundamentals?.[h.ticker]?.peg_ratio; return p != null && p >= 1 && p <= 2; });
+    } else if (filterPeg === "overvalued") {
+      result = result.filter((h) => { const p = fundamentals?.[h.ticker]?.peg_ratio; return p != null && p > 2; });
+    } else if (filterPeg === "nodata") {
+      result = result.filter((h) => fundamentals?.[h.ticker]?.peg_ratio == null);
+    }
+    if (filterRegime === "nodata") {
+      result = result.filter((h) => !regime?.[h.ticker]);
+    } else if (filterRegime) {
+      result = result.filter((h) => regime?.[h.ticker]?.current_regime === filterRegime);
+    }
+    if (trimOnly) {
+      result = result.filter((h) => {
+        const lvl = trimSignals?.[h.id]?.level;
+        return lvl && lvl !== "none";
+      });
+    }
     return result;
-  }, [holdings, filterTicker, filterSignal, latestRuns]);
+  }, [holdings, filterTicker, filterSignal, filterPeg, filterRegime, trimOnly, latestRuns, fundamentals, regime, trimSignals]);
 
   const sortedHoldings = useMemo(() => {
     if (!sortKey) return filteredHoldings;
@@ -279,7 +493,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   }
 
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
-  const colSpan = hasFundamentals ? 9 : 8;
+  const hasRegime = regime && Object.keys(regime).length > 0;
+  const colSpan = 8 + (hasRegime ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -290,7 +505,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Ticker search */}
         <input
           type="text"
           value={filterTicker}
@@ -298,6 +514,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           placeholder="Filter by ticker…"
           className="bg-slate-800 border border-slate-700 rounded-sm px-3 py-1.5 text-xs text-slate-200 w-40 focus:outline-hidden focus:border-blue-500 placeholder-slate-500"
         />
+
+        {/* Signal filter */}
         <select
           value={filterSignal}
           onChange={(e) => setFilterSignal(e.target.value)}
@@ -309,18 +527,75 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           <option value="hold">Hold</option>
           <option value="none">Not analyzed</option>
         </select>
+
+        {/* PEG filter */}
+        {hasFundamentals && (
+          <select
+            value={filterPeg}
+            onChange={(e) => setFilterPeg(e.target.value)}
+            className="bg-slate-800/80 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500/60 cursor-pointer transition-colors"
+          >
+            <option value="">All PEG</option>
+            <option value="undervalued">Undervalued (&lt; 1)</option>
+            <option value="fair">Fair (1–2)</option>
+            <option value="overvalued">Overvalued (&gt; 2)</option>
+            <option value="nodata">No PEG data</option>
+          </select>
+        )}
+
+        {/* Regime filter — pill toggles */}
+        {hasRegime && (
+          <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800/80 p-0.5 gap-0.5">
+            {(["", "Bull", "Sideways", "Bear"] as const).map((val) => {
+              const isActive = filterRegime === val;
+              const label = val === "" ? "All" : val === "Sideways" ? "Sidew." : val;
+              const activeClass =
+                val === "Bull" ? "bg-green-800/80 text-green-100" :
+                val === "Bear" ? "bg-red-900/80 text-red-100" :
+                val === "Sideways" ? "bg-yellow-800/80 text-yellow-100" :
+                "bg-slate-600 text-white";
+              const idleClass =
+                val === "Bull" ? "text-green-500 hover:text-green-300" :
+                val === "Bear" ? "text-red-500 hover:text-red-300" :
+                val === "Sideways" ? "text-yellow-500 hover:text-yellow-300" :
+                "text-slate-400 hover:text-slate-200";
+              return (
+                <button
+                  key={val}
+                  onClick={() => setFilterRegime(val)}
+                  className={`text-[11px] font-medium px-2.5 py-0.5 rounded-md transition-colors ${isActive ? activeClass : idleClass}`}
+                >
+                  {val ? `● ${label}` : label}
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setTrimOnly((v) => !v)}
+          className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+            trimOnly
+              ? "bg-orange-500/20 text-orange-300 border-orange-500/50"
+              : "bg-transparent text-slate-400 border-slate-700 hover:border-slate-500"
+          }`}
+        >
+          Trim signals only
+        </button>
+
         {isFiltered && (
-          <>
-            <span className="text-xs text-slate-500">
-              {filteredHoldings.length} of {holdings.length}
+          <div className="flex items-center gap-1.5 ml-1">
+            <span className="text-xs text-slate-500 tabular-nums">
+              {filteredHoldings.length} / {holdings.length}
             </span>
             <button
-              onClick={() => { setFilterTicker(""); setFilterSignal(""); }}
-              className="text-xs text-slate-500 hover:text-slate-300 underline"
+              onClick={() => { setFilterTicker(""); setFilterSignal(""); setFilterPeg(""); setFilterRegime(""); setTrimOnly(false); }}
+              className="text-[11px] text-slate-500 hover:text-slate-200 border border-slate-700 hover:border-slate-500 rounded px-1.5 py-0.5 transition-colors"
             >
-              Clear
+              ✕ Clear
             </button>
-          </>
+          </div>
         )}
       </div>
 
@@ -328,15 +603,17 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
         <table className="w-full text-sm">
           <thead className="sticky top-0 bg-navy-700 text-slate-400 text-xs uppercase tracking-wider">
             <tr>
-              {hasFundamentals && <th className="w-6 px-2 py-3" />}
               <SortableHeader label="Ticker"         colKey="ticker"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="left" />
-              <SortableHeader label="Shares"         colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <SortableHeader label="Avg Cost"       colKey="avg_cost"       sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Position"       colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Current Price"  colKey="current_price"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Market Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <SortableHeader label="Unrealized P&L" colKey="unrealized_pnl" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <th className="text-left px-4 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Last Analysis</th>
-              <th className="text-left px-4 py-3">Actions</th>
+              <th className="text-left px-3 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Last Analysis</th>
+              {hasRegime && (
+                <th className="text-left px-3 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">AI vs Regime</th>
+              )}
+              <th className="text-left px-3 py-3 whitespace-nowrap text-slate-400 text-xs uppercase tracking-wider">Trim</th>
+              <th className="text-left px-3 py-3">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -363,23 +640,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                 return (
                   <React.Fragment key={h.id}>
                     <tr className={`border-t border-slate-800 hover:bg-slate-800/30 ${rowTint}`}>
-                      {/* Expand toggle */}
-                      {hasFundamentals && (
-                        <td className="px-2 py-2">
-                          {fundData && (
-                            <button
-                              onClick={() => toggleExpand(h.id)}
-                              className="text-slate-500 hover:text-slate-300 text-xs transition-colors"
-                              title="Show fundamentals"
-                            >
-                              {isExpanded ? "▾" : "▸"}
-                            </button>
-                          )}
-                        </td>
-                      )}
-
-                      {/* Ticker */}
-                      <td className="px-4 py-2">
+                      {/* Ticker + badges (stacked) + expand toggle */}
+                      <td className="px-3 py-2">
                         {isEditing ? (
                           <EditInput
                             autoFocus
@@ -388,60 +650,83 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             onKeyDown={handleEditKey}
                             className="w-24 uppercase"
                           />
-                        ) : onTickerClick ? (
-                          <button
-                            onClick={() => onTickerClick(h)}
-                            className="font-mono text-purple-400 hover:text-purple-300 hover:underline transition-colors"
-                          >
-                            {h.ticker}
-                          </button>
-                        ) : h.last_run ? (
-                          <Link href={`/runs/${h.last_run.run_id}`} className="font-mono text-purple-400 hover:underline">
-                            {h.ticker}
-                          </Link>
                         ) : (
-                          <span className="font-mono text-purple-400">{h.ticker}</span>
+                          <div className="flex flex-col gap-1 min-w-[120px]">
+                            {/* Row 1: expand toggle + ticker name */}
+                            <div className="flex items-center gap-1.5">
+                              {(hasFundamentals || hasRegime) && (fundData || regime?.[h.ticker]) ? (
+                                <button
+                                  onClick={() => toggleExpand(h.id)}
+                                  className={`flex-shrink-0 w-4 h-4 flex items-center justify-center rounded text-[11px] transition-colors ${isExpanded ? "text-blue-400 bg-blue-900/30" : "text-slate-500 hover:text-slate-200 hover:bg-slate-700"}`}
+                                  title={isExpanded ? "Collapse details" : "Expand for fundamentals & regime analysis"}
+                                >
+                                  {isExpanded ? "▾" : "▸"}
+                                </button>
+                              ) : <span className="w-4 flex-shrink-0" />}
+                              {onTickerClick ? (
+                                <button
+                                  onClick={() => onTickerClick(h)}
+                                  className="font-mono font-semibold text-sm text-purple-400 hover:text-purple-300 hover:underline transition-colors"
+                                >
+                                  {h.ticker}
+                                </button>
+                              ) : h.last_run ? (
+                                <Link href={`/runs/${h.last_run.run_id}`} className="font-mono font-semibold text-sm text-purple-400 hover:underline">
+                                  {h.ticker}
+                                </Link>
+                              ) : (
+                                <span className="font-mono font-semibold text-sm text-purple-400">{h.ticker}</span>
+                              )}
+                            </div>
+                            {/* Row 2: badges */}
+                            <div className="flex items-center flex-wrap gap-1 pl-5">
+                              {fundData && fundData.asset_type === "stock" && (
+                                <PegBadge peg={fundData.peg_ratio} />
+                              )}
+                              {regime?.[h.ticker] && <RegimeBadge data={regime[h.ticker]} />}
+                            </div>
+                          </div>
                         )}
                       </td>
 
-                      {/* Shares */}
-                      <td className="px-4 py-2 text-right tabular-nums">
+                      {/* Position: shares + avg cost stacked */}
+                      <td className="px-3 py-2 text-right tabular-nums">
                         {isEditing ? (
-                          <EditInput
-                            value={editDraft.shares}
-                            onChange={(v) => setEditDraft((d) => ({ ...d, shares: v }))}
-                            onKeyDown={handleEditKey}
-                            className="w-24 text-right"
-                          />
+                          <div className="flex flex-col gap-1 items-end">
+                            <EditInput
+                              value={editDraft.shares}
+                              onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setEditDraft((d) => ({ ...d, shares: v })); }}
+                              onKeyDown={handleEditKey}
+                              className="w-24 text-right"
+                            />
+                            <EditInput
+                              value={editDraft.avg_cost}
+                              onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setEditDraft((d) => ({ ...d, avg_cost: v })); }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && editDraft.avg_cost.trim() === ".") return;
+                                handleEditKey(e);
+                              }}
+                              placeholder="avg cost"
+                              className="w-24 text-right"
+                            />
+                          </div>
                         ) : (
-                          <span className="text-slate-300">{h.shares.toLocaleString("en-US")}</span>
-                        )}
-                      </td>
-
-                      {/* Avg Cost */}
-                      <td className="px-4 py-2 text-right tabular-nums">
-                        {isEditing ? (
-                          <EditInput
-                            value={editDraft.avg_cost}
-                            onChange={(v) => setEditDraft((d) => ({ ...d, avg_cost: v }))}
-                            onKeyDown={handleEditKey}
-                            placeholder="—"
-                            className="w-24 text-right"
-                          />
-                        ) : (
-                          <span className="text-slate-400">{fmtMoney(h.avg_cost, displayCurrency)}</span>
+                          <div className="flex flex-col gap-0.5">
+                            <span className="text-slate-300 font-mono text-xs">{h.shares.toLocaleString("en-US")} sh</span>
+                            <span className="text-slate-500 font-mono text-[10px]">@ {fmtMoney(h.avg_cost, displayCurrency)}</span>
+                          </div>
                         )}
                       </td>
 
                       {/* Current Price (read-only) */}
-                      <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{fmtMoney(h.current_price, displayCurrency)}</td>
+                      <td className="px-3 py-2 text-right text-slate-300 tabular-nums font-mono text-xs">{fmtMoney(h.current_price, displayCurrency)}</td>
 
                       {/* Market Value (read-only) */}
-                      <td className="px-4 py-2 text-right text-slate-300 tabular-nums">{fmtMoney(h.market_value, displayCurrency)}</td>
+                      <td className="px-3 py-2 text-right text-slate-300 tabular-nums font-mono text-xs">{fmtMoney(h.market_value, displayCurrency)}</td>
 
                       {/* Unrealized P&L (read-only) */}
-                      <td className={`px-4 py-2 text-right tabular-nums ${pnlColor}`}>
-                        {fmtPnl(pnl, h.unrealized_pnl_pct, displayCurrency)}
+                      <td className={`px-3 py-2 text-right tabular-nums ${pnlColor}`}>
+                        <div className="font-semibold font-mono text-xs">{fmtPnl(pnl, h.unrealized_pnl_pct, displayCurrency)}</div>
                       </td>
 
                       {/* Last Analysis */}
@@ -463,6 +748,17 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-sm ${verdictColors[entry.verdict] ?? "bg-slate-700 text-slate-200"}`}>
                                 {entry.verdict.toUpperCase()}
                               </span>
+                              {h.last_run?.previous_verdict && h.last_run?.previous_run_id && (
+                                <a
+                                  href={`/runs/compare?a=${h.last_run?.previous_run_id}&b=${h.last_run?.run_id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="ml-1 text-amber-400 hover:text-amber-300"
+                                  title={`Verdict changed from ${h.last_run?.previous_verdict} on ${h.last_run?.previous_analysis_date} → ${h.last_run?.verdict} on ${h.last_run?.analysis_date}. Click to compare.`}
+                                >
+                                  ↺ changed
+                                </a>
+                              )}
                               <span className={`text-xs ${stale ? "text-amber-400" : "text-slate-500"}`}>
                                 {days === 0 ? "today" : `${days}d ago`}{stale ? " ⚠" : ""}
                               </span>
@@ -478,8 +774,46 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                         })()}
                       </td>
 
+                      {/* AI vs Regime */}
+                      {hasRegime && (() => {
+                        const r = regime?.[h.ticker];
+                        const verdict = rowEntry?.verdict;
+                        if (!r || !verdict) return <td className="px-3 py-2 text-slate-500 text-xs">—</td>;
+                        const isConflict =
+                          (verdict === "buy" && r.signal < 0) ||
+                          (verdict === "sell" && r.signal > 0);
+                        const isNeutral = verdict === "hold" || r.current_regime === "Sideways";
+                        const signStr = `${r.signal >= 0 ? "+" : ""}${r.signal.toFixed(2)}`;
+                        return (
+                          <td className="px-3 py-2 text-xs whitespace-nowrap">
+                            {isConflict ? (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/30"
+                                title={`AI verdict (${verdict}) conflicts with Markov regime (${r.current_regime}, signal ${signStr}). Consider reviewing.`}
+                              >
+                                ⚠ Conflicts
+                              </span>
+                            ) : isNeutral ? (
+                              <span className="text-slate-600 text-[11px]">— Neutral</span>
+                            ) : (
+                              <span
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-green-900/30 text-green-400 border border-green-500/30"
+                                title={`AI verdict (${verdict}) aligns with Markov regime (${r.current_regime}).`}
+                              >
+                                ✓ Agrees
+                              </span>
+                            )}
+                          </td>
+                        );
+                      })()}
+
+                      {/* Trim */}
+                      <td className="px-3 py-2">
+                        <TrimBadge entry={trimSignals?.[h.id]} />
+                      </td>
+
                       {/* Actions */}
-                      <td className="px-4 py-2">
+                      <td className="px-3 py-2">
                         {isEditing ? (
                           <div className="flex items-center gap-2">
                             <button
@@ -494,26 +828,27 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                             </button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-3 flex-wrap">
+                          <div className="flex items-center gap-1.5">
                             <Link
                               href={`/runs/new?ticker=${encodeURIComponent(h.ticker)}`}
-                              className="text-xs text-slate-400 hover:text-blue-400 transition-colors"
+                              className="text-slate-500 hover:text-blue-400 transition-colors leading-none"
+                              title="Analyze"
                             >
-                              Analyze
+                              ⚡
                             </Link>
                             <WatchButton ticker={h.ticker} />
                             <button
                               onClick={() => startEdit(h)}
-                              className="text-xs text-slate-500 hover:text-slate-200 transition-colors"
+                              className="text-slate-500 hover:text-slate-200 transition-colors leading-none"
                               title="Edit"
                             >
-                              Edit
+                              ✎
                             </button>
                             <button
                               onClick={() => deleteMutation.mutate(h.id)}
                               disabled={deleteMutation.isPending}
-                              className="text-xs text-slate-600 hover:text-red-400 transition-colors disabled:opacity-50"
-                              title="Delete"
+                              className="text-slate-600 hover:text-red-400 transition-colors disabled:opacity-50 leading-none"
+                              title="Delete holding"
                             >
                               ✕
                             </button>
@@ -526,6 +861,11 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                     {isExpanded && fundData && (
                       <FundamentalsRow key={`${h.id}-fund`} data={fundData} colSpan={colSpan} />
                     )}
+
+                    {/* Regime expand row */}
+                    {isExpanded && regime?.[h.ticker] && (
+                      <RegimeRow key={`${h.id}-regime`} data={regime[h.ticker]} colSpan={colSpan} />
+                    )}
                   </React.Fragment>
                 );
               })
@@ -534,8 +874,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
             {/* New row draft */}
             {addingNew && (
               <tr className="border-t border-slate-700 bg-slate-800/20">
-                {hasFundamentals && <td className="px-2 py-2" />}
-                <td className="px-4 py-2">
+                <td className="px-3 py-2">
                   <EditInput
                     autoFocus
                     value={newDraft.ticker}
@@ -545,27 +884,29 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                     className="w-24 uppercase"
                   />
                 </td>
-                <td className="px-4 py-2 text-right">
-                  <EditInput
-                    value={newDraft.shares}
-                    onChange={(v) => setNewDraft((d) => ({ ...d, shares: v }))}
-                    onKeyDown={handleNewKey}
-                    placeholder="0"
-                    className="w-24 text-right"
-                  />
+                <td className="px-3 py-2 text-right">
+                  <div className="flex flex-col gap-1 items-end">
+                    <EditInput
+                      value={newDraft.shares}
+                      onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setNewDraft((d) => ({ ...d, shares: v })); }}
+                      onKeyDown={handleNewKey}
+                      placeholder="shares"
+                      className="w-24 text-right"
+                    />
+                    <EditInput
+                      value={newDraft.avg_cost}
+                      onChange={(v) => { if (v === "" || /^\d*\.?\d*$/.test(v)) setNewDraft((d) => ({ ...d, avg_cost: v })); }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && newDraft.avg_cost.trim() === ".") return;
+                        handleNewKey(e);
+                      }}
+                      placeholder="avg cost"
+                      className="w-24 text-right"
+                    />
+                  </div>
                 </td>
-                <td className="px-4 py-2 text-right">
-                  <EditInput
-                    value={newDraft.avg_cost}
-                    onChange={(v) => setNewDraft((d) => ({ ...d, avg_cost: v }))}
-                    onKeyDown={handleNewKey}
-                    placeholder="0.00"
-                    className="w-24 text-right"
-                  />
-                </td>
-                <td colSpan={3} />
-                <td />
-                <td className="px-4 py-2">
+                <td colSpan={colSpan - 3} />
+                <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={saveNew}
