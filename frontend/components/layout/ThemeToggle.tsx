@@ -1,17 +1,10 @@
 "use client";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
-
-const OPTIONS = [
-  { value: "system", label: "System", icon: "◐" },
-  { value: "light", label: "Light", icon: "☀" },
-  { value: "dark", label: "Dark", icon: "☾" },
-] as const;
-
-type ThemeValue = (typeof OPTIONS)[number]["value"];
+import { Moon, Sun } from "lucide-react";
 
 export function ThemeToggle() {
-  const { theme, setTheme, resolvedTheme } = useTheme();
+  const { setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => setMounted(true), []);
@@ -19,40 +12,39 @@ export function ThemeToggle() {
   if (!mounted) {
     return (
       <span
-        className="inline-block w-[4.5rem] h-7 rounded border border-border bg-elevated"
+        className="inline-block h-[22px] w-10 rounded-[11px] border border-border bg-input/70"
         aria-hidden
       />
     );
   }
 
-  const active = (theme ?? "system") as ThemeValue;
+  const isDark = resolvedTheme === "dark";
+  const label = isDark ? "Switch to light theme" : "Switch to dark theme";
 
   return (
-    <div
-      className="flex items-center rounded border border-border bg-elevated p-0.5"
-      role="group"
-      aria-label="Appearance"
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isDark}
+      aria-label={label}
+      title={label}
+      onClick={() => setTheme(isDark ? "light" : "dark")}
+      className="relative block h-[22px] w-10 shrink-0 rounded-[11px] border border-input-border bg-input/70 p-0 transition-colors hover:border-blue-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/60"
     >
-      {OPTIONS.map(({ value, label, icon }) => {
-        const selected = active === value;
-        return (
-          <button
-            key={value}
-            type="button"
-            title={`${label}${value === "system" && resolvedTheme ? ` (${resolvedTheme})` : ""}`}
-            aria-label={label}
-            aria-pressed={selected}
-            onClick={() => setTheme(value)}
-            className={`px-1.5 py-0.5 text-xs rounded transition-colors ${
-              selected
-                ? "bg-blue-600 text-white"
-                : "text-muted hover:text-fg-secondary"
-            }`}
-          >
-            <span aria-hidden>{icon}</span>
-          </button>
-        );
-      })}
-    </div>
+      <span
+        className={`absolute left-px top-px flex h-[18px] w-[18px] items-center justify-center rounded-full bg-elevated text-muted shadow-sm transition-transform duration-200 ${
+          isDark ? "translate-x-[18px]" : "translate-x-0"
+        }`}
+      >
+        <Sun
+          className={`absolute h-3 w-3 transition-opacity ${isDark ? "opacity-0" : "opacity-100"}`}
+          aria-hidden="true"
+        />
+        <Moon
+          className={`absolute h-3 w-3 transition-opacity ${isDark ? "opacity-100" : "opacity-0"}`}
+          aria-hidden="true"
+        />
+      </span>
+    </button>
   );
 }
