@@ -123,12 +123,12 @@ function RunRow({
       <td className="px-4 py-3">
         <PriceSummary run={run} />
       </td>
-      <td className="px-4 py-3 text-muted text-xs">{run.analysts.join(", ")}</td>
-      <td className="px-4 py-3 text-muted text-xs font-mono">{run.llm_model}</td>
-      <td className="px-4 py-3 text-muted text-xs">
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">{run.analysts.join(", ")}</td>
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs font-mono">{run.llm_model}</td>
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">
         {run.started_at ? new Date(run.started_at).toLocaleDateString() : "—"}
       </td>
-      <td className="px-4 py-3 text-muted text-xs">{formatDuration(run.started_at, run.completed_at)}</td>
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">{formatDuration(run.started_at, run.completed_at)}</td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
           <Link href={`/runs/${run.id}`} className="text-blue-400 hover:underline text-xs">
@@ -223,10 +223,10 @@ export function RunTable({ runs, archived, onMutate, selectedIds, onSelectionCha
             <th className="text-left px-4 py-3">Status</th>
             <th className="text-left px-4 py-3">Verdict</th>
             <th className="text-left px-4 py-3">Prices</th>
-            <th className="text-left px-4 py-3">Analysts</th>
-            <th className="text-left px-4 py-3">Model</th>
-            <th className="text-left px-4 py-3">Started</th>
-            <th className="text-left px-4 py-3">Duration</th>
+            <th className="hidden lg:table-cell text-left px-4 py-3">Analysts</th>
+            <th className="hidden lg:table-cell text-left px-4 py-3">Model</th>
+            <th className="hidden lg:table-cell text-left px-4 py-3">Started</th>
+            <th className="hidden lg:table-cell text-left px-4 py-3">Duration</th>
             <th className="text-left px-4 py-3">Actions</th>
           </tr>
         </thead>
