@@ -27,8 +27,8 @@ function RunPickerRow({ run, onPick }: { run: Run; onPick: () => void }) {
           <span className="text-subtle">—</span>
         )}
       </td>
-      <td className="px-4 py-3 text-muted text-xs font-mono">{run.llm_model}</td>
-      <td className="px-4 py-3 text-xs text-muted">
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs font-mono">{run.llm_model}</td>
+      <td className="hidden lg:table-cell px-4 py-3 text-xs text-muted">
         {run.started_at ? new Date(run.started_at).toLocaleDateString() : "—"}
       </td>
       <td className="px-4 py-3">
@@ -68,8 +68,8 @@ function RunPicker({ anchorId }: { anchorId: string }) {
               <th className="text-left px-4 py-3">Ticker</th>
               <th className="text-left px-4 py-3">Date</th>
               <th className="text-left px-4 py-3">Verdict</th>
-              <th className="text-left px-4 py-3">Model</th>
-              <th className="text-left px-4 py-3">Started</th>
+              <th className="hidden lg:table-cell text-left px-4 py-3">Model</th>
+              <th className="hidden lg:table-cell text-left px-4 py-3">Started</th>
               <th className="text-left px-4 py-3" />
             </tr>
           </thead>

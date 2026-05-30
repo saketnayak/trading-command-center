@@ -334,10 +334,10 @@ function ItemRow({ item, onRemove, onToggle, onRunNow }: {
   return (
     <tr className="border-t border-border hover:bg-muted-surface/40">
       <td className="px-4 py-3 font-semibold text-fg">{item.ticker}</td>
-      <td className="px-4 py-3 text-muted text-sm">{item.llm_provider} / {item.llm_model}</td>
-      <td className="px-4 py-3 text-muted text-sm">{item.depth}</td>
-      <td className="px-4 py-3 text-muted text-xs">{item.analysts.join(", ")}</td>
-      <td className="px-4 py-3"><CronLabel cron={item.schedule_cron} /></td>
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.llm_provider} / {item.llm_model}</td>
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.depth}</td>
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">{item.analysts.join(", ")}</td>
+      <td className="hidden lg:table-cell px-4 py-3"><CronLabel cron={item.schedule_cron} /></td>
       <td className="px-4 py-3 text-xs">
         {item.last_run_at && item.last_run_id ? (
           <Link href={`/runs/${item.last_run_id}`} className="text-blue-400 hover:underline">
@@ -437,12 +437,17 @@ export default function WatchlistPage() {
             {watchlist.items.length === 0 ? (
               <p className="text-muted text-sm text-center py-10">No tickers yet. Add one above to start tracking.</p>
             ) : (
-              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[720px]">
+              <div className="overflow-x-auto"><table className="w-full text-sm lg:min-w-[720px]">
                 <thead className="bg-page">
                   <tr>
-                    {["Ticker", "Model", "Depth", "Analysts", "Schedule", "Last Run", "Status", "Actions"].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">{h}</th>
-                    ))}
+                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Ticker</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Model</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Depth</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Analysts</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Schedule</th>
+                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Last Run</th>
+                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Status</th>
+                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Actions</th>
                   </tr>
                 </thead>
                 <tbody>

@@ -76,15 +76,15 @@ export function SellCandidatesPanel({ entries, computedAt }: Props) {
       </button>
       {expanded && (
         <div className="px-4 pb-3">
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="text-xs text-muted uppercase">
               <tr>
                 <th className="text-left py-1">Ticker</th>
                 <th className="text-right py-1">Gain</th>
                 <th className="text-left py-1">Verdict</th>
-                <th className="text-left py-1">Regime</th>
-                <th className="text-left py-1">Trim</th>
-                <th className="text-left py-1">Top reason</th>
+                <th className="hidden lg:table-cell text-left py-1">Regime</th>
+                <th className="hidden lg:table-cell text-left py-1">Trim</th>
+                <th className="hidden lg:table-cell text-left py-1">Top reason</th>
               </tr>
             </thead>
             <tbody>
@@ -107,7 +107,7 @@ export function SellCandidatesPanel({ entries, computedAt }: Props) {
                         : "—"}
                     </td>
                     <td className="py-2 text-fg-secondary">{e.current_verdict ?? "—"}</td>
-                    <td className={`py-2 ${regimeStyle(e.regime)}`}>
+                    <td className={`hidden lg:table-cell py-2 ${regimeStyle(e.regime)}`}>
                       {e.regime ?? "—"}
                       {e.regime_signal !== null && e.regime !== null && (
                         <span className="ml-1 text-xs text-muted">
@@ -116,7 +116,7 @@ export function SellCandidatesPanel({ entries, computedAt }: Props) {
                         </span>
                       )}
                     </td>
-                    <td className="py-2">
+                    <td className="hidden lg:table-cell py-2">
                       <span
                         className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${lvl.cls}`}
                         title={e.reasons.join("\n")}
@@ -124,14 +124,14 @@ export function SellCandidatesPanel({ entries, computedAt }: Props) {
                         {lvl.label}
                       </span>
                     </td>
-                    <td className="py-2 text-muted" title={e.reasons.join("\n")}>
+                    <td className="hidden lg:table-cell py-2 text-muted" title={e.reasons.join("\n")}>
                       {e.reasons[0] ?? ""}
                     </td>
                   </tr>
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
           <p className="mt-2 text-xs text-muted">
             Showing {flagged.length} of {entries.length} holdings · {strongCount} strong · {considerCount} consider · {watchCount} watch
           </p>

@@ -58,9 +58,14 @@ export default function PerformancePage() {
               <table className="w-full text-sm">
                 <thead className="bg-page">
                   <tr>
-                    {["Ticker", "Date", "Verdict", "Day 0", "+7d", "+14d", "+30d", "+90d"].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">{h}</th>
-                    ))}
+                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Ticker</th>
+                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Date</th>
+                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Verdict</th>
+                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Day 0</th>
+                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">+7d</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">+14d</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">+30d</th>
+                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">+90d</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -91,7 +96,7 @@ export default function PerformancePage() {
                         </td>
                         <td className="px-4 py-3 text-fg-secondary">{base ? `$${base.toFixed(2)}` : "—"}</td>
                         {[o.price_7d, o.price_14d, o.price_30d, o.price_90d].map((v, i) => (
-                          <td key={i} className={`px-4 py-3 ${color(v)}`}>{pct(v)}</td>
+                          <td key={i} className={`${i > 0 ? "hidden lg:table-cell " : ""}px-4 py-3 ${color(v)}`}>{pct(v)}</td>
                         ))}
                       </tr>
                     );

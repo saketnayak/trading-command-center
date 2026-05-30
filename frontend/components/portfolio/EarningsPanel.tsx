@@ -84,10 +84,10 @@ export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }:
               <th className="text-left px-4 py-3">Ticker</th>
               <th className="text-left px-4 py-3">Date</th>
               <th className="text-right px-4 py-3">Days Away</th>
-              <th className="text-right px-4 py-3">EPS Est.</th>
-              <th className="text-right px-4 py-3">EPS Actual</th>
-              <th className="text-right px-4 py-3">Rev. Est. ($B)</th>
-              <th className="text-right px-4 py-3">Quarter</th>
+              <th className="hidden lg:table-cell text-right px-4 py-3">EPS Est.</th>
+              <th className="hidden lg:table-cell text-right px-4 py-3">EPS Actual</th>
+              <th className="hidden lg:table-cell text-right px-4 py-3">Rev. Est. ($B)</th>
+              <th className="hidden lg:table-cell text-right px-4 py-3">Quarter</th>
             </tr>
           </thead>
           <tbody>
@@ -124,8 +124,8 @@ export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }:
                       {isPast ? `${Math.abs(days)}d ago` : `${days}d`}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-fg-secondary">{fmtNum(e.eps_estimate, "$")}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">
+                  <td className="hidden lg:table-cell px-4 py-2 text-right tabular-nums text-fg-secondary">{fmtNum(e.eps_estimate, "$")}</td>
+                  <td className="hidden lg:table-cell px-4 py-2 text-right tabular-nums">
                     {e.eps_actual != null ? (
                       <span className={e.eps_actual >= (e.eps_estimate ?? 0) ? "text-green-400" : "text-red-400"}>
                         {fmtNum(e.eps_actual, "$")}
@@ -134,10 +134,10 @@ export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }:
                       <span className="text-muted">—</span>
                     )}
                   </td>
-                  <td className="px-4 py-2 text-right tabular-nums text-fg-secondary">
+                  <td className="hidden lg:table-cell px-4 py-2 text-right tabular-nums text-fg-secondary">
                     {e.revenue_estimate != null ? (e.revenue_estimate / 1e9).toFixed(2) : "—"}
                   </td>
-                  <td className="px-4 py-2 text-right text-muted text-xs">{e.quarter_ending ?? "—"}</td>
+                  <td className="hidden lg:table-cell px-4 py-2 text-right text-muted text-xs">{e.quarter_ending ?? "—"}</td>
                 </tr>
               );
             })}

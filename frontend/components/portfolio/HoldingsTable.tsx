@@ -34,6 +34,7 @@ function SortableHeader({
   sortDir,
   onSort,
   align = "right",
+  className = "",
 }: {
   label: string;
   colKey: SortKey;
@@ -41,12 +42,13 @@ function SortableHeader({
   sortDir: SortDir;
   onSort: (key: SortKey) => void;
   align?: "left" | "right";
+  className?: string;
 }) {
   const active = sortKey === colKey;
   const arrow = active ? (sortDir === "asc" ? " ↑" : " ↓") : "";
   return (
     <th
-      className={`px-3 py-3 text-${align} cursor-pointer select-none group whitespace-nowrap`}
+      className={`px-3 py-3 text-${align} cursor-pointer select-none group whitespace-nowrap ${className}`}
       onClick={() => onSort(colKey)}
     >
       <span className={active ? "text-blue-400" : "group-hover:text-fg transition-colors"}>
@@ -605,14 +607,14 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
             <tr>
               <SortableHeader label="Ticker"         colKey="ticker"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="left" />
               <SortableHeader label="Position"       colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <SortableHeader label="Current Price"  colKey="current_price"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <SortableHeader label="Market Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
+              <SortableHeader label="Current Price"  colKey="current_price"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="hidden lg:table-cell" />
+              <SortableHeader label="Market Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="hidden lg:table-cell" />
               <SortableHeader label="Unrealized P&L" colKey="unrealized_pnl" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
               <th className="text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">Last Analysis</th>
               {hasRegime && (
-                <th className="text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">AI vs Regime</th>
+                <th className="hidden lg:table-cell text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">AI vs Regime</th>
               )}
-              <th className="text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">Trim</th>
+              <th className="hidden lg:table-cell text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">Trim</th>
               <th className="text-left px-3 py-3">Actions</th>
             </tr>
           </thead>
@@ -719,10 +721,10 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       </td>
 
                       {/* Current Price (read-only) */}
-                      <td className="px-3 py-2 text-right text-fg-secondary tabular-nums font-mono text-xs">{fmtMoney(h.current_price, displayCurrency)}</td>
+                      <td className="hidden lg:table-cell px-3 py-2 text-right text-fg-secondary tabular-nums font-mono text-xs">{fmtMoney(h.current_price, displayCurrency)}</td>
 
                       {/* Market Value (read-only) */}
-                      <td className="px-3 py-2 text-right text-fg-secondary tabular-nums font-mono text-xs">{fmtMoney(h.market_value, displayCurrency)}</td>
+                      <td className="hidden lg:table-cell px-3 py-2 text-right text-fg-secondary tabular-nums font-mono text-xs">{fmtMoney(h.market_value, displayCurrency)}</td>
 
                       {/* Unrealized P&L (read-only) */}
                       <td className={`px-3 py-2 text-right tabular-nums ${pnlColor}`}>
@@ -778,14 +780,14 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       {hasRegime && (() => {
                         const r = regime?.[h.ticker];
                         const verdict = rowEntry?.verdict;
-                        if (!r || !verdict) return <td className="px-3 py-2 text-muted text-xs">—</td>;
+                        if (!r || !verdict) return <td className="hidden lg:table-cell px-3 py-2 text-muted text-xs">—</td>;
                         const isConflict =
                           (verdict === "buy" && r.signal < 0) ||
                           (verdict === "sell" && r.signal > 0);
                         const isNeutral = verdict === "hold" || r.current_regime === "Sideways";
                         const signStr = `${r.signal >= 0 ? "+" : ""}${r.signal.toFixed(2)}`;
                         return (
-                          <td className="px-3 py-2 text-xs whitespace-nowrap">
+                          <td className="hidden lg:table-cell px-3 py-2 text-xs whitespace-nowrap">
                             {isConflict ? (
                               <span
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-900/30 text-amber-400 border border-amber-500/30"
@@ -808,7 +810,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       })()}
 
                       {/* Trim */}
-                      <td className="px-3 py-2">
+                      <td className="hidden lg:table-cell px-3 py-2">
                         <TrimBadge entry={trimSignals?.[h.id]} />
                       </td>
 
