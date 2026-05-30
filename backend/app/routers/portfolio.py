@@ -1,5 +1,6 @@
 import asyncio
 import csv
+import weakref
 import io
 import time
 from uuid import UUID
@@ -36,8 +37,16 @@ router = APIRouter()
 # In-process price cache: ticker → (price, expiry_unix_ts)
 _price_cache: dict[str, tuple[Optional[float], float]] = {}
 _CACHE_TTL = 3600  # 1 hour
-# Limit concurrent Finnhub requests to avoid 429 rate-limit errors
-_finnhub_semaphore = asyncio.Semaphore(5)
+# Lazily initialized per event loop to avoid loop-mismatch errors in multi-loop
+# environments (e.g. pytest-asyncio with function-scoped loops).
+_finnhub_semaphores: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _get_finnhub_semaphore() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    if loop not in _finnhub_semaphores:
+        _finnhub_semaphores[loop] = asyncio.Semaphore(5)
+    return _finnhub_semaphores[loop]
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -165,7 +174,7 @@ async def _fetch_price(ticker: str, api_key: Optional[str]) -> Optional[float]:
             url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={api_key}"
             data: dict = {}
             try:
-                async with _finnhub_semaphore:
+                async with _get_finnhub_semaphore():
                     async with httpx.AsyncClient(timeout=8) as client:
                         r = await client.get(url)
                         r.raise_for_status()

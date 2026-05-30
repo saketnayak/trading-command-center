@@ -10,14 +10,23 @@ will return None if Yahoo cannot resolve them.
 """
 import asyncio
 import logging
+import weakref
 from typing import Optional
 
 import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
-# Cap concurrent yfinance fetches to avoid Yahoo Finance throttling
-_yf_semaphore = asyncio.Semaphore(5)
+# Lazily initialized per event loop to avoid loop-mismatch errors in multi-loop
+# environments (e.g. pytest-asyncio with function-scoped loops).
+_yf_semaphores: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _get_yf_semaphore() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    if loop not in _yf_semaphores:
+        _yf_semaphores[loop] = asyncio.Semaphore(5)
+    return _yf_semaphores[loop]
 
 
 def _sync_fetch_price(ticker: str) -> Optional[float]:
@@ -39,5 +48,5 @@ def _sync_fetch_price(ticker: str) -> Optional[float]:
 
 async def fetch_price(ticker: str) -> Optional[float]:
     """Async wrapper: fetches stock price via Yahoo Finance with concurrency throttling."""
-    async with _yf_semaphore:
+    async with _get_yf_semaphore():
         return await asyncio.to_thread(_sync_fetch_price, ticker)
