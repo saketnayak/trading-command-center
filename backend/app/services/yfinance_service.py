@@ -12,6 +12,8 @@ import asyncio
 import logging
 from typing import Optional
 
+import yfinance as yf
+
 logger = logging.getLogger(__name__)
 
 # Cap concurrent yfinance fetches to avoid Yahoo Finance throttling
@@ -22,7 +24,6 @@ def _sync_fetch_price(ticker: str) -> Optional[float]:
     """Synchronous price fetch via yfinance fast_info.
     Returns current/last traded price, falling back to previous close."""
     try:
-        import yfinance as yf
         info = yf.Ticker(ticker).fast_info
         last = getattr(info, "last_price", None)
         prev = getattr(info, "previous_close", None)
