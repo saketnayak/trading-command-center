@@ -29,12 +29,15 @@ from app.schemas.portfolio_delivery_settings import UpdateDeliverySettingsReques
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
 import app.services.fx_service as fx
+import app.services.yfinance_service as _yf
 
 router = APIRouter()
 
 # In-process price cache: ticker → (price, expiry_unix_ts)
 _price_cache: dict[str, tuple[Optional[float], float]] = {}
 _CACHE_TTL = 3600  # 1 hour
+# Limit concurrent Finnhub requests to avoid 429 rate-limit errors
+_finnhub_semaphore = asyncio.Semaphore(5)
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -154,25 +157,31 @@ async def _fetch_price(ticker: str, api_key: Optional[str]) -> Optional[float]:
         price = await _crypto.fetch_price(ticker, finnhub_key=api_key)
     else:
         if not api_key:
-            return None
-        url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={api_key}"
-        try:
-            async with httpx.AsyncClient(timeout=8) as client:
-                r = await client.get(url)
-                r.raise_for_status()
-                data = r.json()
-            c = data.get("c")
-            pc = data.get("pc")
-            # c == 0 means market is closed / data unavailable; fall back to
-            # previous close (pc) so prices still show on weekends/after-hours.
-            if c is not None and c != 0:
-                price = float(c)
-            elif pc is not None and pc != 0:
-                price = float(pc)
-            else:
+            # No Finnhub key — fall back to Yahoo Finance (15-min delayed, no key required).
+            # price_unavailable_reason is still set on the response so the UI warns the user
+            # to configure a Finnhub key for real-time data.
+            price = await _yf.fetch_price(ticker)
+        else:
+            url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={api_key}"
+            data: dict = {}
+            try:
+                async with _finnhub_semaphore:
+                    async with httpx.AsyncClient(timeout=8) as client:
+                        r = await client.get(url)
+                        r.raise_for_status()
+                        data = r.json()
+                # c == 0 means market is closed / data unavailable; fall back to
+                # previous close (pc) so prices still show on weekends/after-hours.
+                c = data.get("c")
+                pc = data.get("pc")
+                if c is not None and c != 0:
+                    price = float(c)
+                elif pc is not None and pc != 0:
+                    price = float(pc)
+                else:
+                    price = None
+            except Exception:
                 price = None
-        except Exception:
-            price = None
 
     # Don't cache None for the full hour — retry after 2 minutes so a transient
     # failure or a market-close race doesn't lock out prices for the whole TTL.
@@ -213,14 +222,11 @@ async def _fetch_prices_bulk(
             result[ticker] = price
             _price_cache[ticker] = (price, now + _CACHE_TTL)
 
-    # Fetch stocks concurrently via Finnhub
-    if uncached_stock and api_key:
+    # Fetch stocks concurrently — Finnhub when key is present, yfinance fallback otherwise
+    if uncached_stock:
         stock_prices = await asyncio.gather(*[_fetch_price(t, api_key) for t in uncached_stock])
         for ticker, price in zip(uncached_stock, stock_prices):
             result[ticker] = price
-    elif uncached_stock:
-        for ticker in uncached_stock:
-            result[ticker] = None
 
     return result
 
