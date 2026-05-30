@@ -39,7 +39,7 @@ function RunColumn({ side, data }: { side: "A" | "B"; data: RunWithReport }) {
       )}
 
       {report && (
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
           {[
             { label: "Entry", value: report.suggested_entry },
             { label: "Stop", value: report.suggested_stop },
@@ -91,7 +91,7 @@ export function ComparisonPanel({ a, b }: { a: RunWithReport; b: RunWithReport }
             : `Verdicts differ — Run A says ${verdictA.toUpperCase()}, Run B says ${verdictB.toUpperCase()}`}
         </div>
       )}
-      <div className="flex gap-4 items-start">
+      <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-start">
         <RunColumn side="A" data={a} />
         <RunColumn side="B" data={b} />
       </div>

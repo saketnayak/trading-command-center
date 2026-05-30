@@ -59,7 +59,7 @@ export function ApiKeyRow({ provider, label, description, placeholder, docsUrl, 
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={placeholder ?? "sk-…"}
-        className="bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg w-64 focus:outline-hidden focus:border-blue-500"
+        className="bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
       />
       <button
         onClick={() => mutation.mutate()}

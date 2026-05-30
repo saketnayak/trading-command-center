@@ -50,7 +50,7 @@ export function PortfolioHeader({
     : null;
 
   return (
-    <div className="flex items-center gap-4 bg-input/50 border border-border rounded-sm px-4 py-3">
+    <div className="flex flex-col lg:flex-row lg:items-center gap-4 bg-input/50 border border-border rounded-sm px-4 py-3">
       {/* Left: portfolio name + meta */}
       <div className="flex items-center gap-3 min-w-0">
         <span className="text-purple-400 font-medium text-sm truncate">{portfolio.name}</span>
@@ -68,11 +68,11 @@ export function PortfolioHeader({
       </div>
 
       {/* Spacer */}
-      <div className="flex-1" />
+      <div className="hidden lg:block flex-1" />
 
       {/* Right: totals */}
       {hasData ? (
-        <div className="flex items-center gap-4 shrink-0">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0 w-full lg:w-auto">
           <div className="text-right">
             <div className="text-fg text-sm font-semibold tabular-nums">
               {fmtMoney(totals!.market_value, displayCurrency)}
@@ -93,7 +93,7 @@ export function PortfolioHeader({
       )}
 
       {/* Divider */}
-      <div className="h-6 w-px bg-muted-surface shrink-0" />
+      <div className="hidden sm:block h-6 w-px bg-muted-surface shrink-0" />
 
       {/* Action buttons */}
       <div className="flex items-center gap-1 shrink-0">

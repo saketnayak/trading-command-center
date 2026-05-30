@@ -74,9 +74,9 @@ export function ChatPanel({ portfolioId }: { portfolioId: string }) {
   }
 
   return (
-    <div className="flex h-[calc(100vh-200px)] gap-4">
+    <div className="flex flex-col lg:flex-row gap-4 min-h-[24rem] lg:h-[calc(100vh-200px)]">
       {/* Sidebar */}
-      <div className="w-48 shrink-0 flex flex-col gap-4">
+      <div className="w-full lg:w-48 shrink-0 flex flex-col gap-4">
         <div className="bg-input/60 border border-input-border rounded-lg p-3">
           <p className="text-xs font-medium text-muted mb-1">Context</p>
           <p className="text-xs text-muted">Live holdings, verdicts, and latest insight.</p>

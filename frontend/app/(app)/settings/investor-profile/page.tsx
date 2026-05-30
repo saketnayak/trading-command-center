@@ -179,7 +179,7 @@ export default function InvestorProfilePage() {
   });
 
   return (
-    <main className="p-6 max-w-2xl mx-auto">
+    <main className="px-4 py-4 sm:p-6 max-w-2xl mx-auto">
         <div className="flex items-center gap-3 mb-8">
           <a href="/settings" className="text-muted hover:text-fg-secondary text-sm">← Settings</a>
           <h1 className="text-lg font-semibold text-fg">Investor DNA</h1>
@@ -243,7 +243,7 @@ export default function InvestorProfilePage() {
             </div>
             <div>
               <Label>Risk willingness: {form.risk_willingness}/5</Label>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <span className="text-muted text-xs">Conservative</span>
                 <input
                   type="range"
@@ -350,7 +350,7 @@ export default function InvestorProfilePage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <button
               type="submit"
               disabled={saveMutation.isPending || saved}

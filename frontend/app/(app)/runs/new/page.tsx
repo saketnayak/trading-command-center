@@ -31,7 +31,7 @@ function NewRunContent() {
 
 export default function NewRunPage() {
   return (
-    <main className="p-6">
+    <main className="px-4 py-4 sm:p-6">
       <h1 className="text-fg text-lg font-semibold mb-6">New Run</h1>
       <Suspense fallback={<div className="text-muted text-sm">Loading…</div>}>
         <NewRunContent />

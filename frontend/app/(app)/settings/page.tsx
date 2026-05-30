@@ -188,47 +188,47 @@ export default function SettingsPage() {
 
   return (
     <>
-    <main className="p-6 max-w-3xl mx-auto flex flex-col gap-8">
+    <main className="px-4 py-4 sm:p-6 max-w-3xl mx-auto flex flex-col gap-8">
 
         {/* Profile */}
         <SectionCard title="My Profile" description="Your display name and login credentials.">
           <div className="px-4 py-4 flex flex-col gap-4">
-            <div className="flex items-center gap-4">
-              <label className="text-muted text-xs w-32 shrink-0">Display Name</label>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <label className="text-muted text-xs sm:w-32 shrink-0">Display Name</label>
               <input
                 type="text"
                 value={profileName}
                 onChange={(e) => { setProfileName(e.target.value); setProfileStatus("idle"); }}
-                className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-64 focus:outline-hidden focus:border-blue-500"
+                className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
               />
             </div>
             <Divider />
             <div className="flex flex-col gap-2">
               <span className="text-muted text-xs">Change Password</span>
-              <div className="flex items-center gap-3">
-                <label className="text-muted text-xs w-32 shrink-0">Current</label>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <label className="text-muted text-xs sm:w-32 shrink-0">Current</label>
                 <input
                   type="password"
                   value={currentPassword}
                   onChange={(e) => { setCurrentPassword(e.target.value); setProfileStatus("idle"); }}
                   placeholder="Current password"
-                  className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-64 focus:outline-hidden focus:border-blue-500"
+                  className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
                 />
               </div>
-              <div className="flex items-center gap-3">
-                <label className="text-muted text-xs w-32 shrink-0">New</label>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <label className="text-muted text-xs sm:w-32 shrink-0">New</label>
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); setProfileStatus("idle"); }}
                   placeholder="New password"
-                  className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-64 focus:outline-hidden focus:border-blue-500"
+                  className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
                 />
               </div>
             </div>
             <Divider />
-            <div className="flex items-center gap-4">
-              <label className="text-muted text-xs w-32 shrink-0">Display Currency</label>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+              <label className="text-muted text-xs sm:w-32 shrink-0">Display Currency</label>
               <select
                 value={preferredCurrency}
                 onChange={(e) => { setPreferredCurrency(e.target.value); setProfileStatus("idle"); }}
@@ -259,7 +259,7 @@ export default function SettingsPage() {
             {profileLoading ? (
               <div className="h-8 bg-input rounded-sm animate-pulse w-48" />
             ) : investorProfile ? (
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex gap-6 text-sm">
                   {investorProfile.time_horizon && (
                     <div>
@@ -280,13 +280,13 @@ export default function SettingsPage() {
                     </div>
                   )}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   <span className="text-xs text-green-400 font-medium">● DNA active</span>
                   <a href="/settings/investor-profile" className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 rounded-sm px-2 py-1">Edit</a>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-between">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-muted text-sm">Personalize your AI insights by sharing your investment context.</p>
                 <a href="/settings/investor-profile" className="text-xs text-purple-400 hover:text-purple-300 border border-purple-500/30 rounded-sm px-3 py-1.5">Set up →</a>
               </div>
@@ -351,8 +351,8 @@ export default function SettingsPage() {
             description="Notifies users when their analysis runs complete."
           >
             <div className="px-4 py-4 flex flex-col gap-3">
-              <div className="flex items-center gap-3">
-                <span className="text-muted text-xs w-32 shrink-0">Status</span>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="text-muted text-xs sm:w-32 shrink-0">Status</span>
                 {smtpLoading ? (
                   <span className="text-muted text-xs">Checking…</span>
                 ) : smtpError ? (
@@ -364,8 +364,8 @@ export default function SettingsPage() {
                 )}
               </div>
               {!smtpLoading && !smtpError && smtpStatus?.configured && smtpStatus.from_address && (
-                <div className="flex items-center gap-3">
-                  <span className="text-muted text-xs w-32 shrink-0">Sending from</span>
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <span className="text-muted text-xs sm:w-32 shrink-0">Sending from</span>
                   <span className="text-fg-secondary text-xs font-mono">{smtpStatus.from_address}</span>
                 </div>
               )}
@@ -422,7 +422,7 @@ SMTP_FROM=noreply@yourdomain.com`}
                 value={inviteEmail}
                 onChange={(e) => { setInviteEmail(e.target.value); setInviteStatus("idle"); }}
                 placeholder="member@example.com"
-                className="bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg w-64 focus:outline-hidden focus:border-blue-500"
+                className="bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
               />
               <button
                 onClick={() => { setInviteStatus("idle"); setInviteUrl(null); inviteMutation.mutate(); }}
@@ -464,7 +464,7 @@ SMTP_FROM=noreply@yourdomain.com`}
           >
             <div className="px-4 py-4 flex flex-col gap-5">
               {/* Backup */}
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                 <div className="flex-1">
                   <p className="text-fg-secondary text-xs font-medium mb-0.5">Download Backup</p>
                   <p className="text-muted text-xs">

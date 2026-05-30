@@ -85,7 +85,7 @@ function BatchAnalyzeModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs">
       <div className="bg-elevated border border-input-border rounded-xl shadow-xl w-full max-w-md mx-4 p-6 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-base font-semibold text-fg">Analyze All Stale Holdings</h2>
           <button onClick={onClose} className="text-muted hover:text-fg-secondary text-lg">✕</button>
         </div>
@@ -323,7 +323,7 @@ export default function PortfolioPage() {
 
   return (
     <>
-    <main className="max-w-screen-2xl mx-auto px-6 py-6 space-y-4">
+    <main className="max-w-screen-2xl mx-auto px-4 py-4 sm:px-6 sm:py-6 space-y-4">
         <h1 className="text-lg font-semibold text-fg">Portfolio</h1>
 
         <div className="flex items-center gap-4">
@@ -378,7 +378,7 @@ export default function PortfolioPage() {
 
         {/* Tab bar — Market tab is always accessible; portfolio tabs require a loaded portfolio */}
         {!loadingPortfolios && (
-          <div className="flex gap-1 border-b border-border">
+          <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-thin">
             {selectedId && current && TABS.filter((t) => t.id !== "trending").map((t) => (
               <button
                 key={t.id}

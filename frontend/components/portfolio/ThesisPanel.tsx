@@ -67,7 +67,7 @@ function CrossRefResult({ result }: { result: ThesisCrossRef }) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {result.aligned_positions && result.aligned_positions.length > 0 && (
           <div className="bg-green-900/10 border border-green-800/40 rounded-lg p-4">
             <p className="text-xs text-green-400 font-medium uppercase tracking-wide mb-2">
@@ -101,7 +101,7 @@ function CrossRefResult({ result }: { result: ThesisCrossRef }) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {result.missing_exposure && result.missing_exposure.length > 0 && (
           <div>
             <p className="text-xs text-muted font-medium uppercase tracking-wide mb-2">Missing exposure</p>

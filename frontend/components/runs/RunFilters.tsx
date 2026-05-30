@@ -15,11 +15,11 @@ interface RunFiltersProps {
 }
 
 const inputClass =
-  "bg-surface border border-border rounded-sm px-3 py-2 text-sm text-fg focus:outline-hidden focus:border-blue-500";
+  "w-full min-w-0 bg-surface border border-border rounded-sm px-3 py-2 text-sm text-fg focus:outline-hidden focus:border-blue-500";
 
 export function RunFilters({ value, onChange }: RunFiltersProps) {
   return (
-    <div className="flex items-center gap-3 bg-input rounded-sm px-4 py-3 mb-4">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-input rounded-sm px-4 py-3 mb-4">
       <input
         type="text"
         placeholder="TICKER"

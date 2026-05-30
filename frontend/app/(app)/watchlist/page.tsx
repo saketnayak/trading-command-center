@@ -399,14 +399,14 @@ export default function WatchlistPage() {
   });
 
   return (
-    <main className="p-6 max-w-6xl mx-auto flex flex-col gap-6">
-        <div className="flex items-center justify-between">
+    <main className="px-4 py-4 sm:p-6 max-w-6xl mx-auto flex flex-col gap-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link href="/runs" className="text-blue-400 hover:underline text-sm">← Back to History</Link>
           <h1 className="text-lg font-semibold text-fg">Watchlist</h1>
         </div>
 
         <div className="bg-elevated border border-input-border rounded-xl p-5">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
             <p className="text-xs text-muted uppercase tracking-wide font-semibold">
               Add Ticker
             </p>
@@ -437,7 +437,7 @@ export default function WatchlistPage() {
             {watchlist.items.length === 0 ? (
               <p className="text-muted text-sm text-center py-10">No tickers yet. Add one above to start tracking.</p>
             ) : (
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[720px]">
                 <thead className="bg-page">
                   <tr>
                     {["Ticker", "Model", "Depth", "Analysts", "Schedule", "Last Run", "Status", "Actions"].map((h) => (
@@ -456,7 +456,7 @@ export default function WatchlistPage() {
                     />
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             )}
           </div>
         )}

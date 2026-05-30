@@ -123,8 +123,8 @@ function CompareContent() {
 
 export default function ComparePage() {
   return (
-    <main className="p-6 max-w-7xl mx-auto flex flex-col gap-6">
-        <div className="flex items-center justify-between">
+    <main className="px-4 py-4 sm:p-6 max-w-7xl mx-auto flex flex-col gap-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link href="/runs" className="text-blue-400 hover:underline text-sm">
             ← Back to History
           </Link>

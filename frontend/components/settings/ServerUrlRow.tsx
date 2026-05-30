@@ -34,7 +34,7 @@ export function ServerUrlRow({ provider, label, isValid, onSaved }: ServerUrlRow
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={provider === "ollama" ? "http://localhost:11434" : "http://localhost:8080"}
-        className="bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg w-64 focus:outline-hidden focus:border-blue-500"
+        className="bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
       />
       <button
         onClick={() => mutation.mutate()}

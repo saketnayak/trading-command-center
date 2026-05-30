@@ -30,7 +30,7 @@ export function OutcomeCard({ outcome }: { outcome: RunOutcome }) {
       <h2 className="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-4">
         Trade Outcome
       </h2>
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {CHECKPOINTS.map(({ label, key }) => {
           const price = outcome[key] as number | null;
           return (

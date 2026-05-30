@@ -55,7 +55,7 @@ export function MarkovConfirmation({ ticker, verdict }: Props) {
         <span className="text-[10px] text-muted uppercase tracking-wide">yfinance · 10y daily</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
         <div>
           <span className="text-muted uppercase text-[10px] tracking-wide block">AI Verdict</span>
           <span className="text-fg font-semibold uppercase">{verdict ?? "—"}</span>

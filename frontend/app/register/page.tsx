@@ -31,7 +31,7 @@ function RegisterForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-page">
-      <div className="w-80 bg-surface border border-border rounded-lg p-8">
+      <div className="w-full max-w-sm mx-4 bg-surface border border-border rounded-lg p-8">
         <div className="flex justify-center mb-4">
           <Logo height={44} />
         </div>

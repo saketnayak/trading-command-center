@@ -89,10 +89,10 @@ export default function RunsPage() {
   const canCompare = selectedIds.length === 2 && selectedRuns.every((r) => r.status === "completed");
 
   return (
-    <main className="p-6">
-        <div className="flex items-center justify-between mb-4">
+    <main className="px-4 py-4 sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
           <h1 className="text-fg text-lg font-semibold">Run History</h1>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {lastUpdated && (
               <span className="text-muted text-xs">
                 Updated {secondsAgo < 5 ? "just now" : `${secondsAgo}s ago`}
@@ -150,11 +150,11 @@ export default function RunsPage() {
         <RunFilters value={filters} onChange={setFilters} />
 
         {selectedIds.length > 0 && (
-          <div className="flex items-center justify-between bg-input/80 border border-input-border rounded-lg px-4 py-2.5 mb-1">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-input/80 border border-input-border rounded-lg px-4 py-2.5 mb-1">
             <span className="text-sm text-fg-secondary">
               {selectedIds.length} {selectedIds.length === 1 ? "run" : "runs"} selected
             </span>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <button
                 onClick={() => { setSelectedIds([]); setConfirmBulkDelete(false); }}
                 className="text-xs text-muted hover:text-fg"

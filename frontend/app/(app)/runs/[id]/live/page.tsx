@@ -54,9 +54,9 @@ export default function LiveRunPage() {
     run?.status === "aborted";
 
   return (
-    <div className="h-[calc(100vh-2.5rem)] flex flex-col flex-1 min-h-0">
-      <div className="flex gap-4 p-6 max-w-7xl mx-auto w-full flex-1 overflow-hidden">
-        <div className="w-64 shrink-0 flex flex-col gap-4 overflow-y-auto">
+    <div className="min-h-0 flex-1 flex flex-col">
+      <div className="flex flex-col lg:flex-row gap-4 p-4 sm:p-6 max-w-7xl mx-auto w-full flex-1 overflow-hidden">
+        <div className="w-full lg:w-64 shrink-0 flex flex-col gap-4 overflow-y-auto">
           <AgentSidebar run={run} onAbort={handleAbort} />
           {run && <PipelinePanel analysts={run.analysts} events={events} />}
           {isDone && (

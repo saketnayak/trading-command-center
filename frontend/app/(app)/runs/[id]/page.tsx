@@ -49,7 +49,7 @@ function NotesEditor({ id, notes }: { id: string; notes: string | null }) {
           rows={4}
           className="bg-page border border-input-border rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-blue-500 resize-y"
         />
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             onClick={() => mutation.mutate(value)}
             disabled={mutation.isPending}
@@ -166,15 +166,15 @@ export default function RunResultsPage() {
   const isRunning = run?.status === "pending" || run?.status === "running";
 
   return (
-    <main className="p-6 max-w-5xl mx-auto flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+    <main className="px-4 py-4 sm:p-6 max-w-5xl mx-auto flex flex-col gap-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
             <Link href="/runs" className="text-blue-400 hover:underline text-sm">
               ← Back to History
             </Link>
             {run && <LabelEditor id={id} label={run.label} />}
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {run && (
               <Link href={rerunUrl(run)} className="text-muted hover:text-blue-400 text-sm">
                 Re-run

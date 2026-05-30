@@ -17,12 +17,12 @@ export default function PerformancePage() {
   });
 
   return (
-    <main className="p-6 max-w-5xl mx-auto flex flex-col gap-6">
-        <div className="flex items-center justify-between">
+    <main className="px-4 py-4 sm:p-6 max-w-5xl mx-auto flex flex-col gap-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <Link href="/runs" className="text-blue-400 hover:underline text-sm">
             ← Back to History
           </Link>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <h1 className="text-lg font-semibold text-fg">Trade Accuracy</h1>
             <button
               onClick={() => data && downloadPerformanceCsv(data)}
@@ -39,7 +39,7 @@ export default function PerformancePage() {
 
         {data && (
           <>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               {[
                 { label: "7-day accuracy", value: data.accuracy_7d },
                 { label: "14-day accuracy", value: data.accuracy_14d },
@@ -54,7 +54,7 @@ export default function PerformancePage() {
               ))}
             </div>
 
-            <div className="bg-elevated border border-input-border rounded-xl overflow-hidden">
+            <div className="bg-elevated border border-input-border rounded-xl overflow-hidden overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-page">
                   <tr>

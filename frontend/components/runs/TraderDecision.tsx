@@ -63,7 +63,7 @@ export function TraderDecision({ run, report }: Props) {
           </div>
 
           {hasPrices && (
-            <div className="flex gap-6 border-t border-input-border pt-4">
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6 border-t border-input-border pt-4">
               <PriceLevel label="Entry" value={report.suggested_entry} />
               <div className="w-px bg-muted-surface" />
               <PriceLevel label="Stop" value={report.suggested_stop} />

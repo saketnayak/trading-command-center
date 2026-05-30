@@ -572,9 +572,9 @@ export function InsightsDashboard({ portfolioId, hasHoldings, portfolioName }: I
   return (
     <div>
       <BehavioralAlerts portfolioId={portfolioId} />
-      <div className="flex gap-5">
+      <div className="flex flex-col lg:flex-row gap-5">
       {/* Sidebar: history + generate button */}
-      <div className="w-52 shrink-0 space-y-2">
+      <div className="w-full lg:w-52 shrink-0 space-y-2">
         <button
           onClick={() => setShowGenerate((v) => !v)}
           disabled={isRunning}
