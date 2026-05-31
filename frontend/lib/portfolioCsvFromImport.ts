@@ -19,10 +19,13 @@ function normalizeNumericString(value: string): string {
   }
 
   if (lastComma !== -1) {
-    return cleaned.replace(",", ".");
+    if (/^[+-]?\d{1,3}(,\d{3})+$/.test(cleaned)) {
+      return cleaned.replace(/,/g, "");
+    }
+    return cleaned.replace(/,/g, ".");
   }
 
-  return cleaned.replace(/,/g, "");
+  return cleaned;
 }
 
 export function parseNumericCell(value: unknown): number | null {
