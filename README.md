@@ -87,16 +87,38 @@ Import your holdings from any broker CSV or add tickers manually. Once a [free F
 
 | Feature | Detail |
 |---|---|
-| **Live prices & P&L** | Current price, market value, unrealized gain/loss per holding, color-coded |
+| **Live prices & P&L** | Current price, market value, unrealized gain/loss per holding, color-coded. Finnhub is the primary source, with an automatic Yahoo Finance fallback so prices fill in even when Finnhub is missing a ticker |
 | **AI Portfolio Insights** | Daily briefing: health score (1-10), overall stance, action items (BUY MORE / TRIM / EXIT / WATCH / REANALYZE), risk alerts, sector chart |
+| **Behavioral alerts** | Surfaces behavioral-finance patterns from your own activity — concentration drift, sector over-weighting, and stale/unanalyzed positions — each with a suggested action |
 | **Earnings calendar** | 60-day upcoming earnings for all holdings; days-away urgency coloring; EPS beat/miss |
 | **Key fundamentals** | Expandable row per holding: P/E, Beta, 52-week range, dividend yield, EPS (TTM), market cap |
+| **PEG valuation** | Per-holding PEG ratio (P/E ÷ 3-year EPS growth) classified as **Undervalued** (< 1.0), **Fairly valued** (≤ 1.5), or **Overvalued**; filter the holdings grid by valuation band. N/A when earnings are negative or growth data is unavailable |
 | **News feed** | Merged, time-sorted company news for all holdings; per-ticker color badges |
-| **Market regime detection** | Per-holding Markov regime badge (Bull / Sideways / Bear) with directional signal and Sharpe ratio; portfolio-wide regime distribution in the stats bar; filter holdings by regime; expandable 3×3 transition matrix |
-| **Sell-side signals** | Holdings are flagged as trim candidates and surfaced as a "Sell Candidates" banner, combining valuation, regime, and the latest AI verdict |
+| **Market regime detection** | Per-holding **Markov regime** badge (Bull / Sideways / Bear) fitted on ~10 years of daily returns, with a directional signal (−1 to +1), walk-forward Sharpe, and max drawdown. Expand any row for the full 3×3 state-transition matrix. The stats bar shows the portfolio-wide regime distribution and average signal, and you can filter holdings by regime. On a run, an **AI-vs-regime** badge flags whether the AI verdict agrees or conflicts with the detected regime |
+| **Sell-side signals** | Holdings are scored as trim candidates and surfaced as a "Sell Candidates" banner, combining PEG valuation, Markov regime, unrealized P&L, position weight, and the latest AI verdict |
 | **Analyze all stale** | One click to batch-queue AI analysis for every holding not reviewed in the last 7 days |
 | **Multi-currency** | Display in USD, EUR, GBP, AUD, JPY, CAD, CHF, CNY, INR, or SGD with live ECB rates |
+| **Crypto holdings** | Crypto tickers (e.g. `BTC-USD`, `ETH-USD`) are priced via CoinGecko and analyzed by the agent team (the fundamentals analyst is skipped for crypto) |
 | **CSV export** | Download current holdings with live prices and P&L included |
+
+### AI portfolio tools
+
+Beyond the holdings grid, the portfolio workspace has dedicated tabs that put an LLM to work on your positions:
+
+| Tool | What it does |
+|---|---|
+| **Chat** | Ask free-form questions about your portfolio ("What's my tech exposure?", "Which positions look overvalued?"). The assistant answers with your live holdings, prices, and P&L in context |
+| **Thesis cross-reference** | Paste an investment thesis (50–10,000 chars) and get an alignment score (1–10), a summary of the thesis, and a breakdown of which holdings support it versus which conflict |
+| **Discover** | Compares your sector weights against the S&P 500, identifies under-weighted sectors, and asks the AI to suggest specific tickers that would fill those gaps |
+| **Market** | Market-wide overview — trending US tickers, top 5 gainers/losers, and daily performance of all 11 SPDR sector ETFs |
+
+### Scheduled delivery
+
+Have the morning briefing come to you. Per-portfolio delivery settings push each new AI insight to **email** and/or a **webhook** — with formatting for **Slack**, **Telegram**, or a generic HTTP endpoint — so you wake up to a fresh brief without opening the app.
+
+### Personalized investor profile
+
+Fill in an optional investor profile (**Settings → Investor Profile**) — time horizon, risk willingness and ability, investment style, preferred sectors, blind spots, emotional tendencies, personal rules, and goals. The AI uses it to tailor insights and analysis to how *you* actually invest.
 
 ### AI stock analysis
 
@@ -125,6 +147,50 @@ Invite colleagues with a one-use link. Team members share run history and portfo
 Connect whichever AI provider you prefer. Keys are stored encrypted at rest.
 
 OpenAI · Anthropic (Claude) · Google Gemini · xAI Grok · Groq · DeepSeek · Qwen · GLM · OpenRouter · Azure OpenAI · Ollama (local) · vLLM (local)
+
+---
+
+## Methodology — how the quant signals work
+
+The AI agents are the headline act, but a single LLM call is qualitative and can be confidently wrong — especially about *timing* and *valuation*. AgentFloor pairs every verdict with two independent, model-free quantitative checks computed directly from market data, then measures whether they agree. The idea is **triangulation**: a narrative is more trustworthy when a price-based model and a valuation yardstick point the same way, and a disagreement tells you exactly where to dig deeper.
+
+> All three are decision-support signals, not predictions. AgentFloor is research-only — see the disclaimer above.
+
+### Markov regime detection — *is the trend with me or against me?*
+
+**Why.** An LLM reads news and fundamentals; it does not measure the price trend itself. Markets spend long stretches in persistent states (trending up, ranging, trending down), and the odds of what happens next depend heavily on the state you're in. A regime model captures that persistence quantitatively and independently of any narrative, giving you a cheap sanity check on *when* a thesis is likely to play out.
+
+**How.**
+1. Pull ~10 years of daily closes from Yahoo Finance (needs ≥ 260 trading days).
+2. Label each day **Bull / Sideways / Bear** from its trailing 20-day return against a ±5% band.
+3. Count every day-to-day state change into a row-normalized **3×3 transition matrix** — the empirical probability of moving between regimes.
+4. The latest day's label is the **current regime**. From its row of the matrix we derive:
+   - **Directional signal** = P(next day Bull) − P(next day Bear), ranging −1 to +1.
+   - **Persistence** = probability the current regime simply continues.
+   - **Long-run distribution** = the chain's stationary distribution (how much time the stock spends in each regime over the long haul).
+5. A **walk-forward backtest** (strictly no lookahead — the matrix is re-estimated day by day) trades the signal's sign and reports the resulting **Sharpe ratio** and **max drawdown**. This is the honesty check: it tells you whether following the signal would actually have paid off historically, rather than just curve-fitting. An optional Gaussian HMM overlay is shown when `hmmlearn` is installed.
+
+Results are cached for ~4 hours per ticker.
+
+### PEG ratio — *am I overpaying for the growth I'm buying?*
+
+**Why.** P/E in isolation punishes fast-growing companies and flatters slow ones — a 40× P/E is cheap for a 40%-grower and expensive for a 5%-grower. **PEG** (P/E ÷ growth) normalizes price by the growth you're actually paying for, giving one growth-adjusted yardstick that's comparable across very different holdings.
+
+**How.** PEG = trailing P/E ÷ 3-year EPS growth rate, sourced from Finnhub fundamentals. Bands: **< 1.0 Undervalued**, **≤ 1.5 Fairly valued**, **above Overvalued**. It is deliberately marked **N/A** when earnings are negative or growth data is missing — a PEG built on a negative denominator is meaningless, and showing nothing is safer than showing a misleading number.
+
+### AI-vs-regime evaluation — *do the narrative and the tape agree?*
+
+**Why.** The qualitative verdict (BUY / SELL / HOLD) and the quantitative regime are produced by completely different processes. When they line up, you have genuine conviction. When they clash — the AI says BUY while price action is bearish — that's not noise to ignore; it's the most useful signal of all, a prompt to re-examine the thesis before acting.
+
+**How.** On a completed run, the **Markov Regime Check** compares the verdict against the regime signal:
+
+| Outcome | Condition | Read |
+|---|---|---|
+| **✓ Confirms** | Directional verdict agrees with the signal's sign (BUY + bullish, or SELL + bearish) | Two independent methods agree — higher conviction |
+| **⚠ Conflicts** | BUY while signal < 0, or SELL while signal > 0 | Narrative fights the tape — slow down and re-check |
+| **— Neutral** | Verdict is HOLD, or the regime is Sideways | No strong directional view to compare |
+
+The same comparison drives the **AI-vs-regime** badge on each holding and feeds the composite **sell-side trim score**, which combines PEG (overvalued when PEG > 3), regime, unrealized P&L, position weight, and the latest verdict to flag trim candidates.
 
 ---
 
@@ -314,11 +380,14 @@ npx tsx --test lib/export/parseMdForPdf.test.ts
 backend/
   main.py                  # FastAPI app, router mounts, lifespan
   app/
-    routers/               # auth, runs, api_keys, users, llm_providers, watchlist, portfolio, regime
+    routers/               # auth, runs, api_keys, users, admin, llm_providers, watchlist,
+                           #   portfolio, regime, market, ticker, investor_profile
     models/                # SQLAlchemy models
     services/              # auth, encryption, websocket, job_manager, scheduler,
                            #   trading_agent_runner, outcome_service, portfolio_insight_runner,
-                           #   markov_service (Markov regime detection)
+                           #   portfolio_chat_service, portfolio_thesis_runner, trim_signal_service,
+                           #   behavioral_alerts_service, delivery_service, fx_service,
+                           #   crypto_data_service, yfinance_service, markov_service (regime detection)
     schemas/               # Pydantic request/response models
     config.py              # pydantic-settings (all env vars)
   tests/
@@ -328,9 +397,11 @@ frontend/
   app/                     # Next.js App Router pages
   components/
     runs/                  # RunTable, RunForm, AnalystReports, BullBearDebate,
-                           #   DownloadMenu, ComparisonPanel, OutcomeCard, PipelinePanel
+                           #   DownloadMenu, ComparisonPanel, OutcomeCard, PipelinePanel, MarkovConfirmation
     portfolio/             # HoldingsTable, InsightsDashboard, EarningsPanel, NewsPanel,
-                           #   PortfolioSwitcher, PortfolioStatsBar, MarkovConfirmation
+                           #   ChatPanel, ThesisPanel, DiscoverPanel, TrendingPanel, BehavioralAlerts,
+                           #   SellCandidatesPanel, DeliverySettingsModal, TickerDrawer,
+                           #   PortfolioSwitcher, PortfolioStatsBar
   lib/
     api.ts                 # typed API client
     websocket.ts           # useAgentStream hook
