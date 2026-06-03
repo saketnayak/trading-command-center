@@ -11,7 +11,9 @@ import {
   triggerWatchlistRun,
   getProviderModels,
 } from "@/lib/api";
-import type { WatchlistItem, AddWatchlistItemRequest } from "@/lib/types";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
+import type { WatchlistItem, AddWatchlistItemRequest, TickerMetadata } from "@/lib/types";
 import { IconButton } from "@/components/ui/IconButton";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS, responseLanguageLabel } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
@@ -340,15 +342,20 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
 
 // ─── Item Row ─────────────────────────────────────────────────────────────────
 
-function ItemRow({ item, onRemove, onToggle, onRunNow }: {
+function ItemRow({ item, onRemove, onToggle, onRunNow, metadata }: {
   item: WatchlistItem;
   onRemove: () => void;
   onToggle: () => void;
   onRunNow: () => void;
+  metadata?: TickerMetadata;
 }) {
   return (
     <tr className="border-t border-border hover:bg-muted-surface/40">
-      <td className="px-4 py-3 font-semibold text-fg">{item.ticker}</td>
+      <td className="px-4 py-3">
+        <TickerLabel ticker={item.ticker} metadata={metadata}>
+          <span className="font-semibold text-fg">{item.ticker}</span>
+        </TickerLabel>
+      </td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.llm_provider} / {item.llm_model}</td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.depth}</td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{responseLanguageLabel(item.response_language)}</td>
@@ -405,6 +412,10 @@ export default function WatchlistPage() {
   const [showAddTicker, setShowAddTicker] = useState(true);
 
   const { data: watchlist, isLoading } = useQuery({ queryKey: ["watchlist"], queryFn: getWatchlist });
+  const { data: tickerMetadata = {} } = useTickerMetadata(
+    watchlist?.items.map((item) => item.ticker) ?? [],
+    { enabled: !!watchlist && watchlist.items.length > 0 }
+  );
 
   const addMutation = useMutation({
     mutationFn: (req: AddWatchlistItemRequest) => addWatchlistItem(req),
@@ -491,6 +502,7 @@ export default function WatchlistPage() {
                       onRemove={() => removeMutation.mutate(item.id)}
                       onToggle={() => toggleMutation.mutate({ id: item.id, enabled: !item.enabled })}
                       onRunNow={() => runNowMutation.mutate(item.id)}
+                      metadata={tickerMetadata[item.ticker.toUpperCase()]}
                     />
                   ))}
                 </tbody>

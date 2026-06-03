@@ -7,6 +7,8 @@ import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type L
 import { fmtMoney, fmtPnl } from "@/lib/currency";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 import { IconButton, IconLink } from "@/components/ui/IconButton";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { PortfolioHolding, FundamentalsData, RegimeData, TrimSignalEntry } from "@/lib/types";
 
 interface HoldingsTableProps {
@@ -363,6 +365,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   }
 
   const tickers = holdings.map((h) => h.ticker);
+  const { data: tickerMetadata = {} } = useTickerMetadata(tickers);
   const { data: latestRuns = {} } = useQuery({
     queryKey: ["latest-runs-by-ticker", tickers],
     queryFn: () => getLatestRunsByTicker(tickers),
@@ -669,18 +672,24 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                                 </button>
                               ) : <span className="w-4 flex-shrink-0" />}
                               {onTickerClick ? (
-                                <button
-                                  onClick={() => onTickerClick(h)}
-                                  className="font-mono font-semibold text-sm text-purple-400 hover:text-purple-300 hover:underline transition-colors"
-                                >
-                                  {h.ticker}
-                                </button>
+                                <TickerLabel ticker={h.ticker} metadata={tickerMetadata[h.ticker.toUpperCase()]}>
+                                  <button
+                                    onClick={() => onTickerClick(h)}
+                                    className="font-mono font-semibold text-sm text-purple-400 hover:text-purple-300 hover:underline transition-colors"
+                                  >
+                                    {h.ticker}
+                                  </button>
+                                </TickerLabel>
                               ) : h.last_run ? (
-                                <Link href={`/runs/${h.last_run.run_id}`} className="font-mono font-semibold text-sm text-purple-400 hover:underline">
-                                  {h.ticker}
-                                </Link>
+                                <TickerLabel ticker={h.ticker} metadata={tickerMetadata[h.ticker.toUpperCase()]}>
+                                  <Link href={`/runs/${h.last_run.run_id}`} className="font-mono font-semibold text-sm text-purple-400 hover:underline">
+                                    {h.ticker}
+                                  </Link>
+                                </TickerLabel>
                               ) : (
-                                <span className="font-mono font-semibold text-sm text-purple-400">{h.ticker}</span>
+                                <TickerLabel ticker={h.ticker} metadata={tickerMetadata[h.ticker.toUpperCase()]}>
+                                  <span className="font-mono font-semibold text-sm text-purple-400">{h.ticker}</span>
+                                </TickerLabel>
                               )}
                             </div>
                             {/* Row 2: badges */}

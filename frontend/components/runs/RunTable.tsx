@@ -4,7 +4,9 @@ import { useMutation } from "@tanstack/react-query";
 import { Archive, ArchiveRestore, Check, Eye, LoaderCircle, RefreshCcw, Trash2, X } from "lucide-react";
 import { archiveRun, deleteRun } from "@/lib/api";
 import { IconButton, IconLink } from "@/components/ui/IconButton";
-import type { Run } from "@/lib/types";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
+import type { Run, TickerMetadata } from "@/lib/types";
 import { responseLanguageLabel } from "@/lib/responseLanguage";
 
 function rerunUrl(run: Run): string {
@@ -69,12 +71,14 @@ function RunRow({
   onMutate,
   selected,
   onToggle,
+  metadata,
 }: {
   run: Run;
   archived: boolean;
   onMutate: () => void;
   selected?: boolean;
   onToggle?: () => void;
+  metadata?: TickerMetadata;
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -103,7 +107,9 @@ function RunRow({
         </td>
       )}
       <td className="px-4 py-3">
-        <span className="text-fg font-mono">{run.ticker}</span>
+        <TickerLabel ticker={run.ticker} metadata={metadata}>
+          <span className="text-fg font-mono">{run.ticker}</span>
+        </TickerLabel>
         {run.label && <p className="text-muted text-xs mt-0.5">{run.label}</p>}
       </td>
       <td className="px-4 py-3">
@@ -195,6 +201,8 @@ function RunRow({
 }
 
 export function RunTable({ runs, archived, onMutate, selectedIds, onSelectionChange }: RunTableProps) {
+  const { data: tickerMetadata = {} } = useTickerMetadata(runs.map((run) => run.ticker));
+
   function toggle(id: string) {
     if (!onSelectionChange) return;
     if (selectedIds?.includes(id)) {
@@ -263,6 +271,7 @@ export function RunTable({ runs, archived, onMutate, selectedIds, onSelectionCha
                 onMutate={onMutate}
                 selected={selectedIds?.includes(run.id)}
                 onToggle={showCheckboxes ? () => toggle(run.id) : undefined}
+                metadata={tickerMetadata[run.ticker.toUpperCase()]}
               />
             ))
           )}

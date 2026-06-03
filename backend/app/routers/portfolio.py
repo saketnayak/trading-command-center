@@ -24,6 +24,7 @@ from app.models.report import Report
 from app.models.api_key import ApiKey
 from app.services.encryption import decrypt_key
 from app.services.portfolio_parser import parse_portfolio_csv
+from app.services.ticker_metadata_service import get_many_ticker_metadata
 from app.services.trim_signal_service import score_trim_signal
 from app.services.markov_service import get_regime_for_portfolio
 from app.schemas.portfolio_delivery_settings import UpdateDeliverySettingsRequest
@@ -1334,27 +1335,6 @@ async def get_portfolio_news(
 
 # ── Sector gaps ───────────────────────────────────────────────────────────────
 
-_profile_cache: dict[str, tuple[dict, float]] = {}
-_PROFILE_TTL = 86400  # 24 hours
-
-
-async def _fetch_profile(ticker: str, api_key: str) -> dict:
-    now = time.time()
-    if ticker in _profile_cache:
-        data, expiry = _profile_cache[ticker]
-        if now < expiry:
-            return data
-    try:
-        url = f"https://finnhub.io/api/v1/stock/profile2?symbol={ticker}&token={api_key}"
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            data = r.json()
-    except Exception:
-        data = {}
-    _profile_cache[ticker] = (data, now + _PROFILE_TTL)
-    return data
-
 
 @router.get("/portfolio/{portfolio_id}/sector-gaps")
 async def get_sector_gaps(
@@ -1365,8 +1345,6 @@ async def get_sector_gaps(
     from app.services.sp500_sectors import SP500_SECTOR_WEIGHTS
 
     finnhub_key = await _get_finnhub_key(db)
-    if not finnhub_key:
-        return []
 
     try:
         snap = await _get_latest_snapshot(portfolio_id, user.id, db)
@@ -1381,20 +1359,27 @@ async def get_sector_gaps(
         return []
 
     tickers = [h.ticker for h in holdings]
-    prices_map, profiles = await asyncio.gather(
-        _fetch_prices_bulk(tickers, finnhub_key),
-        asyncio.gather(*[_fetch_profile(t, finnhub_key) for t in tickers]),
-    )
+    metadata = await get_many_ticker_metadata(tickers, db, finnhub_key)
+    sector_by_ticker = {
+        ticker: row.sector
+        for ticker, row in metadata.items()
+        if row.sector
+    }
+    if not sector_by_ticker:
+        return []
+
+    prices_map = await _fetch_prices_bulk(list(sector_by_ticker.keys()), finnhub_key)
 
     sector_values: dict[str, float] = {}
     total_value = 0.0
-    for holding, profile in zip(holdings, profiles):
-        price = prices_map.get(holding.ticker)
+    for holding in holdings:
+        ticker = holding.ticker.upper()
+        price = prices_map.get(ticker)
         if price is None:
             continue
         market_value = price * holding.shares
-        sector = profile.get("finnhubIndustry") or "Unknown"
-        if sector == "Unknown":
+        sector = sector_by_ticker.get(ticker)
+        if not sector:
             continue
         sector_values[sector] = sector_values.get(sector, 0.0) + market_value
         total_value += market_value

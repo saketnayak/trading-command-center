@@ -1,6 +1,6 @@
 """
 Market-wide data endpoints — trending tickers, top movers, sector performance.
-All data sourced from Yahoo Finance (trending list) and Finnhub (quotes + profiles).
+All data sourced from Yahoo Finance (trending list), Finnhub quotes, and cached ticker metadata.
 Requires a valid Finnhub API key; returns empty lists gracefully without one.
 """
 import asyncio
@@ -16,14 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.api_key import ApiKey
+from app.models.ticker_metadata import TickerMetadata
 from app.models.user import User
 from app.services.encryption import decrypt_key
+from app.services.ticker_metadata_service import get_many_ticker_metadata
 
 router = APIRouter()
 
 _FH = "https://finnhub.io/api/v1"
 _MARKET_TTL = 1800   # 30 min — quote cache
-_PROFILE_TTL = 86400  # 24 h  — profile cache
 
 # Limit concurrent outgoing Finnhub requests to avoid bursting the free-tier
 # rate limit (60 req/min). Semaphore(10) keeps peak concurrency well below
@@ -67,7 +68,6 @@ SECTOR_ETFS: list[tuple[str, str]] = [
 
 # In-process caches
 _quote_cache: dict[str, tuple[dict, float]] = {}
-_profile_cache: dict[str, tuple[dict, float]] = {}
 _trending_cache: tuple[list[str], float] = ([], 0.0)
 
 
@@ -137,32 +137,6 @@ async def _fetch_quote(ticker: str, api_key: str, client: httpx.AsyncClient) -> 
     return data
 
 
-async def _fetch_profile(ticker: str, api_key: str, client: httpx.AsyncClient) -> dict:
-    now = time.time()
-    if ticker in _profile_cache:
-        data, expiry = _profile_cache[ticker]
-        if now < expiry:
-            return data
-    async with _FINNHUB_SEM:
-        try:
-            r = await client.get(
-                f"{_FH}/stock/profile2",
-                params={"symbol": ticker, "token": api_key},
-            )
-            r.raise_for_status()
-            raw = r.json()
-        except Exception:
-            return {}  # do not cache transient failures
-    data = {
-        "name": raw.get("name"),
-        "sector": raw.get("finnhubIndustry"),
-        "logo": raw.get("logo"),
-        "market_cap": raw.get("marketCapitalization"),
-    }
-    _profile_cache[ticker] = (data, now + _PROFILE_TTL)
-    return data
-
-
 async def _get_trending_tickers(client: httpx.AsyncClient) -> list[str]:
     """Fetch trending US tickers from Yahoo Finance. Falls back to a curated list on error."""
     global _trending_cache
@@ -192,13 +166,13 @@ async def _get_trending_tickers(client: httpx.AsyncClient) -> list[str]:
     return tickers
 
 
-def _build_ticker(ticker: str, quote: dict, profile: dict) -> MarketTicker:
+def _build_ticker(ticker: str, quote: dict, metadata: TickerMetadata | None) -> MarketTicker:
     return MarketTicker(
         ticker=ticker,
-        name=profile.get("name"),
-        sector=profile.get("sector"),
-        logo=profile.get("logo"),
-        market_cap=profile.get("market_cap"),
+        name=metadata.company_name if metadata else None,
+        sector=metadata.sector if metadata else None,
+        logo=metadata.logo_url if metadata else None,
+        market_cap=metadata.market_cap if metadata else None,
         price=quote.get("price"),
         change_pct=quote.get("change_pct"),
         change=quote.get("change"),
@@ -223,13 +197,11 @@ async def get_trending(
         tickers = await _get_trending_tickers(client)
         if not tickers:
             return []
-        quotes_list, profiles_list = await asyncio.gather(
-            asyncio.gather(*[_fetch_quote(t, api_key, client) for t in tickers]),
-            asyncio.gather(*[_fetch_profile(t, api_key, client) for t in tickers]),
-        )
+        quotes_list = await asyncio.gather(*[_fetch_quote(t, api_key, client) for t in tickers])
+    metadata = await get_many_ticker_metadata(tickers, db, api_key)
     return [
-        _build_ticker(t, q, p)
-        for t, q, p in zip(tickers, quotes_list, profiles_list)
+        _build_ticker(t, q, metadata.get(t))
+        for t, q in zip(tickers, quotes_list)
         if q is not None
     ]
 
@@ -258,15 +230,10 @@ async def get_movers(
         losers_raw = ranked[:5]
         gainers_raw = list(reversed(ranked[-5:]))
 
-        async def enrich(raw_list: list[dict]) -> list[MarketTicker]:
-            if not raw_list:
-                return []
-            profiles = await asyncio.gather(
-                *[_fetch_profile(x["ticker"], api_key, client) for x in raw_list]
-            )
-            return [_build_ticker(x["ticker"], x, p) for x, p in zip(raw_list, profiles)]
-
-        gainers, losers = await asyncio.gather(enrich(gainers_raw), enrich(losers_raw))
+    mover_tickers = [x["ticker"] for x in gainers_raw + losers_raw]
+    metadata = await get_many_ticker_metadata(mover_tickers, db, api_key)
+    gainers = [_build_ticker(x["ticker"], x, metadata.get(x["ticker"])) for x in gainers_raw]
+    losers = [_build_ticker(x["ticker"], x, metadata.get(x["ticker"])) for x in losers_raw]
 
     return MoversResponse(gainers=gainers, losers=losers)
 
