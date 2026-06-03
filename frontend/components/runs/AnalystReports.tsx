@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { Report } from "@/lib/types";
 import { getAnalystReportContent } from "@/lib/analystReports";
 import { Markdown } from "@/components/ui/Markdown";
+import { AnalystIconBadge } from "@/components/runs/RunContextIcons";
 
 interface Props {
   report: Report | undefined;
@@ -42,7 +43,10 @@ export function AnalystReports({ report, analysts }: Props) {
                 : "px-3 py-2 text-sm text-muted hover:text-fg-secondary whitespace-nowrap border-b-2 border-transparent capitalize"
             }
           >
-            {analyst}
+            <span className="inline-flex items-center gap-1.5">
+              <AnalystIconBadge analyst={analyst} />
+              <span>{analyst}</span>
+            </span>
           </button>
         ))}
       </div>

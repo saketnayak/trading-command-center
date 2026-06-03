@@ -1,13 +1,22 @@
 "use client";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { Archive, ArchiveRestore, Check, Eye, LoaderCircle, RefreshCcw, Trash2, X } from "lucide-react";
+import {
+  Archive,
+  ArchiveRestore,
+  Check,
+  Eye,
+  LoaderCircle,
+  RefreshCcw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { archiveRun, deleteRun } from "@/lib/api";
 import { IconButton, IconLink } from "@/components/ui/IconButton";
+import { RunContextIcons } from "@/components/runs/RunContextIcons";
 import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { Run, TickerMetadata } from "@/lib/types";
-import { responseLanguageLabel } from "@/lib/responseLanguage";
 
 function rerunUrl(run: Run): string {
   const p = new URLSearchParams({
@@ -133,7 +142,7 @@ function RunRow({
         <PriceSummary run={run} />
       </td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">
-        {run.analysts.join(", ")} · {responseLanguageLabel(run.response_language)}
+        <RunContextIcons analysts={run.analysts} responseLanguage={run.response_language} />
       </td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs font-mono">{run.llm_model}</td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">

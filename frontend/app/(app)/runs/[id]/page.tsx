@@ -10,8 +10,8 @@ import { getRun, getReport, getRunOutcome, updateRun } from "@/lib/api";
 import { DownloadMenu } from "@/components/runs/DownloadMenu";
 import { OutcomeCard } from "@/components/runs/OutcomeCard";
 import { MarkovConfirmation } from "@/components/runs/MarkovConfirmation";
+import { LanguageFlag } from "@/components/runs/RunContextIcons";
 import type { Run, RunOutcome } from "@/lib/types";
-import { responseLanguageLabel } from "@/lib/responseLanguage";
 
 function rerunUrl(run: Run): string {
   const p = new URLSearchParams({
@@ -203,8 +203,9 @@ export default function RunResultsPage() {
         <TraderDecision run={run} report={report} />
         {run && <MarkovConfirmation ticker={run.ticker} verdict={run.verdict} />}
         {run && (
-          <div className="bg-surface border border-input-border rounded-lg px-4 py-3 text-xs text-muted">
-            Response language: <span className="text-fg-secondary">{responseLanguageLabel(run.response_language)}</span>
+          <div className="bg-surface border border-input-border rounded-lg px-4 py-3 text-xs text-muted flex items-center gap-2">
+            Response language:
+            <LanguageFlag value={run.response_language} />
           </div>
         )}
         {outcome && <OutcomeCard outcome={outcome} />}

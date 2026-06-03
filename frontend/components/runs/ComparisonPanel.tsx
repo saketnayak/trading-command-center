@@ -1,7 +1,7 @@
 "use client";
+import { RunContextIcons } from "@/components/runs/RunContextIcons";
 import type { RunWithReport } from "@/lib/types";
 import { getAnalystReportContent } from "@/lib/analystReports";
-import { responseLanguageLabel } from "@/lib/responseLanguage";
 
 const VERDICT_COLOR: Record<string, string> = {
   buy: "text-green-400",
@@ -57,8 +57,10 @@ function RunColumn({ side, data }: { side: "A" | "B"; data: RunWithReport }) {
       <div className="text-xs text-muted space-y-1">
         <p><span className="text-muted">Model:</span> {run.llm_provider} / {run.llm_model}</p>
         <p><span className="text-muted">Depth:</span> {run.depth}</p>
-        <p><span className="text-muted">Language:</span> {responseLanguageLabel(run.response_language)}</p>
-        <p><span className="text-muted">Analysts:</span> {run.analysts.join(", ")}</p>
+        <div className="flex items-center gap-2 pt-1">
+          <span className="text-muted">Analysts / Language:</span>
+          <RunContextIcons analysts={run.analysts} responseLanguage={run.response_language} />
+        </div>
       </div>
 
       {report && (

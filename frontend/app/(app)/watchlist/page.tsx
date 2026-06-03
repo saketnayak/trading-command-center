@@ -15,7 +15,8 @@ import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { WatchlistItem, AddWatchlistItemRequest, TickerMetadata } from "@/lib/types";
 import { IconButton } from "@/components/ui/IconButton";
-import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS, responseLanguageLabel } from "@/lib/responseLanguage";
+import { AnalystIcons, LanguageFlag } from "@/components/runs/RunContextIcons";
+import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
 
 import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
@@ -358,8 +359,14 @@ function ItemRow({ item, onRemove, onToggle, onRunNow, metadata }: {
       </td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.llm_provider} / {item.llm_model}</td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.depth}</td>
-      <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{responseLanguageLabel(item.response_language)}</td>
-      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">{item.analysts.join(", ")}</td>
+      <td className="hidden lg:table-cell px-4 py-3">
+        <LanguageFlag value={item.response_language} />
+      </td>
+      <td className="hidden lg:table-cell px-4 py-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <AnalystIcons analysts={item.analysts} />
+        </div>
+      </td>
       <td className="hidden lg:table-cell px-4 py-3"><CronLabel cron={item.schedule_cron} /></td>
       <td className="px-4 py-3 text-xs">
         {item.last_run_at && item.last_run_id ? (

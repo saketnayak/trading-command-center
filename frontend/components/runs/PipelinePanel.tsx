@@ -1,4 +1,5 @@
 "use client";
+import { AnalystIconBadge } from "@/components/runs/RunContextIcons";
 import type { AgentEventPayload } from "@/lib/types";
 
 interface PipelinePanelProps {
@@ -43,10 +44,11 @@ const statusLabel: Record<StageStatus, string> = {
   error: "error",
 };
 
-function StageRow({ label, status }: { label: string; status: StageStatus }) {
+function StageRow({ label, status, analyst }: { label: string; status: StageStatus; analyst?: string }) {
   return (
     <div className="flex items-center gap-2">
       <span className={`w-2 h-2 rounded-full shrink-0 ${statusDot[status]}`} />
+      {analyst && <AnalystIconBadge analyst={analyst} />}
       <span className="text-fg-secondary text-sm flex-1">{label}</span>
       <span className="text-muted text-xs">{statusLabel[status]}</span>
     </div>
@@ -63,6 +65,7 @@ export function PipelinePanel({ analysts, events }: PipelinePanelProps) {
             key={analyst}
             label={analyst.charAt(0).toUpperCase() + analyst.slice(1)}
             status={getStageStatus(analyst, events)}
+            analyst={analyst}
           />
         ))}
         <div className="border-t border-input-border my-2" />
