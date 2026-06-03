@@ -13,6 +13,7 @@ from app.base import Base  # noqa: E402
 from app.models import user, run, agent_event, report, api_key, outcome  # noqa: F401, E402
 from app.models import portfolio, portfolio_insight, watchlist, investor_profile  # noqa: F401, E402
 from app.models import portfolio_delivery_settings  # noqa: F401, E402
+from app.models import ticker_metadata  # noqa: F401, E402
 
 config = context.config
 

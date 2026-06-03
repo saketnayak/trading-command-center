@@ -29,6 +29,9 @@
 			"**/.vexp/.gitignore": true,
 			"**/.vexp/.gitattributes": true
 		},
-		"js/ts.tsdk.path": "frontend/node_modules/typescript/lib"
+		"js/ts.tsdk.path": "frontend/node_modules/typescript/lib",
+		"githubPullRequests.ignoredPullRequestBranches": [
+			"main"
+		]
 	}
 }

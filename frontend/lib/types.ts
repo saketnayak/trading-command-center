@@ -242,6 +242,29 @@ export interface TickerSnapshot {
   } | null;
 }
 
+export interface TickerMetadata {
+  ticker: string;
+  asset_type: "stock" | "crypto" | string;
+  company_name: string | null;
+  display_name: string | null;
+  sector: string | null;
+  industry: string | null;
+  logo_url: string | null;
+  website: string | null;
+  exchange: string | null;
+  country: string | null;
+  currency: string | null;
+  market_cap: number | null;
+  ipo_date: string | null;
+  source: string;
+  fetched_at: string;
+  expires_at: string;
+}
+
+export interface TickerMetadataResponse {
+  items: Record<string, TickerMetadata>;
+}
+
 export interface PortfolioHolding {
   id: string;
   ticker: string;

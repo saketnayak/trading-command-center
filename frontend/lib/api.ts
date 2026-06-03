@@ -1,5 +1,5 @@
 import { getSession, signOut } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, TrimSignalsResponse } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, TickerMetadataResponse, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, TrimSignalsResponse } from "./types";
 import type { ResponseLanguage } from "./responseLanguage";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -171,6 +171,23 @@ export async function getSmtpStatus(): Promise<{ configured: boolean; from_addre
 export async function getTickerSnapshot(ticker: string): Promise<TickerSnapshot> {
   const r = await fetchWithAuth(`/ticker/${encodeURIComponent(ticker)}/snapshot`);
   if (!r.ok) throw new Error("Failed to fetch ticker snapshot");
+  return r.json();
+}
+
+export async function getTickerMetadata(
+  tickers: string[],
+  options: { forceRefresh?: boolean } = {}
+): Promise<TickerMetadataResponse> {
+  const symbols = Array.from(
+    new Set(tickers.map((t) => t.trim().toUpperCase()).filter(Boolean))
+  ).slice(0, 50);
+  if (symbols.length === 0) return { items: {} };
+
+  const qs = new URLSearchParams({ symbols: symbols.join(",") });
+  if (options.forceRefresh) qs.set("force_refresh", "true");
+
+  const r = await fetchWithAuth(`/tickers/metadata?${qs.toString()}`);
+  if (!r.ok) throw new Error("Failed to fetch ticker metadata");
   return r.json();
 }
 
