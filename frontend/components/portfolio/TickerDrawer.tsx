@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { getTickerSnapshot } from "@/lib/api";
 import { fmtMoney } from "@/lib/currency";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { PortfolioHolding, TickerChart } from "@/lib/types";
 
 interface TickerDrawerProps {
@@ -96,10 +97,14 @@ function Divider() {
 
 function DrawerContent({ holding, displayCurrency, hidePosition }: { holding: PortfolioHolding; displayCurrency: string; hidePosition?: boolean }) {
   const [chartDays, setChartDays] = useState<7 | 30 | 90>(30);
+  const ticker = holding.ticker.toUpperCase();
+
+  const { data: metadataByTicker = {} } = useTickerMetadata([ticker]);
+  const metadata = metadataByTicker[ticker];
 
   const { data: snap, isLoading, isError } = useQuery({
-    queryKey: ["ticker-snapshot", holding.ticker],
-    queryFn: () => getTickerSnapshot(holding.ticker),
+    queryKey: ["ticker-snapshot", ticker],
+    queryFn: () => getTickerSnapshot(ticker),
     staleTime: 1000 * 60 * 5,
   });
 
@@ -110,7 +115,12 @@ function DrawerContent({ holding, displayCurrency, hidePosition }: { holding: Po
   };
 
   // ── Header ─────────────────────────────────────────────────────────────────
-  const name = snap?.name ?? holding.ticker;
+  const name = metadata?.company_name ?? metadata?.display_name ?? snap?.name ?? ticker;
+  const sector = metadata?.sector ?? snap?.sector;
+  const website = metadata?.website ?? snap?.website;
+  const logo = metadata?.logo_url ?? snap?.logo;
+  const exchange = metadata?.exchange ?? snap?.exchange;
+  const country = metadata?.country ?? snap?.country;
   const hasChart = (snap?.chart?.c?.length ?? 0) >= 2;
 
   return (
@@ -119,19 +129,19 @@ function DrawerContent({ holding, displayCurrency, hidePosition }: { holding: Po
       {/* Ticker + name */}
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-xl font-bold text-fg font-mono">{holding.ticker}</p>
-          {name !== holding.ticker && (
+          <p className="text-xl font-bold text-fg font-mono">{ticker}</p>
+          {name !== ticker && (
             <p className="text-sm text-muted mt-0.5">{name}</p>
           )}
           <div className="flex items-center gap-2 mt-1 flex-wrap">
-            {snap?.exchange && <span className="text-[10px] text-muted bg-input rounded-sm px-1.5 py-0.5">{snap.exchange}</span>}
-            {snap?.sector && <span className="text-[10px] text-muted bg-input rounded-sm px-1.5 py-0.5">{snap.sector}</span>}
-            {snap?.country && <span className="text-[10px] text-muted bg-input rounded-sm px-1.5 py-0.5">{snap.country}</span>}
+            {exchange && <span className="text-[10px] text-muted bg-input rounded-sm px-1.5 py-0.5">{exchange}</span>}
+            {sector && <span className="text-[10px] text-muted bg-input rounded-sm px-1.5 py-0.5">{sector}</span>}
+            {country && <span className="text-[10px] text-muted bg-input rounded-sm px-1.5 py-0.5">{country}</span>}
           </div>
         </div>
-        {snap?.logo && (
+        {logo && (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={snap.logo} alt={name} className="h-10 w-10 rounded-sm object-contain bg-input p-1 shrink-0" />
+          <img src={logo} alt={name} className="h-10 w-10 rounded-sm object-contain bg-input p-1 shrink-0" />
         )}
       </div>
 
@@ -232,10 +242,10 @@ function DrawerContent({ holding, displayCurrency, hidePosition }: { holding: Po
           <Divider />
           <Section title="About">
             <p className="text-xs text-muted leading-relaxed">{snap.description}</p>
-            {snap.website && (
-              <a href={snap.website} target="_blank" rel="noreferrer"
+            {website && (
+              <a href={website} target="_blank" rel="noreferrer"
                 className="text-xs text-blue-400 hover:underline mt-1 inline-block">
-                {snap.website.replace(/^https?:\/\//, "")} ↗
+                {website.replace(/^https?:\/\//, "")} ↗
               </a>
             )}
           </Section>

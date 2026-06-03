@@ -21,6 +21,7 @@ from app.dependencies import get_current_user
 from app.models.api_key import ApiKey
 from app.models.user import User
 from app.services.encryption import decrypt_key
+from app.services.ticker_metadata_service import get_ticker_metadata, normalize_ticker
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
 
@@ -29,9 +30,7 @@ router = APIRouter()
 _FH = "https://finnhub.io/api/v1"
 _CG = "https://api.coingecko.com/api/v3"
 
-_profile_cache: dict[str, tuple[dict, float]] = {}
 _candle_cache: dict[str, tuple[dict, float]] = {}
-_PROFILE_TTL = 86_400   # 24 h
 _CANDLE_TTL  =  3_600   # 1 h
 
 
@@ -85,29 +84,6 @@ def _pct_from_candles(chart: dict) -> tuple[Optional[float], Optional[float], Op
 
 
 # ── Stock helpers ─────────────────────────────────────────────────────────────
-
-async def _stock_profile(ticker: str, api_key: str) -> dict:
-    now = time.time()
-    if ticker in _profile_cache and now < _profile_cache[ticker][1]:
-        return _profile_cache[ticker][0]
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(f"{_FH}/stock/profile2", params={"symbol": ticker, "token": api_key})
-            r.raise_for_status()
-            raw = r.json()
-        data = {
-            "name":     raw.get("name"),
-            "sector":   raw.get("finnhubIndustry"),
-            "website":  raw.get("weburl"),
-            "logo":     raw.get("logo"),
-            "exchange": raw.get("exchange"),
-            "country":  raw.get("country"),
-        }
-    except Exception:
-        data = {}
-    _profile_cache[ticker] = (data, now + _PROFILE_TTL)
-    return data
-
 
 async def _stock_candles(ticker: str, api_key: str, days: int = 90) -> dict:
     now = time.time()
@@ -233,8 +209,9 @@ async def get_ticker_snapshot(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    ticker = ticker.upper()
+    ticker = normalize_ticker(ticker)
     api_key = await _get_finnhub_key(db)
+    metadata = await get_ticker_metadata(ticker, db, api_key)
 
     # ── Crypto ────────────────────────────────────────────────────────────────
     if is_crypto(ticker):
@@ -249,18 +226,31 @@ async def get_ticker_snapshot(
         _, _, d30 = _pct_from_candles(chart)
         return TickerSnapshotResponse(
             ticker=ticker, asset_type="crypto",
-            name=name, description=description,
-            sector=metrics.get("category"),
+            name=metadata.company_name or metadata.display_name or name,
+            description=description,
+            sector=metadata.sector or metrics.get("category"),
+            website=metadata.website,
+            logo=metadata.logo_url,
+            exchange=metadata.exchange,
+            country=metadata.country,
             change_1d_pct=d1, change_1w_pct=d7, change_1m_pct=d30,
             fundamentals=metrics, chart=chart,
         )
 
     # ── Stock ─────────────────────────────────────────────────────────────────
     if not api_key:
-        return TickerSnapshotResponse(ticker=ticker, asset_type="stock")
+        return TickerSnapshotResponse(
+            ticker=ticker,
+            asset_type="stock",
+            name=metadata.company_name or metadata.display_name,
+            sector=metadata.sector,
+            website=metadata.website,
+            logo=metadata.logo_url,
+            exchange=metadata.exchange,
+            country=metadata.country,
+        )
 
-    profile, chart, fundamentals, news, next_e = await asyncio.gather(
-        _stock_profile(ticker, api_key),
+    chart, fundamentals, news, next_e = await asyncio.gather(
         _stock_candles(ticker, api_key),
         _stock_fundamentals(ticker, api_key),
         _stock_news(ticker, api_key),
@@ -269,12 +259,12 @@ async def get_ticker_snapshot(
     d1, d7, d30 = _pct_from_candles(chart)
     return TickerSnapshotResponse(
         ticker=ticker, asset_type="stock",
-        name=profile.get("name"),
-        sector=profile.get("sector"),
-        website=profile.get("website"),
-        logo=profile.get("logo"),
-        exchange=profile.get("exchange"),
-        country=profile.get("country"),
+        name=metadata.company_name or metadata.display_name,
+        sector=metadata.sector,
+        website=metadata.website,
+        logo=metadata.logo_url,
+        exchange=metadata.exchange,
+        country=metadata.country,
         change_1d_pct=d1, change_1w_pct=d7, change_1m_pct=d30,
         fundamentals=fundamentals, chart=chart,
         news=news, next_earnings=next_e,
