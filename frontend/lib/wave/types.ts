@@ -138,12 +138,31 @@ export interface AnnotationOverlay {
   color_hint?: string | null;
 }
 
+export interface ProjectionPathOverlay {
+  kind: "projection_path";
+  label: string;
+  times: string[];
+  prices: number[];
+  direction: "up" | "down" | string;
+  confidence: number;
+}
+
+export interface ProjectionLevelOverlay {
+  kind: "projection_level";
+  price: number;
+  label: string;
+  style: "solid" | "dashed" | "dotted";
+  color_hint?: string | null;
+}
+
 export type ChartOverlay =
   | PivotOverlay
   | WaveLegOverlay
   | ZoneOverlay
   | HorizontalLevelOverlay
-  | AnnotationOverlay;
+  | AnnotationOverlay
+  | ProjectionPathOverlay
+  | ProjectionLevelOverlay;
 
 export interface ChartPayload {
   ohlcv: OHLCVBar[];
@@ -156,8 +175,33 @@ export interface ChartPayload {
 export interface ChartVisibilityOptions {
   waves: boolean;
   fibonacci: boolean;
+  projection: boolean;
   pivots: boolean;
   showAllHistory: boolean;
+}
+
+export interface WaveProjectionLevel {
+  label: string;
+  ratio: number;
+  price: number;
+  time: string;
+}
+
+export interface WaveProjectionPoint {
+  time: string;
+  price: number;
+}
+
+export interface WaveProjection {
+  direction: "up" | "down" | string;
+  basis: string;
+  confidence: number;
+  primary_target: number;
+  levels: WaveProjectionLevel[];
+  path: WaveProjectionPoint[];
+  invalidation_level: number | null;
+  note: string;
+  generated_at: string;
 }
 
 export interface AnalyzeResponse {
@@ -166,4 +210,5 @@ export interface AnalyzeResponse {
   trade_regions: TradeRegion[];
   overview?: AnalysisOverview | null;
   chart: ChartPayload;
+  projection?: WaveProjection | null;
 }

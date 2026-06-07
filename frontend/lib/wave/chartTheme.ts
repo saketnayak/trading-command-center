@@ -13,6 +13,7 @@ export interface ThemeColors {
   target: string;
   invalidation: string;
   fib: string;
+  projection: string;
   zoneLong: string;
   zoneShort: string;
   legendBg: string;
@@ -34,6 +35,7 @@ export const THEMES: Record<ChartTheme, ThemeColors> = {
     target: "#22c55e",
     invalidation: "#fbbf24",
     fib: "rgba(147,197,253,0.75)",
+    projection: "#38bdf8",
     zoneLong: "rgba(74,222,128,0.14)",
     zoneShort: "rgba(248,113,113,0.14)",
     legendBg: "rgba(15,22,41,0.92)",
@@ -53,6 +55,7 @@ export const THEMES: Record<ChartTheme, ThemeColors> = {
     target: "#15803d",
     invalidation: "#b45309",
     fib: "rgba(29,78,216,0.7)",
+    projection: "#0284c7",
     zoneLong: "rgba(21,128,61,0.10)",
     zoneShort: "rgba(185,28,28,0.10)",
     legendBg: "rgba(255,255,255,0.94)",

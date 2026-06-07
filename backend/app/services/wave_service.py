@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, Optional
 
 from elliott_wave.models.chart_payload import AnalyzeResponse
@@ -56,7 +56,9 @@ def _run_analyze_sync(
         overview=result.overview,
         chart=chart,
     )
-    return response.model_dump(mode="json")
+    payload = response.model_dump(mode="json")
+    _attach_projection(payload)
+    return payload
 
 
 def _to_summary(payload: dict[str, Any], ticker: str) -> dict[str, Any]:
@@ -77,9 +79,147 @@ def _to_summary(payload: dict[str, Any], ticker: str) -> dict[str, Any]:
         "confidence": region.get("confidence") if region else None,
         "zone_low": region.get("zone_low") if region else None,
         "zone_high": region.get("zone_high") if region else None,
+        "projection_direction": (payload.get("projection") or {}).get("direction"),
+        "projection_target": (payload.get("projection") or {}).get("primary_target"),
         "warnings": overview.get("warnings") or [],
         "computed_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _attach_projection(payload: dict[str, Any]) -> None:
+    projection = _build_projection(payload)
+    if projection is None:
+        return
+
+    payload["projection"] = projection
+    chart = payload.get("chart") or {}
+    overlays = chart.setdefault("overlays", [])
+    overlays.append(
+        {
+            "kind": "projection_path",
+            "label": "Projected next wave",
+            "times": [p["time"] for p in projection["path"]],
+            "prices": [p["price"] for p in projection["path"]],
+            "direction": projection["direction"],
+            "confidence": projection["confidence"],
+        }
+    )
+    for level in projection["levels"]:
+        overlays.append(
+            {
+                "kind": "projection_level",
+                "price": level["price"],
+                "label": level["label"],
+                "style": "dashed",
+                "color_hint": "projection",
+            }
+        )
+
+
+def _build_projection(payload: dict[str, Any]) -> Optional[dict[str, Any]]:
+    chart = payload.get("chart") or {}
+    bars = chart.get("ohlcv") or []
+    scenarios = payload.get("top_scenarios") or []
+    trade_regions = payload.get("trade_regions") or []
+    if len(bars) < 2 or not scenarios:
+        return None
+
+    scenario = scenarios[0]
+    legs = scenario.get("legs") or []
+    if not legs:
+        return None
+
+    last_leg = legs[-1]
+    latest = bars[-1]
+    last_time = _parse_dt(latest.get("time"))
+    prev_time = _parse_dt(bars[-2].get("time"))
+    if last_time is None or prev_time is None:
+        return None
+
+    latest_close = _safe_float(latest.get("close"))
+    start_price = _safe_float(last_leg.get("start_price"))
+    end_price = _safe_float(last_leg.get("end_price"))
+    if latest_close is None or start_price is None or end_price is None:
+        return None
+
+    leg_size = abs(end_price - start_price)
+    if leg_size <= 0:
+        return None
+
+    direction = _projection_direction(scenario, last_leg)
+    step = max(last_time - prev_time, timedelta(days=1))
+    leg_bars = max(8, min(80, abs(int(last_leg.get("end_idx", 0)) - int(last_leg.get("start_idx", 0))) or 20))
+    ratios = [0.618, 1.0, 1.618]
+    labels = ["0.618 extension", "1.000 extension", "1.618 extension"]
+
+    levels: list[dict[str, Any]] = []
+    path = [{"time": last_time.isoformat(), "price": round(latest_close, 4)}]
+    for idx, (ratio, label) in enumerate(zip(ratios, labels), start=1):
+        price = latest_close + (direction * leg_size * ratio)
+        future_time = last_time + step * max(1, round(leg_bars * (idx / 2)))
+        level = {
+            "label": label,
+            "ratio": ratio,
+            "price": round(price, 4),
+            "time": future_time.isoformat(),
+        }
+        levels.append(level)
+        path.append({"time": level["time"], "price": level["price"]})
+
+    confidence = _projection_confidence(scenario, trade_regions[0] if trade_regions else None)
+    direction_label = "up" if direction > 0 else "down"
+    return {
+        "direction": direction_label,
+        "basis": f"{scenario.get('pattern', 'wave')} / {scenario.get('trend', 'trend')}",
+        "confidence": confidence,
+        "primary_target": levels[1]["price"],
+        "levels": levels,
+        "path": path,
+        "invalidation_level": scenario.get("invalidation_level"),
+        "note": (
+            "Forward projection uses the active Elliott count and Fibonacci extension ratios. "
+            "Treat it as a scenario path, not a price prediction."
+        ),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+def _projection_direction(scenario: dict[str, Any], last_leg: dict[str, Any]) -> int:
+    trend = str(scenario.get("trend") or "").lower()
+    if trend in {"bullish", "long", "up"}:
+        return 1
+    if trend in {"bearish", "short", "down"}:
+        return -1
+
+    start = _safe_float(last_leg.get("start_price")) or 0.0
+    end = _safe_float(last_leg.get("end_price")) or start
+    return 1 if end >= start else -1
+
+
+def _projection_confidence(scenario: dict[str, Any], region: Optional[dict[str, Any]]) -> float:
+    scenario_score = _safe_float(scenario.get("score")) or 0.0
+    region_confidence = _safe_float(region.get("confidence")) if region else None
+    if region_confidence is None:
+        return round(min(95.0, scenario_score), 1)
+    return round(min(95.0, scenario_score * 0.65 + region_confidence * 0.35), 1)
+
+
+def _parse_dt(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str):
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _safe_float(value: Any) -> Optional[float]:
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 async def analyze_wave(

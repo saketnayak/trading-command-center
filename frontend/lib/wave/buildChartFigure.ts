@@ -11,6 +11,7 @@ import type {
 const DEFAULT_VISIBILITY: ChartVisibilityOptions = {
   waves: true,
   fibonacci: true,
+  projection: true,
   pivots: true,
   showAllHistory: true,
 };
@@ -204,48 +205,76 @@ function applyOverlays(
         if (overlay.color_hint === "fib" && !visibility.fibonacci) break;
         if (overlay.color_hint === "stop" || overlay.color_hint === "target") break;
         if (overlay.color_hint === "invalidation" && !visibility.waves) break;
-        shapes.push({
-          type: "line",
-          xref: "paper",
-          x0: 0,
-          x1: 1,
-          y0: overlay.price,
-          y1: overlay.price,
-          line: {
-            color: levelColor(overlay.color_hint, t),
-            width: compact ? 1.5 : overlay.color_hint === "fib" ? 1 : 1.7,
-            dash:
-              overlay.style === "dashed"
-                ? "dash"
-                : overlay.style === "dotted"
-                  ? "dot"
-                  : undefined,
-          },
+        addLevelShapeAndLegend(overlay, shapes, data, t, compact);
+        break;
+      case "projection_path":
+        if (!visibility.projection) break;
+        data.push({
+          type: "scatter",
+          mode: "lines+markers+text",
+          x: overlay.times,
+          y: overlay.prices,
+          text: overlay.prices.map((_price, idx) => (idx === 0 ? "" : `P${idx}`)),
+          textposition: "top center",
+          name: `${overlay.label} (${overlay.confidence.toFixed(0)})`,
+          line: { color: t.projection, width: 2, dash: "dash" },
+          marker: { color: t.projection, size: compact ? 4 : 6, symbol: "circle-open" },
+          textfont: { color: t.projection, size: compact ? 10 : 11 },
+          showlegend: !compact,
         });
-        if (!compact) {
-          data.push({
-            type: "scatter",
-            mode: "lines",
-            x: [null],
-            y: [null],
-            name: overlay.label,
-            line: {
-              color: levelColor(overlay.color_hint, t),
-              width: overlay.color_hint === "fib" ? 1 : 1.7,
-              dash:
-                overlay.style === "dashed"
-                  ? "dash"
-                  : overlay.style === "dotted"
-                    ? "dot"
-                    : "solid",
-            },
-            showlegend: true,
-          });
-        }
+        break;
+      case "projection_level":
+        if (!visibility.projection) break;
+        addLevelShapeAndLegend(overlay, shapes, data, t, compact);
         break;
       default:
         break;
     }
+  }
+}
+
+function addLevelShapeAndLegend(
+  overlay: { price: number; label: string; style: "solid" | "dashed" | "dotted"; color_hint?: string | null },
+  shapes: Array<Partial<Shape>>,
+  data: Array<Record<string, unknown>>,
+  t: (typeof THEMES)["dark"],
+  compact: boolean,
+) {
+  const color = levelColor(overlay.color_hint, t);
+  const dash =
+    overlay.style === "dashed"
+      ? "dash"
+      : overlay.style === "dotted"
+        ? "dot"
+        : "solid";
+
+  shapes.push({
+    type: "line",
+    xref: "paper",
+    x0: 0,
+    x1: 1,
+    y0: overlay.price,
+    y1: overlay.price,
+    line: {
+      color,
+      width: compact ? 1.5 : overlay.color_hint === "fib" ? 1 : 1.7,
+      dash,
+    },
+  });
+  if (!compact) {
+    data.push({
+      type: "scatter",
+      mode: "lines",
+      x: [null],
+      y: [null],
+      name: overlay.label,
+      line: {
+        color,
+        width: overlay.color_hint === "fib" ? 1 : 1.7,
+        dash,
+      },
+      showlegend: true,
+    });
   }
 }
 
@@ -254,6 +283,7 @@ function levelColor(colorHint: string | null | undefined, t: (typeof THEMES)["da
   if (colorHint === "target") return t.target;
   if (colorHint === "invalidation") return t.invalidation;
   if (colorHint === "fib") return t.fib;
+  if (colorHint === "projection") return t.projection;
   return t.pivot;
 }
 
@@ -289,6 +319,9 @@ function focusChart(
           return true;
         }
       }
+    }
+    if (overlay.kind === "projection_path" || overlay.kind === "projection_level") {
+      return visibility.projection;
     }
     if (overlay.kind === "pivot") return visibility.pivots;
     return false;

@@ -17,6 +17,7 @@ import type {
 const DEFAULT_VISIBILITY: ChartVisibilityOptions = {
   waves: true,
   fibonacci: true,
+  projection: true,
   pivots: true,
   showAllHistory: true,
 };
@@ -69,7 +70,12 @@ export default function WaveChartPage() {
 
       {data && (
         <section className="flex min-h-0 flex-1 flex-col gap-3 p-3">
-          <SummaryStrip scenario={scenario} tradeRegion={tradeRegion} />
+          <SummaryStrip
+            scenario={scenario}
+            tradeRegion={tradeRegion}
+            projectionTarget={data.projection?.primary_target ?? null}
+            projectionConfidence={data.projection?.confidence ?? null}
+          />
           <div className="min-h-0 flex-1">
             <AnalysisChart
               chart={data.chart}
@@ -96,6 +102,7 @@ function VisibilityControls({
   const options: Array<{ key: keyof ChartVisibilityOptions; label: string }> = [
     { key: "waves", label: "Waves" },
     { key: "fibonacci", label: "Fib" },
+    { key: "projection", label: "Projection" },
     { key: "pivots", label: "Pivots" },
     { key: "showAllHistory", label: "Full history" },
   ];
@@ -126,16 +133,21 @@ function VisibilityControls({
 function SummaryStrip({
   scenario,
   tradeRegion,
+  projectionTarget,
+  projectionConfidence,
 }: {
   scenario: ElliottScenario | null;
   tradeRegion: TradeRegion | null;
+  projectionTarget: number | null;
+  projectionConfidence: number | null;
 }) {
   return (
-    <div className="grid shrink-0 gap-2 sm:grid-cols-4">
+    <div className="grid shrink-0 gap-2 sm:grid-cols-5">
       <Metric label="Pattern" value={scenario ? `${scenario.pattern} / ${scenario.trend}` : "-"} />
       <Metric label="Confidence" value={formatConfidence(tradeRegion, scenario)} />
+      <Metric label="Projected target" value={projectionTarget == null ? "-" : fmtPrice(projectionTarget)} />
+      <Metric label="Projection conf." value={projectionConfidence == null ? "-" : `${projectionConfidence.toFixed(0)} / 100`} />
       <Metric label="Entry zone" value={formatZone(tradeRegion)} />
-      <Metric label="Risk level" value={formatRiskLevel(tradeRegion, scenario)} />
     </div>
   );
 }
@@ -157,11 +169,6 @@ function formatConfidence(region: TradeRegion | null, scenario: ElliottScenario 
 function formatZone(region: TradeRegion | null): string {
   if (!region) return "-";
   return `${fmtPrice(region.zone_low)} - ${fmtPrice(region.zone_high)}`;
-}
-
-function formatRiskLevel(region: TradeRegion | null, scenario: ElliottScenario | null): string {
-  const level = region?.stop_level ?? scenario?.invalidation_level;
-  return level == null ? "-" : fmtPrice(level);
 }
 
 function fmtPrice(value: number): string {
