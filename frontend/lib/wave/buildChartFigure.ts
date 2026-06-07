@@ -4,63 +4,114 @@ import { THEMES, type ChartTheme } from "@/lib/wave/chartTheme";
 import type {
   ChartOverlay,
   ChartPayload,
+  ChartVisibilityOptions,
   ElliottScenario,
-  TradeRegion,
 } from "@/lib/wave/types";
+
+const DEFAULT_VISIBILITY: ChartVisibilityOptions = {
+  waves: true,
+  fibonacci: true,
+  pivots: true,
+  showAllHistory: true,
+};
 
 export function buildChartFigure(
   chart: ChartPayload,
-  title: string,
+  _title: string,
   theme: ChartTheme,
   hover: boolean,
+  options: {
+    compact?: boolean;
+    height?: number;
+    maxBars?: number;
+    visibility?: ChartVisibilityOptions;
+  } = {},
 ): { data: Data[]; layout: Partial<Layout> } {
   const t = THEMES[theme];
   const data: Array<Record<string, unknown>> = [];
   const shapes: Array<Partial<Shape>> = [];
+  const compact = options.compact ?? false;
+  const visibility = { ...DEFAULT_VISIBILITY, ...options.visibility };
+  const limitBars = compact || !visibility.showAllHistory;
+  const visibleBars = limitBars
+    ? chart.ohlcv.slice(-(options.maxBars ?? (compact ? 160 : 260)))
+    : chart.ohlcv;
 
-  const times = chart.ohlcv.map((b) => b.time);
+  const times = visibleBars.map((b) => b.time);
 
   data.push({
     type: "candlestick",
     x: times,
-    open: chart.ohlcv.map((b) => b.open),
-    high: chart.ohlcv.map((b) => b.high),
-    low: chart.ohlcv.map((b) => b.low),
-    close: chart.ohlcv.map((b) => b.close),
+    open: visibleBars.map((b) => b.open),
+    high: visibleBars.map((b) => b.high),
+    low: visibleBars.map((b) => b.low),
+    close: visibleBars.map((b) => b.close),
     name: "Price",
     increasing: { line: { color: t.candleUp } },
     decreasing: { line: { color: t.candleDown } },
+    showlegend: false,
+    whiskerwidth: 0.35,
   });
 
+  const renderChart = focusChart(chart, visibility, compact);
   if (chart.overlays.length > 0) {
-    applyOverlays(chart.overlays, data, shapes, t);
+    applyOverlays(renderChart.overlays, data, shapes, t, compact, visibility);
   } else {
-    applyLegacyLayers(chart, data, shapes, t);
+    applyLegacyLayers(renderChart, data, shapes, t);
   }
 
   const layout = {
-    title: { text: title, font: { size: 15, color: t.font } },
+    title: {
+      text: "",
+      font: { size: 15, color: t.font },
+    },
     paper_bgcolor: t.paper,
     plot_bgcolor: t.bg,
-    font: { color: t.font },
-    height: 650,
+    font: { color: t.font, size: compact ? 10 : 12 },
+    height: options.height,
+    autosize: options.height == null,
     xaxis: {
-      title: { text: "Date" },
+      title: { text: "" },
       gridcolor: t.grid,
       linecolor: t.axis,
       tickcolor: t.axis,
       rangeslider: { visible: false },
+      range: limitBars && times.length > 1 ? [times[0], times[times.length - 1]] : undefined,
+      showgrid: true,
+      zeroline: false,
+      fixedrange: false,
+      nticks: compact ? 4 : 8,
+      mirror: true,
     },
     yaxis: {
-      title: { text: "Price" },
+      title: { text: "" },
       gridcolor: t.grid,
       linecolor: t.axis,
       tickcolor: t.axis,
       side: "right",
+      showgrid: true,
+      zeroline: false,
+      fixedrange: false,
+      nticks: compact ? 5 : 10,
+      mirror: true,
     },
     hovermode: hover ? "x unified" : false,
-    legend: { bgcolor: "rgba(0,0,0,0)", borderwidth: 0, font: { size: 11 } },
-    margin: { l: 60, r: 40, t: 50, b: 40 },
+    showlegend: !compact,
+    legend: {
+      orientation: "h",
+      x: 0,
+      y: 1.02,
+      xanchor: "left",
+      yanchor: "bottom",
+      bgcolor: t.legendBg,
+      bordercolor: t.legendBorder,
+      borderwidth: 1,
+      font: { size: 11, color: t.font },
+      itemclick: "toggle",
+      itemdoubleclick: "toggleothers",
+    },
+    dragmode: "pan",
+    margin: compact ? { l: 8, r: 42, t: 8, b: 22 } : { l: 10, r: 66, t: 34, b: 28 },
     shapes,
   } as Partial<Layout>;
 
@@ -92,9 +143,6 @@ function applyLegacyLayers(
     addScenarioTraces(scenario, sIdx, data, t);
   });
 
-  chart.trade_regions.forEach((region) => {
-    addZoneShape(region, shapes, t);
-  });
 }
 
 function applyOverlays(
@@ -102,6 +150,8 @@ function applyOverlays(
   data: Array<Record<string, unknown>>,
   shapes: Array<Partial<Shape>>,
   t: (typeof THEMES)["dark"],
+  compact = false,
+  visibility: ChartVisibilityOptions = DEFAULT_VISIBILITY,
 ) {
   const scenarioColors = new Map<string, string>();
   let scenarioIdx = 0;
@@ -109,6 +159,7 @@ function applyOverlays(
   for (const overlay of overlays) {
     switch (overlay.kind) {
       case "pivot":
+        if (compact || !visibility.pivots) break;
         data.push({
           type: "scatter",
           mode: "lines+markers+text",
@@ -119,9 +170,11 @@ function applyOverlays(
           name: "Pivots",
           line: { color: t.pivot, width: 1, dash: "dot" },
           marker: { color: t.pivot, size: 6 },
+          showlegend: false,
         });
         break;
       case "wave_leg": {
+        if (!visibility.waves) break;
         let color = scenarioColors.get(overlay.scenario_label);
         if (!color) {
           color = t.scenario[scenarioIdx % t.scenario.length];
@@ -135,30 +188,22 @@ function applyOverlays(
           y: [overlay.start_price, overlay.end_price],
           text: ["", overlay.label],
           textposition: "top center",
-          name: overlay.scenario_label,
-          line: { color, width: 2 },
-          textfont: { color, size: 11 },
+          name: `Wave: ${overlay.scenario_label}`,
+          line: { color, width: compact ? 2.5 : 2.4 },
+          textfont: { color, size: compact ? 10 : 12 },
           legendgroup: overlay.scenario_label,
-          showlegend: !scenarioColors.has(overlay.scenario_label + "_shown"),
+          showlegend: !compact && !scenarioColors.has(overlay.scenario_label + "_shown"),
         });
         scenarioColors.set(overlay.scenario_label + "_shown", "1");
         break;
       }
       case "zone":
-        shapes.push({
-          type: "rect",
-          xref: "paper",
-          x0: 0,
-          x1: 1,
-          y0: overlay.y0,
-          y1: overlay.y1,
-          fillcolor:
-            overlay.direction === "long" ? t.zoneLong : t.zoneShort,
-          line: { width: 0 },
-          layer: "below",
-        });
+        // Trade zones are execution aids, not Elliott Wave structure.
         break;
       case "level":
+        if (overlay.color_hint === "fib" && !visibility.fibonacci) break;
+        if (overlay.color_hint === "stop" || overlay.color_hint === "target") break;
+        if (overlay.color_hint === "invalidation" && !visibility.waves) break;
         shapes.push({
           type: "line",
           xref: "paper",
@@ -167,8 +212,8 @@ function applyOverlays(
           y0: overlay.price,
           y1: overlay.price,
           line: {
-            color: overlay.color_hint ?? t.pivot,
-            width: 1,
+            color: levelColor(overlay.color_hint, t),
+            width: compact ? 1.5 : overlay.color_hint === "fib" ? 1 : 1.7,
             dash:
               overlay.style === "dashed"
                 ? "dash"
@@ -177,11 +222,84 @@ function applyOverlays(
                   : undefined,
           },
         });
+        if (!compact) {
+          data.push({
+            type: "scatter",
+            mode: "lines",
+            x: [null],
+            y: [null],
+            name: overlay.label,
+            line: {
+              color: levelColor(overlay.color_hint, t),
+              width: overlay.color_hint === "fib" ? 1 : 1.7,
+              dash:
+                overlay.style === "dashed"
+                  ? "dash"
+                  : overlay.style === "dotted"
+                    ? "dot"
+                    : "solid",
+            },
+            showlegend: true,
+          });
+        }
         break;
       default:
         break;
     }
   }
+}
+
+function levelColor(colorHint: string | null | undefined, t: (typeof THEMES)["dark"]): string {
+  if (colorHint === "stop") return t.stop;
+  if (colorHint === "target") return t.target;
+  if (colorHint === "invalidation") return t.invalidation;
+  if (colorHint === "fib") return t.fib;
+  return t.pivot;
+}
+
+function focusChart(
+  chart: ChartPayload,
+  visibility: ChartVisibilityOptions,
+  compact: boolean,
+): ChartPayload {
+  const topScenario = chart.scenarios[0];
+  const topRegion = chart.trade_regions[0];
+  const latestClose = chart.ohlcv.at(-1)?.close;
+  const topLabelPrefix = topScenario
+    ? `${topScenario.pattern}/${topScenario.trend}`
+    : "";
+
+  let fibCount = 0;
+  const overlays = chart.overlays.filter((overlay) => {
+    if (overlay.kind === "wave_leg") {
+      return visibility.waves && topLabelPrefix !== "" && overlay.scenario_label.startsWith(topLabelPrefix);
+    }
+    if (overlay.kind === "zone") {
+      return false;
+    }
+    if (overlay.kind === "level") {
+      if (overlay.color_hint === "stop" || overlay.color_hint === "target") return false;
+      if (overlay.color_hint === "invalidation") return visibility.waves;
+      if (overlay.color_hint === "fib" && latestClose != null) {
+        if (!visibility.fibonacci) return false;
+        if (!compact) return true;
+        const nearLatestPrice = Math.abs(overlay.price - latestClose) / latestClose <= 0.18;
+        if (nearLatestPrice && fibCount < 4) {
+          fibCount += 1;
+          return true;
+        }
+      }
+    }
+    if (overlay.kind === "pivot") return visibility.pivots;
+    return false;
+  });
+
+  return {
+    ...chart,
+    scenarios: topScenario ? [topScenario] : [],
+    trade_regions: topRegion ? [topRegion] : [],
+    overlays,
+  };
 }
 
 function addScenarioTraces(
@@ -209,22 +327,4 @@ function addScenarioTraces(
     });
     first = false;
   }
-}
-
-function addZoneShape(
-  region: TradeRegion,
-  shapes: Array<Partial<Shape>>,
-  t: (typeof THEMES)["dark"],
-) {
-  shapes.push({
-    type: "rect",
-    xref: "paper",
-    x0: 0,
-    x1: 1,
-    y0: region.zone_low,
-    y1: region.zone_high,
-    fillcolor: region.direction === "long" ? t.zoneLong : t.zoneShort,
-    line: { width: 0 },
-    layer: "below",
-  });
 }

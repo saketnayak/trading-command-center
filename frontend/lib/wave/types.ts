@@ -153,6 +153,13 @@ export interface ChartPayload {
   trade_regions: TradeRegion[];
 }
 
+export interface ChartVisibilityOptions {
+  waves: boolean;
+  fibonacci: boolean;
+  pivots: boolean;
+  showAllHistory: boolean;
+}
+
 export interface AnalyzeResponse {
   instrument: Instrument;
   top_scenarios: ElliottScenario[];
