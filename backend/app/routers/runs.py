@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, case
 from sqlalchemy.orm import selectinload
-from app.database import get_db
+from app.database import AsyncSessionLocal, get_db
 from app.models.run import Run, RunStatus, RunVerdict
 from app.models.report import Report
 from app.models.agent_event import AgentEvent
@@ -71,10 +71,26 @@ def _run_to_response(run: Run) -> RunResponse:
     return base
 
 
+async def _get_run(
+    db: AsyncSession,
+    run_id: UUID,
+    *,
+    options: tuple = (),
+) -> Run:
+    q = select(Run).where(Run.id == run_id)
+    if options:
+        q = q.options(*options)
+    result = await db.execute(q)
+    run = result.scalar_one_or_none()
+    if not run:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found")
+    return run
+
+
 @router.get("/runs", response_model=list[RunResponse])
 async def list_runs(
     ticker: str | None = Query(None),
-    status: str | None = Query(None),
+    run_status: str | None = Query(None, alias="status"),
     verdict: str | None = Query(None),
     user_id: UUID | None = Query(None),
     archived: bool = Query(False),
@@ -89,8 +105,8 @@ async def list_runs(
     q = q.where(Run.archived == archived)
     if ticker:
         q = q.where(Run.ticker.ilike(ticker))
-    if status:
-        q = q.where(Run.status == status)
+    if run_status:
+        q = q.where(Run.status == run_status)
     if verdict:
         q = q.where(Run.verdict == verdict)
     if user_id:
@@ -144,6 +160,7 @@ async def create_run(
 
 @router.get("/runs/stats")
 async def get_run_stats(db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    base_filters = [Run.archived == False]  # noqa: E712
     result = await db.execute(
         select(
             func.count().label("total"),
@@ -152,14 +169,14 @@ async def get_run_stats(db: AsyncSession = Depends(get_db), _user: User = Depend
             func.sum(case((Run.verdict == RunVerdict.hold, 1), else_=0)).label("hold_count"),
             func.sum(case((Run.status == RunStatus.completed, 1), else_=0)).label("completed"),
             func.sum(case((Run.status == RunStatus.failed, 1), else_=0)).label("failed"),
-        ).select_from(Run).where(Run.archived == False)
+        ).select_from(Run).where(*base_filters)
     )
     row = result.one()
     dur_result = await db.execute(
         select(
             func.avg(func.extract("epoch", Run.completed_at) - func.extract("epoch", Run.started_at))
         ).select_from(Run).where(
-            Run.archived == False,
+            *base_filters,
             Run.status == RunStatus.completed,
             Run.started_at.isnot(None),
             Run.completed_at.isnot(None),
@@ -229,12 +246,7 @@ async def compare_runs(
     _user: User = Depends(get_current_user),
 ):
     async def load(run_id: UUID) -> RunWithReport:
-        result = await db.execute(
-            select(Run).where(Run.id == run_id).options(selectinload(Run.report))
-        )
-        run = result.scalar_one_or_none()
-        if not run:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Run {run_id} not found")
+        run = await _get_run(db, run_id, options=(selectinload(Run.report),))
         report_result = await db.execute(select(Report).where(Report.run_id == run_id))
         report = report_result.scalar_one_or_none()
         return RunWithReport(run=_run_to_response(run), report=report)
@@ -302,12 +314,7 @@ async def update_run(
 
 @router.get("/runs/{run_id}", response_model=RunResponse)
 async def get_run(run_id: UUID, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
-    result = await db.execute(
-        select(Run).where(Run.id == run_id).options(selectinload(Run.report))
-    )
-    run = result.scalar_one_or_none()
-    if not run:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Run not found")
+    run = await _get_run(db, run_id, options=(selectinload(Run.report),))
     return _run_to_response(run)
 
 
@@ -411,6 +418,7 @@ async def bulk_delete_runs(
 
 @router.get("/runs/{run_id}/report", response_model=ReportResponse)
 async def get_report(run_id: UUID, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    await _get_run(db, run_id)
     result = await db.execute(select(Report).where(Report.run_id == run_id))
     report = result.scalar_one_or_none()
     if not report:
@@ -425,6 +433,7 @@ async def get_run_outcome(
     _user: User = Depends(get_current_user),
 ):
     from app.services.outcome_service import get_or_create_outcome
+    await _get_run(db, run_id)
     try:
         outcome = await get_or_create_outcome(str(run_id), db)
     except ValueError as exc:
@@ -434,6 +443,7 @@ async def get_run_outcome(
 
 @router.get("/runs/{run_id}/events")
 async def get_run_events(run_id: UUID, db: AsyncSession = Depends(get_db), _user: User = Depends(get_current_user)):
+    await _get_run(db, run_id)
     result = await db.execute(
         select(AgentEvent).where(AgentEvent.run_id == run_id).order_by(AgentEvent.sequence)
     )
@@ -444,10 +454,17 @@ async def get_run_events(run_id: UUID, db: AsyncSession = Depends(get_db), _user
 @router.websocket("/ws/runs/{run_id}")
 async def run_websocket(run_id: str, ws: WebSocket, token: str = Query(...)):
     try:
-        decode_access_token(token)
+        payload = decode_access_token(token)
+        parsed_run_id = UUID(run_id)
     except Exception:
         await ws.close(code=4001)
         return
+    async with AsyncSessionLocal() as db:
+        user = await db.get(User, UUID(payload["sub"]))
+        run = await db.get(Run, parsed_run_id)
+        if not user or not run:
+            await ws.close(code=4004)
+            return
     await ws_manager.connect(run_id, ws)
     try:
         while True:

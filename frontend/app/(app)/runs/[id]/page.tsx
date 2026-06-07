@@ -148,12 +148,22 @@ function LabelEditor({ id, label }: { id: string; label: string | null }) {
 export default function RunResultsPage() {
   const { id } = useParams<{ id: string }>();
 
-  const { data: run } = useQuery({
+  const {
+    data: run,
+    isLoading: runLoading,
+    isError: runIsError,
+    error: runError,
+  } = useQuery({
     queryKey: ["run", id],
     queryFn: () => getRun(id),
   });
 
-  const { data: report } = useQuery({
+  const {
+    data: report,
+    isLoading: reportLoading,
+    isError: reportIsError,
+    error: reportError,
+  } = useQuery({
     queryKey: ["report", id],
     queryFn: () => getReport(id),
     enabled: run?.status === "completed",
@@ -173,6 +183,32 @@ export default function RunResultsPage() {
   );
 
   const isRunning = run?.status === "pending" || run?.status === "running";
+
+  if (runLoading) {
+    return (
+      <main className="px-4 py-4 sm:p-6 max-w-5xl mx-auto flex flex-col gap-6">
+        <Link href="/runs" className="text-blue-400 hover:underline text-sm">
+          ← Back to History
+        </Link>
+        <div className="bg-surface border border-input-border rounded-lg px-4 py-6 text-sm text-muted">
+          Loading run…
+        </div>
+      </main>
+    );
+  }
+
+  if (runIsError || !run) {
+    return (
+      <main className="px-4 py-4 sm:p-6 max-w-5xl mx-auto flex flex-col gap-6">
+        <Link href="/runs" className="text-blue-400 hover:underline text-sm">
+          ← Back to History
+        </Link>
+        <div className="bg-surface border border-red-500/40 rounded-lg px-4 py-6 text-sm text-red-300">
+          {runError instanceof Error ? runError.message : "Failed to load this run."}
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="px-4 py-4 sm:p-6 max-w-5xl mx-auto flex flex-col gap-6">
@@ -204,6 +240,18 @@ export default function RunResultsPage() {
             <Link href={`/runs/${id}/live`} className="text-blue-400 hover:underline">
               View live feed →
             </Link>
+          </div>
+        )}
+
+        {run.status === "completed" && reportLoading && (
+          <div className="bg-surface border border-input-border rounded-lg px-4 py-3 text-sm text-muted">
+            Loading report…
+          </div>
+        )}
+
+        {run.status === "completed" && reportIsError && (
+          <div className="bg-surface border border-red-500/40 rounded-lg px-4 py-3 text-sm text-red-300">
+            {reportError instanceof Error ? reportError.message : "Failed to load report."}
           </div>
         )}
 

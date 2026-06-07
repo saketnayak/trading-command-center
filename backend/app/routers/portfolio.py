@@ -233,11 +233,16 @@ async def _fetch_prices_bulk(
             result[ticker] = price
             _price_cache[ticker] = (price, now + _CACHE_TTL)
 
-    # Fetch stocks concurrently — Finnhub when key is present, yfinance fallback otherwise
+    # Stock portfolio prices require Finnhub so the API can clearly signal when
+    # real-time stock pricing is unavailable. Crypto prices still work above.
     if uncached_stock:
-        stock_prices = await asyncio.gather(*[_fetch_price(t, api_key) for t in uncached_stock])
-        for ticker, price in zip(uncached_stock, stock_prices):
-            result[ticker] = price
+        if not api_key:
+            for ticker in uncached_stock:
+                result[ticker] = None
+        else:
+            stock_prices = await asyncio.gather(*[_fetch_price(t, api_key) for t in uncached_stock])
+            for ticker, price in zip(uncached_stock, stock_prices):
+                result[ticker] = price
 
     return result
 
@@ -1809,12 +1814,19 @@ async def get_portfolio_trim_signals(
         current_verdict = current_verdict_raw.upper() if current_verdict_raw else None
         previous_verdict = previous_verdict_raw.upper() if previous_verdict_raw else None
 
-        regime_data = regime_map.get(h.ticker)
-        regime = regime_data.get("current_regime") if regime_data else None
-        regime_signal = regime_data.get("signal") if regime_data else None
+        if last_run:
+            regime_data = regime_map.get(h.ticker)
+            regime = regime_data.get("current_regime") if regime_data else None
+            regime_signal = regime_data.get("signal") if regime_data else None
 
-        fund = fundamentals_map.get(h.ticker, {})
-        peg = fund.get("peg_ratio")
+            fund = fundamentals_map.get(h.ticker, {})
+            peg = fund.get("peg_ratio")
+        else:
+            regime = None
+            regime_signal = None
+            peg = None
+            pnl_pct = None
+            weight_pct = None
 
         signal = score_trim_signal(
             ticker=h.ticker,

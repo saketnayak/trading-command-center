@@ -233,6 +233,182 @@ async def test_latest_by_ticker_scoped_to_user():
 
 
 @pytest.mark.asyncio
+async def test_run_read_endpoints_are_team_visible():
+    """Run history is team-visible: members can inspect other users' run artifacts."""
+    from app.database import AsyncSessionLocal
+    from app.models.agent_event import AgentEvent, EventType
+    from app.models.outcome import RunOutcome
+    from app.models.report import Report
+    from app.models.run import Run, RunStatus, RunVerdict
+    from app.services.auth import create_invite_token
+    from datetime import date, datetime, timezone
+
+    owner_email = f"run_owner_{uuid.uuid4().hex[:6]}@test.com"
+    member_email = f"run_member_{uuid.uuid4().hex[:6]}@test.com"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        owner_token = await _get_token(client, owner_email)
+        invite = create_invite_token(member_email)
+        await client.post("/auth/register", json={
+            "email": member_email,
+            "password": "password1",
+            "name": "Member",
+            "invite_token": invite,
+        })
+        member_login = await client.post("/auth/login", json={"email": member_email, "password": "password1"})
+        member_token = member_login.json()["access_token"]
+        owner_id = await _decode_user_id(owner_token)
+
+        run_id = uuid.uuid4()
+        own_run_id = uuid.uuid4()
+        async with AsyncSessionLocal() as db:
+            db.add(Run(
+                id=run_id,
+                created_by=uuid.UUID(owner_id),
+                ticker="LEAK",
+                analysis_date=date.today(),
+                llm_provider="openai",
+                llm_model="gpt-4o",
+                depth="standard",
+                analysts=["market"],
+                status=RunStatus.completed,
+                verdict=RunVerdict.buy,
+                completed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            ))
+            db.add(Run(
+                id=own_run_id,
+                created_by=uuid.UUID(await _decode_user_id(member_token)),
+                ticker="OWN",
+                analysis_date=date.today(),
+                llm_provider="openai",
+                llm_model="gpt-4o",
+                depth="standard",
+                analysts=["market"],
+                status=RunStatus.completed,
+                verdict=RunVerdict.hold,
+                completed_at=datetime(2026, 1, 2, tzinfo=timezone.utc),
+            ))
+            await db.flush()
+            db.add(Report(
+                run_id=run_id,
+                trader_decision="private report",
+                verdict=RunVerdict.buy,
+                risk_assessment="private risk",
+            ))
+            db.add(AgentEvent(
+                run_id=run_id,
+                agent_name="market_analyst",
+                event_type=EventType.started,
+                payload={"type": "started", "secret": "private"},
+                sequence=1,
+            ))
+            db.add(RunOutcome(
+                run_id=run_id,
+                ticker="LEAK",
+                verdict="buy",
+                analysis_date=str(date.today()),
+                price_at_analysis=100,
+                price_7d=110,
+            ))
+            await db.commit()
+
+        headers = {"Authorization": f"Bearer {member_token}"}
+        list_response = await client.get("/runs", headers=headers)
+        assert list_response.status_code == 200
+        assert str(run_id) in {row["id"] for row in list_response.json()}
+
+        filtered_response = await client.get(f"/runs?user_id={owner_id}", headers=headers)
+        assert filtered_response.status_code == 200
+        assert [row["id"] for row in filtered_response.json()] == [str(run_id)]
+
+        for path in [
+            f"/runs/{run_id}",
+            f"/runs/{run_id}/report",
+            f"/runs/{run_id}/events",
+            f"/runs/{run_id}/outcome",
+        ]:
+            response = await client.get(path, headers=headers)
+            assert response.status_code == 200
+
+        compare_response = await client.get(
+            f"/runs/compare?a={own_run_id}&b={run_id}",
+            headers=headers,
+        )
+        assert compare_response.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_run_stats_and_performance_are_team_visible():
+    from app.database import AsyncSessionLocal
+    from app.models.outcome import RunOutcome
+    from app.models.run import Run, RunStatus, RunVerdict
+    from app.services.auth import create_invite_token
+    from datetime import date
+
+    owner_email = f"stats_owner_{uuid.uuid4().hex[:6]}@test.com"
+    member_email = f"stats_member_{uuid.uuid4().hex[:6]}@test.com"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        owner_token = await _get_token(client, owner_email)
+        invite = create_invite_token(member_email)
+        await client.post("/auth/register", json={
+            "email": member_email,
+            "password": "password1",
+            "name": "Member",
+            "invite_token": invite,
+        })
+        member_login = await client.post("/auth/login", json={"email": member_email, "password": "password1"})
+        member_token = member_login.json()["access_token"]
+        owner_id = await _decode_user_id(owner_token)
+        member_id = await _decode_user_id(member_token)
+
+        owner_run_id = uuid.uuid4()
+        member_run_id = uuid.uuid4()
+        async with AsyncSessionLocal() as db:
+            for run_id, user_id, ticker, verdict in [
+                (owner_run_id, owner_id, "AAPL", RunVerdict.buy),
+                (member_run_id, member_id, "MSFT", RunVerdict.sell),
+            ]:
+                db.add(Run(
+                    id=run_id,
+                    created_by=uuid.UUID(user_id),
+                    ticker=ticker,
+                    analysis_date=date.today(),
+                    llm_provider="openai",
+                    llm_model="gpt-4o",
+                    depth="standard",
+                    analysts=["market"],
+                    status=RunStatus.completed,
+                    verdict=verdict,
+                ))
+            await db.flush()
+            for run_id, ticker, verdict in [
+                (owner_run_id, "AAPL", RunVerdict.buy),
+                (member_run_id, "MSFT", RunVerdict.sell),
+            ]:
+                db.add(RunOutcome(
+                    run_id=run_id,
+                    ticker=ticker,
+                    verdict=verdict.value,
+                    analysis_date=str(date.today()),
+                    price_at_analysis=100,
+                    price_7d=110 if verdict == RunVerdict.buy else 90,
+                ))
+            await db.commit()
+
+        headers = {"Authorization": f"Bearer {member_token}"}
+        stats = await client.get("/runs/stats", headers=headers)
+        assert stats.status_code == 200
+        assert stats.json()["total"] == 2
+        assert stats.json()["verdicts"]["sell"] == 1
+        assert stats.json()["verdicts"]["buy"] == 1
+
+        performance = await client.get("/runs/performance", headers=headers)
+        assert performance.status_code == 200
+        data = performance.json()
+        assert data["total"] == 2
+        assert {row["ticker"] for row in data["outcomes"]} == {"AAPL", "MSFT"}
+
+
+@pytest.mark.asyncio
 async def test_list_runs_filters_by_date_range():
     """GET /runs?date_from=... excludes runs created before the cutoff."""
     from app.database import AsyncSessionLocal

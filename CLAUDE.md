@@ -21,7 +21,7 @@ pip install uv && uv pip install --system -e ".[dev]"
 # Run dev server (must use python -m, not bare uvicorn — system uvicorn may be Python 3.14)
 python -m uvicorn main:app --reload
 
-# Run all tests (requires running Postgres; see docker-compose.yml for the db service)
+# Run all tests (requires running Postgres; see docker-compose.dev.yml for the db service)
 python -m pytest
 
 # Run a single test file / test
@@ -51,11 +51,11 @@ npx tsc --noEmit # type-check without emitting
 # Copy and fill in secrets first
 cp .env.example .env
 
-docker compose up --build        # starts db, backend, frontend, nginx
-docker compose up db             # just postgres (for local backend dev)
+docker compose -f docker-compose.dev.yml up --build        # starts db, backend, frontend, nginx
+docker compose -f docker-compose.dev.yml up db             # just postgres (for local backend dev)
 ```
 
-Local Postgres from `docker compose up db` is mapped to **port 5433** (not 5432) to avoid conflicts.
+Local Postgres from `docker compose -f docker-compose.dev.yml up db` is mapped to **port 5433** (not 5432) to avoid conflicts.
 
 ---
 
@@ -147,4 +147,4 @@ All four supplementary endpoints require a Finnhub key. They return empty result
 
 ### Deployment
 
-`docker-compose.yml` runs four services: `db` (postgres:16), `backend`, `frontend`, `nginx`. The backend waits for the `db` healthcheck before starting. Nginx reverse-proxies `/api/` → backend, `/ws/` → backend (with WebSocket upgrade headers), and everything else → frontend. TLS is not included — add certbot separately.
+`docker-compose.prod.yml` runs four services: `db` (postgres:16), `backend`, `frontend`, `nginx`. `docker-compose.dev.yml` builds the app locally and also includes Adminer. The backend waits for the `db` healthcheck before starting. Nginx reverse-proxies `/api/` → backend, `/ws/` → backend (with WebSocket upgrade headers), and everything else → frontend. TLS is handled by `docker-compose.traefik.yml`; the bare prod stack listens on HTTP port 80.

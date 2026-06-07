@@ -75,7 +75,7 @@ agentfloor stop      # shut down (data preserved)
 agentfloor start     # start again after stop
 ```
 
-> **Data safety:** Your runs, portfolios, and API keys live in a Docker named volume (`pgdata`). All commands above are non-destructive. The only command that permanently erases data is `docker compose down -v` — avoid it unless you intend a full reset.
+> **Data safety:** Your runs, portfolios, and API keys live in a Docker named volume (`agentfloor_pgdata` in the production stack; `pgdata` in the development stack). All commands above are non-destructive. The only command that permanently erases data is `docker compose down -v` — avoid it unless you intend a full reset.
 
 ---
 
@@ -190,7 +190,7 @@ Go to **Settings → Team** (admin only). Enter an email and click **Invite Memb
 ```bash
 git clone https://github.com/saketnayak/trading-command-center
 cd trading-command-center
-docker compose up db -d
+docker compose -f docker-compose.dev.yml up db -d
 ```
 
 Postgres starts on **port 5433** to avoid conflicts with any local instance on 5432.
@@ -223,7 +223,7 @@ App at **http://localhost:3000**
 
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose -f docker-compose.dev.yml up --build
 ```
 
 Nginx listens on port 80 and routes `/api/*` to FastAPI, `/ws/*` to the WebSocket endpoint, and everything else to Next.js.
@@ -241,7 +241,7 @@ Start Postgres first:
 
 ```bash
 cd /path/to/trading-command-center
-docker compose up db -d
+docker compose -f docker-compose.dev.yml up db -d
 ```
 
 Then apply all pending migrations from the backend directory:
@@ -264,13 +264,13 @@ DATABASE_URL=postgresql://agentfloor:agentfloor@localhost:5433/agentfloor \
 For the compose-managed stack, run Alembic from the backend container against the internal database host:
 
 ```bash
-docker compose exec backend alembic upgrade head
+docker compose -f docker-compose.dev.yml exec backend alembic upgrade head
 ```
 
 If your backend container does not already have `DATABASE_URL` in its environment, pass it explicitly:
 
 ```bash
-docker compose exec \
+docker compose -f docker-compose.dev.yml exec \
   -e DATABASE_URL=postgresql://agentfloor:agentfloor@db:5432/agentfloor \
   backend alembic upgrade head
 ```
@@ -364,7 +364,7 @@ python -m pytest tests/test_auth.py                          # single file
 python -m pytest tests/test_auth.py::test_register_first_user_is_admin
 ```
 
-Tests require a running Postgres instance (`docker compose up db -d`). The test suite truncates all tables at session start so reruns are safe.
+Tests require a running Postgres instance (`docker compose -f docker-compose.dev.yml up db -d`). The test suite uses an isolated temporary database, so reruns are safe.
 
 Frontend export utilities:
 
