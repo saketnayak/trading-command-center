@@ -1,4 +1,8 @@
+import pytest
+
 from app.services.encryption import encrypt_key, decrypt_key
+
+pytestmark = pytest.mark.unit
 
 
 def test_round_trip():

@@ -11,6 +11,7 @@ def _read(name: str) -> bytes:
     return (FIXTURES / name).read_bytes()
 
 
+@pytest.mark.unit
 def test_moomoo_detection_and_parse():
     broker, holdings = parse_portfolio_csv(_read("moomoo_positions.csv"))
     assert broker == "moomoo"
@@ -20,12 +21,14 @@ def test_moomoo_detection_and_parse():
     assert aapl.avg_cost == pytest.approx(162.40)
 
 
+@pytest.mark.unit
 def test_moomoo_skips_cash_rows():
     broker, holdings = parse_portfolio_csv(_read("moomoo_positions.csv"))
     tickers = [h.ticker for h in holdings]
     assert "$USD" not in tickers
 
 
+@pytest.mark.unit
 def test_fidelity_detection_and_parse():
     broker, holdings = parse_portfolio_csv(_read("fidelity_positions.csv"))
     assert broker == "fidelity"
@@ -35,6 +38,7 @@ def test_fidelity_detection_and_parse():
     assert msft.avg_cost == pytest.approx(295.00)
 
 
+@pytest.mark.unit
 def test_schwab_detection_and_parse():
     broker, holdings = parse_portfolio_csv(_read("schwab_positions.csv"))
     assert broker == "schwab"
@@ -44,6 +48,7 @@ def test_schwab_detection_and_parse():
     assert tsla.avg_cost == pytest.approx(3300.0 / 15.0)
 
 
+@pytest.mark.unit
 def test_generic_detection_and_parse():
     broker, holdings = parse_portfolio_csv(_read("generic_positions.csv"))
     assert broker == "generic"
@@ -52,6 +57,7 @@ def test_generic_detection_and_parse():
     assert nvda.avg_cost == pytest.approx(410.0)
 
 
+@pytest.mark.unit
 def test_duplicate_ticker_last_row_wins():
     csv_bytes = b"ticker,shares,avg_cost\nAAPL,50,162.40\nAAPL,75,155.00\n"
     _, holdings = parse_portfolio_csv(csv_bytes)
@@ -59,6 +65,7 @@ def test_duplicate_ticker_last_row_wins():
     assert holdings[0].shares == 75.0
 
 
+@pytest.mark.unit
 def test_unknown_format_raises_422():
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
@@ -66,6 +73,7 @@ def test_unknown_format_raises_422():
     assert exc.value.status_code == 422
 
 
+@pytest.mark.unit
 def test_empty_file_raises_400():
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:
@@ -73,6 +81,7 @@ def test_empty_file_raises_400():
     assert exc.value.status_code == 400
 
 
+@pytest.mark.unit
 def test_truly_empty_file_raises_400():
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as exc:

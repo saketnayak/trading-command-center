@@ -4,6 +4,8 @@ from pydantic import ValidationError
 from app.schemas.run import RunCreateRequest
 from app.utils.response_language import DEFAULT_RESPONSE_LANGUAGE, normalize_response_language
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.mark.parametrize("language", ["en-US", "zh-TW", "zh-CN", "ja-JP", "ko-KR", "de-DE"])
 def test_normalize_response_language_accepts_supported_values(language):

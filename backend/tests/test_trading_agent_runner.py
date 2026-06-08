@@ -9,7 +9,7 @@ from app.services.trading_agent_runner import (
 )
 from app.models.run import RunVerdict
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
 
 @pytest.mark.parametrize(

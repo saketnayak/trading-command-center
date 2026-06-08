@@ -2,7 +2,7 @@ import pytest
 
 from app.utils.tradingagents_analysts import DEFAULT_ANALYSTS, normalize_analysts
 
-pytestmark = pytest.mark.asyncio
+pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
 
 
 async def test_normalize_defaults():

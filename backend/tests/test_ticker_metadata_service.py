@@ -2,8 +2,6 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 
-pytestmark = pytest.mark.unit
-
 from app.services.ticker_metadata_service import (
     is_stale,
     metadata_to_dict,
@@ -12,11 +10,13 @@ from app.services.ticker_metadata_service import (
 from app.models.ticker_metadata import TickerMetadata
 
 
+@pytest.mark.unit
 def test_normalize_ticker():
     assert normalize_ticker("  aapl ") == "AAPL"
     assert normalize_ticker("btc-usd") == "BTC-USD"
 
 
+@pytest.mark.unit
 def test_is_stale():
     now = datetime(2026, 6, 3, 12, 0, tzinfo=timezone.utc)
     row = TickerMetadata(
@@ -30,6 +30,7 @@ def test_is_stale():
     assert is_stale(row, now + timedelta(hours=2))
 
 
+@pytest.mark.unit
 def test_metadata_to_dict_includes_ipo_date():
     now = datetime(2026, 6, 3, 12, 0, tzinfo=timezone.utc)
     row = TickerMetadata(

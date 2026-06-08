@@ -2,6 +2,8 @@ import pytest
 from unittest.mock import AsyncMock
 from app.services.websocket_manager import WebSocketManager
 
+pytestmark = [pytest.mark.unit, pytest.mark.asyncio]
+
 
 @pytest.mark.asyncio
 async def test_broadcast_sends_to_all_subscribers():

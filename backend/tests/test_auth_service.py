@@ -1,5 +1,10 @@
 import uuid
+
+import pytest
+
 from app.services.auth import hash_password, verify_password, create_access_token, decode_access_token
+
+pytestmark = pytest.mark.unit
 
 
 def test_password_round_trip():

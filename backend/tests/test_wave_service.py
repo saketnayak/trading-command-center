@@ -1,6 +1,10 @@
 """Unit tests for wave service helpers (no yfinance)."""
 
+import pytest
+
 from app.services.wave_service import _build_projection, _to_summary
+
+pytestmark = pytest.mark.unit
 
 
 def test_to_summary_extracts_overview_fields() -> None:

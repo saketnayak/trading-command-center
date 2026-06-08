@@ -1,9 +1,12 @@
+import pytest
 from types import SimpleNamespace
 
 from app.services.tradingagents_grounding import (
     apply_analyst_specific_grounding_patch,
     has_analyst_tool_evidence,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_has_analyst_tool_evidence_matches_tool_name():
