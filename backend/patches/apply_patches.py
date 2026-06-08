@@ -215,4 +215,34 @@ if "Normalize date column across yfinance versions" not in content:
 else:
     print("  · dataflows/yfinance.py date-column patch already applied")
 
+# ── 9. Patch llm.py — skip reasoning_effort for Groq (OpenAI-compatible) ─────
+# Groq rejects any request containing the reasoning_effort parameter. Since Groq
+# is routed through provider="openai", _apply_reasoning unconditionally sets this
+# key. We guard on OPENAI_BASE_URL at runtime so native OpenAI is unaffected.
+llm_path = os.path.join(pkg, "llm.py")
+with open(llm_path) as f:
+    content = f.read()
+
+old_openai_block = (
+    "    elif provider == \"openai\":\n"
+    "        kwargs[\"reasoning_effort\"] = \"xhigh\" if e == \"max\" else e\n"
+)
+new_openai_block = (
+    "    elif provider == \"openai\":\n"
+    "        import os as _os\n"
+    "        if \"groq.com\" not in _os.environ.get(\"OPENAI_BASE_URL\", \"\"):\n"
+    "            kwargs[\"reasoning_effort\"] = \"xhigh\" if e == \"max\" else e\n"
+)
+
+if "groq.com" not in content:
+    new_content = content.replace(old_openai_block, new_openai_block)
+    if new_content == content:
+        print("  ✗ WARNING: llm.py _apply_reasoning patch did not match — check library version")
+    else:
+        with open(llm_path, "w") as f:
+            f.write(new_content)
+        print("  ✓ Patched llm.py — skip reasoning_effort for Groq base URL")
+else:
+    print("  · llm.py _apply_reasoning already patched")
+
 print("All patches applied successfully.")

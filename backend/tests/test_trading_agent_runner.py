@@ -1,4 +1,9 @@
+import os
+
 import pytest
+
+pytestmark = pytest.mark.unit
+
 from app.services.trading_agent_runner import _extract_prices
 
 
@@ -51,3 +56,54 @@ def test_extract_prices_comma_formatted():
     assert entry == "1,500.00"
     assert stop == "1,400.00"
     assert target == "1,750.00"
+
+
+def test_groq_reasoning_effort_skipped():
+    """_apply_reasoning must not set reasoning_effort when OPENAI_BASE_URL is Groq."""
+    from tradingagents.llm import _apply_reasoning
+
+    old = os.environ.get("OPENAI_BASE_URL")
+    try:
+        os.environ["OPENAI_BASE_URL"] = "https://api.groq.com/openai/v1"
+        kwargs: dict = {}
+        _apply_reasoning("openai", "medium", kwargs)
+        assert "reasoning_effort" not in kwargs
+    finally:
+        if old is None:
+            os.environ.pop("OPENAI_BASE_URL", None)
+        else:
+            os.environ["OPENAI_BASE_URL"] = old
+
+
+def test_openai_reasoning_effort_applied_without_base_url():
+    """_apply_reasoning must still set reasoning_effort for native OpenAI (no base URL override)."""
+    from tradingagents.llm import _apply_reasoning
+
+    old = os.environ.get("OPENAI_BASE_URL")
+    try:
+        os.environ.pop("OPENAI_BASE_URL", None)
+        kwargs: dict = {}
+        _apply_reasoning("openai", "medium", kwargs)
+        assert kwargs.get("reasoning_effort") == "medium"
+    finally:
+        if old is None:
+            os.environ.pop("OPENAI_BASE_URL", None)
+        else:
+            os.environ["OPENAI_BASE_URL"] = old
+
+
+def test_openai_reasoning_effort_max_maps_to_xhigh():
+    """_apply_reasoning must map 'max' -> 'xhigh' for native OpenAI."""
+    from tradingagents.llm import _apply_reasoning
+
+    old = os.environ.get("OPENAI_BASE_URL")
+    try:
+        os.environ.pop("OPENAI_BASE_URL", None)
+        kwargs: dict = {}
+        _apply_reasoning("openai", "max", kwargs)
+        assert kwargs.get("reasoning_effort") == "xhigh"
+    finally:
+        if old is None:
+            os.environ.pop("OPENAI_BASE_URL", None)
+        else:
+            os.environ["OPENAI_BASE_URL"] = old
