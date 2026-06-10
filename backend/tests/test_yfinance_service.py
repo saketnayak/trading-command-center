@@ -85,3 +85,22 @@ async def test_fetch_history_period_uses_period_cache_key(monkeypatch):
         "SPY",
         {"period": "2y", "interval": "1d", "auto_adjust": True},
     )
+
+
+def test_prepare_ohlcv_frame_selects_required_columns():
+    frame = pd.DataFrame(
+        {
+            "Open": [100.0, 101.0],
+            "High": [102.0, 103.0],
+            "Low": [99.0, 100.0],
+            "Close": [101.0, 102.0],
+            "Adj Close": [101.0, 102.0],
+            "Volume": [1000, 1100],
+        },
+        index=pd.date_range("2024-01-01", periods=2, freq="D"),
+    )
+
+    prepared = yfinance_service.prepare_ohlcv_frame(frame, "AAPL")
+
+    assert list(prepared.columns) == ["Open", "High", "Low", "Close", "Volume"]
+    assert len(prepared) == 2

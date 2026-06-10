@@ -2,7 +2,7 @@ import time
 import numpy as np
 import pandas as pd
 import pytest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 pytest.mark.unit
 pytestmark = pytest.mark.unit
@@ -92,12 +92,24 @@ async def test_cache_hit_skips_recompute():
 @pytest.mark.asyncio
 async def test_cache_miss_on_expired():
     from app.services import markov_service
+
     fake_result = {"ticker": "TEST2", "signal": 0.5, "current_regime": "Bull"}
+    fake_data = pd.DataFrame(
+        {"Close": [100.0 + i for i in range(300)]},
+        index=pd.date_range("2020-01-01", periods=300, freq="B"),
+    )
     markov_service._regime_cache["TEST2"] = (fake_result, time.time() - 1)  # expired
-    with patch("app.services.markov_service._compute_regime", return_value=None) as mock_compute:
+    with (
+        patch(
+            "app.services.markov_service.fetch_history_period",
+            new=AsyncMock(return_value=fake_data),
+        ) as mock_fetch,
+        patch("app.services.markov_service._compute_regime", return_value=None) as mock_compute,
+    ):
         result = await markov_service.get_regime("TEST2")
     assert result is None
-    mock_compute.assert_called_once_with("TEST2")
+    mock_fetch.assert_awaited_once_with("TEST2", period="10y", interval="1d", auto_adjust=True)
+    mock_compute.assert_called_once_with(fake_data, "TEST2")
 
 
 def test_walk_forward_stats_returns_sharpe_and_drawdown():

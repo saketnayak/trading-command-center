@@ -20,6 +20,7 @@ import yfinance as yf
 logger = logging.getLogger(__name__)
 
 _HISTORY_CACHE_TTL = 14400  # 4 hours
+_OHLCV_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 _history_cache: dict[str, tuple[pd.DataFrame, float]] = {}
 
 # Lazily initialized per event loop to avoid loop-mismatch errors in multi-loop
@@ -55,6 +56,19 @@ async def fetch_price(ticker: str) -> Optional[float]:
     """Async wrapper: fetches stock price via Yahoo Finance with concurrency throttling."""
     async with _get_yf_semaphore():
         return await asyncio.to_thread(_sync_fetch_price, ticker)
+
+
+def prepare_ohlcv_frame(data: pd.DataFrame, symbol: str = "") -> pd.DataFrame:
+    """Select and clean OHLCV columns expected by Elliott Wave analysis."""
+    missing = [column for column in _OHLCV_COLUMNS if column not in data.columns]
+    if missing:
+        label = symbol or "symbol"
+        raise ValueError(f"Missing required columns for {label}: {missing}")
+
+    frame = data[_OHLCV_COLUMNS].copy()
+    frame = frame.dropna()
+    frame.index = pd.to_datetime(frame.index)
+    return frame
 
 
 def _normalize_history_frame(data: pd.DataFrame | None, symbol: str) -> pd.DataFrame:

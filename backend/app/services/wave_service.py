@@ -7,6 +7,9 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, Optional
 
+import pandas as pd
+
+from app.services.yfinance_service import fetch_history_period, prepare_ohlcv_frame
 from elliott_wave.models.chart_payload import AnalyzeResponse
 from elliott_wave.models.selection import AnalysisProfile
 from elliott_wave.services.analysis_orchestrator import AnalysisOrchestrator
@@ -16,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 _CACHE_TTL = 14400  # 4 hours
 _analyze_cache: dict[str, tuple[dict[str, Any], float]] = {}
-_sem = asyncio.Semaphore(5)
 
 _orchestrator = AnalysisOrchestrator()
 _chart_payload_service = ChartPayloadService()
@@ -41,12 +43,14 @@ def _run_analyze_sync(
     period: str = DEFAULT_PERIOD,
     interval: str = DEFAULT_INTERVAL,
     profile: AnalysisProfile = DEFAULT_PROFILE,
+    ohlcv: pd.DataFrame,
 ) -> dict[str, Any]:
     df, context, result = _orchestrator.analyze(
         symbol=symbol.upper(),
         period=period,  # type: ignore[arg-type]
         interval=interval,  # type: ignore[arg-type]
         profile=profile,
+        ohlcv=ohlcv,
     )
     chart = _chart_payload_service.build(df, context, result)
     response = AnalyzeResponse(
@@ -239,27 +243,39 @@ async def analyze_wave(
         if cached and cached[1] > time.time():
             return cached[0]
 
-    async with _sem:
-        if use_cache:
-            cached = _analyze_cache.get(key)
-            if cached and cached[1] > time.time():
-                return cached[0]
+    if use_cache:
+        cached = _analyze_cache.get(key)
+        if cached and cached[1] > time.time():
+            return cached[0]
 
-        try:
-            payload = await asyncio.to_thread(
-                _run_analyze_sync,
-                symbol,
-                period=period,
-                interval=interval,
-                profile=profile,
-            )
-        except Exception as exc:
-            logger.warning("wave analysis failed for %s: %s", symbol, exc)
-            return None
+    try:
+        history = await fetch_history_period(
+            symbol,
+            period=period,
+            interval=interval,
+            auto_adjust=True,
+        )
+        ohlcv = prepare_ohlcv_frame(history, symbol)
+    except Exception as exc:
+        logger.warning("wave history fetch failed for %s: %s", symbol, exc)
+        return None
 
-        if use_cache:
-            _analyze_cache[key] = (payload, time.time() + _CACHE_TTL)
-        return payload
+    try:
+        payload = await asyncio.to_thread(
+            _run_analyze_sync,
+            symbol,
+            period=period,
+            interval=interval,
+            profile=profile,
+            ohlcv=ohlcv,
+        )
+    except Exception as exc:
+        logger.warning("wave analysis failed for %s: %s", symbol, exc)
+        return None
+
+    if use_cache:
+        _analyze_cache[key] = (payload, time.time() + _CACHE_TTL)
+    return payload
 
 
 async def get_wave_summary(
