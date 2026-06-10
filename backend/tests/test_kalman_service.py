@@ -123,7 +123,7 @@ async def test_cache_hit_skips_recompute():
     from app.services import kalman_service
 
     fake_result = {"ticker": "TEST", "signal": 0.5, "trend_direction": "up"}
-    kalman_service._kalman_cache["TEST:2015-01-01::1d:True:0.001:0.0001:1.0"] = (
+    kalman_service._kalman_cache["TEST:2015-01-01::1d:True:0.01:0.01:0.1"] = (
         fake_result,
         time.time() + 3600,
     )
@@ -138,7 +138,7 @@ async def test_cache_miss_on_expired():
     from app.services import kalman_service
 
     fake_result = {"ticker": "TEST2", "signal": 0.5, "trend_direction": "up"}
-    kalman_service._kalman_cache["TEST2:2015-01-01::1d:True:0.001:0.0001:1.0"] = (
+    kalman_service._kalman_cache["TEST2:2015-01-01::1d:True:0.01:0.01:0.1"] = (
         fake_result,
         time.time() - 1,
     )
@@ -147,10 +147,16 @@ async def test_cache_miss_on_expired():
         result = await get_kalman("TEST2")
 
     assert result is None
-    mock_compute.assert_called_once_with("TEST2", "2015-01-01", None, "1d", True, 0.001, 0.0001, 1.0)
+    mock_compute.assert_called_once_with("TEST2", "2015-01-01", None, "1d", True, 0.01, 0.01, 0.1)
 
 
 @pytest.mark.asyncio
 async def test_get_kalman_rejects_invalid_covariance():
     with pytest.raises(KalmanDataError, match="observation_covariance"):
         await get_kalman("TEST3", observation_covariance=0.0)
+
+
+@pytest.mark.asyncio
+async def test_get_kalman_rejects_out_of_range_transition_covariance():
+    with pytest.raises(KalmanDataError, match="transition_covariance_level"):
+        await get_kalman("TEST4", transition_covariance_level=1.1)

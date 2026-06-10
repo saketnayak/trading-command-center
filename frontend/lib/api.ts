@@ -2,6 +2,7 @@ import { getSession, signOut } from "next-auth/react";
 import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, TickerMetadataResponse, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, KalmanData, TrimSignalsResponse, WaveSummary } from "./types";
 import type { AnalyzeResponse } from "./wave/types";
 import type { ResponseLanguage } from "./responseLanguage";
+import type { KalmanSettings } from "./kalmanSettings";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -423,8 +424,46 @@ export async function getTickerRegime(ticker: string): Promise<RegimeData | null
   return data ?? null;
 }
 
+interface KalmanSettingsResponse {
+  observation_covariance: number;
+  transition_covariance: number;
+  processing_mode: "causal" | "historical";
+  updated_at: string | null;
+}
+
+function fromKalmanSettingsResponse(data: KalmanSettingsResponse): KalmanSettings {
+  return {
+    observationCovariance: data.observation_covariance,
+    transitionCovariance: data.transition_covariance,
+    mode: data.processing_mode,
+  };
+}
+
+export async function getKalmanFilterSettings(): Promise<KalmanSettings> {
+  const r = await fetchWithAuth("/kalman/settings");
+  if (!r.ok) throw new Error("Failed to fetch Kalman settings");
+  return fromKalmanSettingsResponse(await r.json());
+}
+
+export async function updateKalmanFilterSettings(settings: KalmanSettings): Promise<KalmanSettings> {
+  const r = await fetchWithAuth("/kalman/settings", {
+    method: "PUT",
+    body: JSON.stringify({
+      observation_covariance: settings.observationCovariance,
+      transition_covariance: settings.transitionCovariance,
+      processing_mode: settings.mode,
+    }),
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    throw new Error(body?.detail ?? "Failed to update Kalman settings");
+  }
+  return fromKalmanSettingsResponse(await r.json());
+}
+
 interface KalmanOptions {
   realTime?: boolean;
+  transitionCovariance?: number;
   transitionCovarianceLevel?: number;
   transitionCovarianceTrend?: number;
   observationCovariance?: number;
@@ -433,8 +472,10 @@ interface KalmanOptions {
 function kalmanQuery(options: KalmanOptions = {}): string {
   const params = new URLSearchParams();
   if (options.realTime != null) params.set("real_time", String(options.realTime));
-  if (options.transitionCovarianceLevel != null) params.set("transition_covariance_level", String(options.transitionCovarianceLevel));
-  if (options.transitionCovarianceTrend != null) params.set("transition_covariance_trend", String(options.transitionCovarianceTrend));
+  const qLevel = options.transitionCovarianceLevel ?? options.transitionCovariance;
+  const qTrend = options.transitionCovarianceTrend ?? options.transitionCovariance;
+  if (qLevel != null) params.set("transition_covariance_level", String(qLevel));
+  if (qTrend != null) params.set("transition_covariance_trend", String(qTrend));
   if (options.observationCovariance != null) params.set("observation_covariance", String(options.observationCovariance));
   const qs = params.toString();
   return qs ? `?${qs}` : "";

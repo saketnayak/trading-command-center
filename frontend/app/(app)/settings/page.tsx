@@ -2,11 +2,30 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getApiKeys, getUsers, inviteUser, updateProfile, getSmtpStatus, getMe, downloadDbBackup, restoreDbBackup, getInvestorProfile } from "@/lib/api";
+import {
+  getApiKeys,
+  getUsers,
+  inviteUser,
+  updateProfile,
+  getSmtpStatus,
+  getMe,
+  downloadDbBackup,
+  restoreDbBackup,
+  getInvestorProfile,
+  getKalmanFilterSettings,
+  updateKalmanFilterSettings,
+} from "@/lib/api";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { ApiKeyRow } from "@/components/settings/ApiKeyRow";
 import { ServerUrlRow } from "@/components/settings/ServerUrlRow";
 import { TeamMemberRow } from "@/components/settings/TeamMemberRow";
+import {
+  KALMAN_SETTINGS_DEFAULTS,
+  KALMAN_SETTINGS_RANGES,
+  validateKalmanSettings,
+  type KalmanProcessingMode,
+  type KalmanSettings,
+} from "@/lib/kalmanSettings";
 
 const CLOUD_PROVIDERS: { provider: string; label: string; placeholder: string; docsUrl: string }[] = [
   { provider: "openai",    label: "OpenAI",    placeholder: "sk-…",     docsUrl: "https://platform.openai.com/api-keys" },
@@ -44,6 +63,222 @@ function SubGroupLabel({ label }: { label: string }) {
     <div className="px-4 py-2 bg-input/40 border-b border-border">
       <span className="text-muted text-xs font-medium uppercase tracking-wide">{label}</span>
     </div>
+  );
+}
+
+const KALMAN_TOOLTIPS = {
+  observationCovariance:
+    "Controls sensitivity to market noise. Higher values treat daily price fluctuations as random noise, resulting in a smoother, lag-prone trend line. Lower values track raw prices tightly, increasing responsiveness but adding market noise.",
+  transitionCovariance:
+    "Controls how fast the underlying trend can change. Higher values assume the market regime or trend shifts rapidly, allowing the filter to catch trend reversals quickly. Lower values assume a stable structural trend, producing a rigid baseline.",
+  mode:
+    "'Live Tracking' utilizes only data up to day T to eliminate look-ahead bias, making it mandatory for backtesting and trading signals. 'Historical View' uses the entire dataset to build a perfectly smoothed history, ideal for retroactive macro research but unusable for live execution.",
+};
+
+function InfoLabel({
+  label,
+  tooltip,
+  active,
+  onToggle,
+}: {
+  label: string;
+  tooltip: string;
+  active: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="relative flex items-center gap-1.5 text-muted text-xs sm:w-44 shrink-0">
+      <span>{label}</span>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label={`Explain ${label}`}
+        className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-input-border text-[10px] text-muted hover:border-blue-500 hover:text-blue-400"
+      >
+        i
+      </button>
+      {active && (
+        <div className="absolute left-0 top-6 z-20 w-72 rounded-md border border-input-border bg-elevated p-3 text-xs leading-relaxed text-fg-secondary shadow-lg">
+          {tooltip}
+        </div>
+      )}
+    </div>
+  );
+}
+
+interface KalmanSettingsDraft {
+  observationCovariance: string;
+  transitionCovariance: string;
+  mode: KalmanProcessingMode;
+}
+
+function toDraft(settings: KalmanSettings): KalmanSettingsDraft {
+  return {
+    observationCovariance: String(settings.observationCovariance),
+    transitionCovariance: String(settings.transitionCovariance),
+    mode: settings.mode,
+  };
+}
+
+function KalmanSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
+  const queryClient = useQueryClient();
+  const { data: persistedSettings = KALMAN_SETTINGS_DEFAULTS, isLoading } = useQuery({
+    queryKey: ["kalman-settings"],
+    queryFn: getKalmanFilterSettings,
+    retry: false,
+  });
+  const [draft, setDraft] = useState<KalmanSettingsDraft | null>(null);
+  const [openInfo, setOpenInfo] = useState<keyof typeof KALMAN_TOOLTIPS | null>(null);
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [error, setError] = useState("");
+  const values = draft ?? toDraft(persistedSettings);
+
+  function currentSettings(): KalmanSettings {
+    return {
+      observationCovariance: Number(values.observationCovariance),
+      transitionCovariance: Number(values.transitionCovariance),
+      mode: values.mode,
+    };
+  }
+
+  const mutation = useMutation({
+    mutationFn: updateKalmanFilterSettings,
+    onSuccess: (settings) => {
+      setDraft(toDraft(settings));
+      setStatus("success");
+      setError("");
+      queryClient.invalidateQueries({ queryKey: ["kalman-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["ticker-kalman"] });
+    },
+    onError: (err: Error) => {
+      setStatus("error");
+      setError(err.message);
+    },
+  });
+
+  function handleSave() {
+    const settings = currentSettings();
+    const validationError = validateKalmanSettings(settings);
+    if (validationError) {
+      setStatus("error");
+      setError(validationError);
+      return;
+    }
+
+    mutation.mutate(settings);
+  }
+
+  function resetDefaults() {
+    setDraft(toDraft(KALMAN_SETTINGS_DEFAULTS));
+    if (isAdmin) mutation.mutate(KALMAN_SETTINGS_DEFAULTS);
+  }
+
+  const inputClass = "bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500";
+  const disabled = !isAdmin || isLoading || mutation.isPending;
+
+  return (
+    <SectionCard
+      title="Kalman Filter"
+      description="Controls trend/noise separation for Kalman confirmation cards and strategy requests."
+    >
+      <div className="px-4 py-4 flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+          <InfoLabel
+            label="Observation Covariance (R)"
+            tooltip={KALMAN_TOOLTIPS.observationCovariance}
+            active={openInfo === "observationCovariance"}
+            onToggle={() => setOpenInfo(openInfo === "observationCovariance" ? null : "observationCovariance")}
+          />
+          <div className="flex-1">
+            <input
+              type="number"
+              min={KALMAN_SETTINGS_RANGES.observationCovariance.min}
+              max={KALMAN_SETTINGS_RANGES.observationCovariance.max}
+              step="0.0001"
+              value={values.observationCovariance}
+              onChange={(e) => {
+                setDraft({ ...values, observationCovariance: e.target.value });
+                setStatus("idle");
+              }}
+              disabled={disabled}
+              className={inputClass}
+            />
+            <p className="mt-1 text-[10px] text-muted">Range: 0.0001 to 10.0. Default: 0.1.</p>
+          </div>
+        </div>
+
+        <Divider />
+
+        <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+          <InfoLabel
+            label="Transition Covariance (Q)"
+            tooltip={KALMAN_TOOLTIPS.transitionCovariance}
+            active={openInfo === "transitionCovariance"}
+            onToggle={() => setOpenInfo(openInfo === "transitionCovariance" ? null : "transitionCovariance")}
+          />
+          <div className="flex-1">
+            <input
+              type="number"
+              min={KALMAN_SETTINGS_RANGES.transitionCovariance.min}
+              max={KALMAN_SETTINGS_RANGES.transitionCovariance.max}
+              step="0.0001"
+              value={values.transitionCovariance}
+              onChange={(e) => {
+                setDraft({ ...values, transitionCovariance: e.target.value });
+                setStatus("idle");
+              }}
+              disabled={disabled}
+              className={inputClass}
+            />
+            <p className="mt-1 text-[10px] text-muted">Range: 0.0001 to 1.0. Default: 0.01.</p>
+          </div>
+        </div>
+
+        <Divider />
+
+        <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+          <InfoLabel
+            label="Processing Mode"
+            tooltip={KALMAN_TOOLTIPS.mode}
+            active={openInfo === "mode"}
+            onToggle={() => setOpenInfo(openInfo === "mode" ? null : "mode")}
+          />
+          <select
+            value={values.mode}
+            onChange={(e) => {
+              setDraft({ ...values, mode: e.target.value as KalmanProcessingMode });
+              setStatus("idle");
+            }}
+            disabled={disabled}
+            className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+          >
+            <option value="causal">Live Tracking (Causal)</option>
+            <option value="historical">Historical View (Smoothed)</option>
+          </select>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <button
+            onClick={handleSave}
+            disabled={disabled}
+            className="bg-blue-600 hover:bg-blue-700 text-fg rounded-sm px-4 py-1.5 text-xs disabled:opacity-50"
+          >
+            {mutation.isPending ? "Saving..." : "Save Kalman Settings"}
+          </button>
+          <button
+            onClick={resetDefaults}
+            disabled={!isAdmin || mutation.isPending}
+            className="text-xs text-muted hover:text-fg-secondary disabled:opacity-50"
+          >
+            Reset defaults
+          </button>
+          {!isAdmin && <span className="text-muted text-xs">Admin access required to modify.</span>}
+          {isLoading && <span className="text-muted text-xs">Loading settings...</span>}
+          {status === "success" && <span className="text-green-400 text-xs">Saved.</span>}
+          {status === "error" && <span className="text-red-400 text-xs">{error}</span>}
+        </div>
+      </div>
+    </SectionCard>
   );
 }
 
@@ -293,6 +528,8 @@ export default function SettingsPage() {
             )}
           </div>
         </SectionCard>
+
+        <KalmanSettingsPanel isAdmin={isAdmin} />
 
         {/* LLM Providers */}
         {isAdmin && (

@@ -10,6 +10,9 @@ from typing import Literal
 
 import numpy as np
 import pandas as pd
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.kalman_settings import KalmanSettings
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +22,25 @@ _fetch_sem = asyncio.Semaphore(10)
 
 _VALID_INTERVALS = {"1d", "5d", "1wk", "1mo", "3mo"}
 _TICKER_RE = re.compile(r"^[A-Z0-9][A-Z0-9.\-=]{0,14}$")
-_DEFAULT_TRANSITION_COVARIANCE = np.array([[0.001, 0.0], [0.0, 0.0001]], dtype=float)
-_DEFAULT_OBSERVATION_COVARIANCE = np.array([[1.0]], dtype=float)
+_DEFAULT_TRANSITION_COVARIANCE_VALUE = 0.01
+_DEFAULT_OBSERVATION_COVARIANCE_VALUE = 0.1
+_DEFAULT_TRANSITION_COVARIANCE = np.array(
+    [[_DEFAULT_TRANSITION_COVARIANCE_VALUE, 0.0], [0.0, _DEFAULT_TRANSITION_COVARIANCE_VALUE]],
+    dtype=float,
+)
+_DEFAULT_OBSERVATION_COVARIANCE = np.array([[_DEFAULT_OBSERVATION_COVARIANCE_VALUE]], dtype=float)
 _DEFAULT_INITIAL_STATE_COVARIANCE = np.eye(2, dtype=float) * 1_000_000.0
+_TRANSITION_COVARIANCE_MIN = 0.0001
+_TRANSITION_COVARIANCE_MAX = 1.0
+_OBSERVATION_COVARIANCE_MIN = 0.0001
+_OBSERVATION_COVARIANCE_MAX = 10.0
+_KALMAN_SETTINGS_ID = 1
+
+
+def _validate_processing_mode(value: str) -> str:
+    if value not in {"causal", "historical"}:
+        raise KalmanDataError("processing_mode must be 'causal' or 'historical'")
+    return value
 
 
 class KalmanDataError(ValueError):
@@ -54,11 +73,70 @@ def _as_matrix(value: object, shape: tuple[int, int], name: str) -> np.ndarray:
     return matrix
 
 
-def _as_positive_float(value: float, name: str) -> float:
+def _as_bounded_float(value: float, name: str, minimum: float, maximum: float) -> float:
     numeric = float(value)
-    if not np.isfinite(numeric) or numeric <= 0:
-        raise KalmanDataError(f"{name} must be a positive finite number")
+    if not np.isfinite(numeric) or numeric < minimum or numeric > maximum:
+        raise KalmanDataError(f"{name} must be between {minimum} and {maximum}")
     return numeric
+
+
+def _settings_to_dict(settings: KalmanSettings) -> dict:
+    return {
+        "observation_covariance": settings.observation_covariance,
+        "transition_covariance": settings.transition_covariance,
+        "processing_mode": settings.processing_mode,
+        "updated_at": settings.updated_at.isoformat() if settings.updated_at else None,
+    }
+
+
+async def get_kalman_settings(db: AsyncSession) -> dict:
+    """Return persisted system-wide Kalman defaults, creating them if absent."""
+    settings = await db.get(KalmanSettings, _KALMAN_SETTINGS_ID)
+    if settings is None:
+        settings = KalmanSettings(
+            id=_KALMAN_SETTINGS_ID,
+            observation_covariance=_DEFAULT_OBSERVATION_COVARIANCE_VALUE,
+            transition_covariance=_DEFAULT_TRANSITION_COVARIANCE_VALUE,
+            processing_mode="causal",
+        )
+        db.add(settings)
+        await db.commit()
+        await db.refresh(settings)
+    return _settings_to_dict(settings)
+
+
+async def update_kalman_settings(
+    db: AsyncSession,
+    observation_covariance: float,
+    transition_covariance: float,
+    processing_mode: str,
+) -> dict:
+    """Persist system-wide Kalman defaults after server-side validation."""
+    r_value = _as_bounded_float(
+        observation_covariance,
+        "observation_covariance",
+        _OBSERVATION_COVARIANCE_MIN,
+        _OBSERVATION_COVARIANCE_MAX,
+    )
+    q_value = _as_bounded_float(
+        transition_covariance,
+        "transition_covariance",
+        _TRANSITION_COVARIANCE_MIN,
+        _TRANSITION_COVARIANCE_MAX,
+    )
+    mode = _validate_processing_mode(processing_mode)
+
+    settings = await db.get(KalmanSettings, _KALMAN_SETTINGS_ID)
+    if settings is None:
+        settings = KalmanSettings(id=_KALMAN_SETTINGS_ID)
+        db.add(settings)
+
+    settings.observation_covariance = r_value
+    settings.transition_covariance = q_value
+    settings.processing_mode = mode
+    await db.commit()
+    await db.refresh(settings)
+    return _settings_to_dict(settings)
 
 
 def download_price_data(
@@ -223,16 +301,31 @@ def _compute_kalman(
     end: str | None = None,
     interval: str = "1d",
     real_time: bool = True,
-    transition_covariance_level: float = 0.001,
-    transition_covariance_trend: float = 0.0001,
-    observation_covariance: float = 1.0,
+    transition_covariance_level: float = _DEFAULT_TRANSITION_COVARIANCE_VALUE,
+    transition_covariance_trend: float = _DEFAULT_TRANSITION_COVARIANCE_VALUE,
+    observation_covariance: float = _DEFAULT_OBSERVATION_COVARIANCE_VALUE,
 ) -> dict | None:
     """Synchronous computation; run via asyncio.to_thread."""
     symbol = _validate_ticker(ticker)
     try:
-        q_level = _as_positive_float(transition_covariance_level, "transition_covariance_level")
-        q_trend = _as_positive_float(transition_covariance_trend, "transition_covariance_trend")
-        r_value = _as_positive_float(observation_covariance, "observation_covariance")
+        q_level = _as_bounded_float(
+            transition_covariance_level,
+            "transition_covariance_level",
+            _TRANSITION_COVARIANCE_MIN,
+            _TRANSITION_COVARIANCE_MAX,
+        )
+        q_trend = _as_bounded_float(
+            transition_covariance_trend,
+            "transition_covariance_trend",
+            _TRANSITION_COVARIANCE_MIN,
+            _TRANSITION_COVARIANCE_MAX,
+        )
+        r_value = _as_bounded_float(
+            observation_covariance,
+            "observation_covariance",
+            _OBSERVATION_COVARIANCE_MIN,
+            _OBSERVATION_COVARIANCE_MAX,
+        )
         data = download_price_data(symbol, start=start, end=end, interval=interval)
         price = prepare_price_series(data)
         result = apply_kalman_filter(
@@ -283,9 +376,9 @@ async def get_kalman(
     end: str | None = None,
     interval: str = "1d",
     real_time: bool = True,
-    transition_covariance_level: float = 0.001,
-    transition_covariance_trend: float = 0.0001,
-    observation_covariance: float = 1.0,
+    transition_covariance_level: float = _DEFAULT_TRANSITION_COVARIANCE_VALUE,
+    transition_covariance_trend: float = _DEFAULT_TRANSITION_COVARIANCE_VALUE,
+    observation_covariance: float = _DEFAULT_OBSERVATION_COVARIANCE_VALUE,
 ) -> dict | None:
     """Return Kalman trend analysis for a ticker, from cache or freshly computed."""
     symbol = _validate_ticker(ticker)
@@ -293,9 +386,24 @@ async def get_kalman(
     _validate_date(end, "end")
     if interval not in _VALID_INTERVALS:
         raise KalmanDataError(f"interval must be one of {sorted(_VALID_INTERVALS)}")
-    q_level = _as_positive_float(transition_covariance_level, "transition_covariance_level")
-    q_trend = _as_positive_float(transition_covariance_trend, "transition_covariance_trend")
-    r_value = _as_positive_float(observation_covariance, "observation_covariance")
+    q_level = _as_bounded_float(
+        transition_covariance_level,
+        "transition_covariance_level",
+        _TRANSITION_COVARIANCE_MIN,
+        _TRANSITION_COVARIANCE_MAX,
+    )
+    q_trend = _as_bounded_float(
+        transition_covariance_trend,
+        "transition_covariance_trend",
+        _TRANSITION_COVARIANCE_MIN,
+        _TRANSITION_COVARIANCE_MAX,
+    )
+    r_value = _as_bounded_float(
+        observation_covariance,
+        "observation_covariance",
+        _OBSERVATION_COVARIANCE_MIN,
+        _OBSERVATION_COVARIANCE_MAX,
+    )
     cache_key = f"{symbol}:{start}:{end or ''}:{interval}:{real_time}:{q_level}:{q_trend}:{r_value}"
     now = time.time()
     if cache_key in _kalman_cache:
@@ -324,9 +432,9 @@ async def get_kalman(
 async def get_kalman_for_portfolio(
     tickers: list[str],
     real_time: bool = True,
-    transition_covariance_level: float = 0.001,
-    transition_covariance_trend: float = 0.0001,
-    observation_covariance: float = 1.0,
+    transition_covariance_level: float = _DEFAULT_TRANSITION_COVARIANCE_VALUE,
+    transition_covariance_trend: float = _DEFAULT_TRANSITION_COVARIANCE_VALUE,
+    observation_covariance: float = _DEFAULT_OBSERVATION_COVARIANCE_VALUE,
 ) -> dict[str, dict]:
     """Return Kalman trend analysis for all tickers concurrently, dropping failures."""
     normalized = [_validate_ticker(t) for t in tickers]
