@@ -17,6 +17,7 @@ import {
 } from "@/lib/api";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { ApiKeyRow } from "@/components/settings/ApiKeyRow";
+import { InfoPopover } from "@/components/settings/InfoPopover";
 import { ServerUrlRow } from "@/components/settings/ServerUrlRow";
 import { TeamMemberRow } from "@/components/settings/TeamMemberRow";
 import {
@@ -74,37 +75,6 @@ const KALMAN_TOOLTIPS = {
   mode:
     "'Live Tracking' utilizes only data up to day T to eliminate look-ahead bias, making it mandatory for backtesting and trading signals. 'Historical View' uses the entire dataset to build a perfectly smoothed history, ideal for retroactive macro research but unusable for live execution.",
 };
-
-function InfoLabel({
-  label,
-  tooltip,
-  active,
-  onToggle,
-}: {
-  label: string;
-  tooltip: string;
-  active: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="relative flex items-center gap-1.5 text-muted text-xs sm:w-44 shrink-0">
-      <span>{label}</span>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-label={`Explain ${label}`}
-        className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-input-border text-[10px] text-muted hover:border-blue-500 hover:text-blue-400"
-      >
-        i
-      </button>
-      {active && (
-        <div className="absolute left-0 top-6 z-20 w-72 rounded-md border border-input-border bg-elevated p-3 text-xs leading-relaxed text-fg-secondary shadow-lg">
-          {tooltip}
-        </div>
-      )}
-    </div>
-  );
-}
 
 interface KalmanSettingsDraft {
   observationCovariance: string;
@@ -183,10 +153,10 @@ function KalmanSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
     >
       <div className="px-4 py-4 flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
-          <InfoLabel
+          <InfoPopover
             label="Observation Covariance (R)"
             tooltip={KALMAN_TOOLTIPS.observationCovariance}
-            active={openInfo === "observationCovariance"}
+            open={openInfo === "observationCovariance"}
             onToggle={() => setOpenInfo(openInfo === "observationCovariance" ? null : "observationCovariance")}
           />
           <div className="flex-1">
@@ -210,10 +180,10 @@ function KalmanSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
         <Divider />
 
         <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
-          <InfoLabel
+          <InfoPopover
             label="Transition Covariance (Q)"
             tooltip={KALMAN_TOOLTIPS.transitionCovariance}
-            active={openInfo === "transitionCovariance"}
+            open={openInfo === "transitionCovariance"}
             onToggle={() => setOpenInfo(openInfo === "transitionCovariance" ? null : "transitionCovariance")}
           />
           <div className="flex-1">
@@ -237,10 +207,10 @@ function KalmanSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
         <Divider />
 
         <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
-          <InfoLabel
+          <InfoPopover
             label="Processing Mode"
             tooltip={KALMAN_TOOLTIPS.mode}
-            active={openInfo === "mode"}
+            open={openInfo === "mode"}
             onToggle={() => setOpenInfo(openInfo === "mode" ? null : "mode")}
           />
           <select
