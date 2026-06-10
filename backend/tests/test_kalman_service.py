@@ -9,6 +9,7 @@ from app.services.kalman_service import (
     KalmanDataError,
     _compute_signal,
     apply_kalman_filter,
+    get_kalman,
     prepare_price_series,
 )
 
@@ -60,10 +61,34 @@ def test_apply_kalman_filter_returns_required_columns():
         "kalman_trend",
         "filtered_price",
         "filtered_trend",
+        "smoothed_price",
+        "smoothed_trend",
     ]
     assert len(result) == 40
     assert np.isfinite(result["kalman_price"]).all()
     assert np.isfinite(result["kalman_trend"]).all()
+    pd.testing.assert_series_equal(result["kalman_price"], result["filtered_price"], check_names=False)
+
+
+def test_apply_kalman_filter_historical_mode_uses_smoothed_state():
+    price = pd.Series(
+        [100.0 + i * 0.5 for i in range(40)],
+        index=pd.date_range("2020-01-01", periods=40, freq="B"),
+        name="price",
+    )
+
+    result = apply_kalman_filter(price, real_time=False)
+
+    pd.testing.assert_series_equal(result["kalman_price"], result["smoothed_price"], check_names=False)
+    pd.testing.assert_series_equal(result["kalman_trend"], result["smoothed_trend"], check_names=False)
+
+
+def test_apply_kalman_filter_zero_lag_initialization_tracks_first_price():
+    price = pd.Series([100.0] + [105.0 + i for i in range(24)])
+
+    result = apply_kalman_filter(price)
+
+    assert result["filtered_price"].iloc[0] == pytest.approx(100.0, abs=1e-3)
 
 
 def test_apply_kalman_filter_rejects_bad_matrix_shape():
@@ -71,6 +96,13 @@ def test_apply_kalman_filter_rejects_bad_matrix_shape():
 
     with pytest.raises(KalmanDataError, match="transition_matrix"):
         apply_kalman_filter(price, transition_matrix=[[1.0]])
+
+
+def test_apply_kalman_filter_rejects_bad_covariance_shape():
+    price = pd.Series([100.0 + i for i in range(25)])
+
+    with pytest.raises(KalmanDataError, match="observation_covariance"):
+        apply_kalman_filter(price, observation_covariance=[[1.0, 0.0]])
 
 
 def test_apply_kalman_filter_rejects_insufficient_data():
@@ -91,9 +123,12 @@ async def test_cache_hit_skips_recompute():
     from app.services import kalman_service
 
     fake_result = {"ticker": "TEST", "signal": 0.5, "trend_direction": "up"}
-    kalman_service._kalman_cache["TEST:2015-01-01::1d"] = (fake_result, time.time() + 3600)
+    kalman_service._kalman_cache["TEST:2015-01-01::1d:True:0.001:0.0001:1.0"] = (
+        fake_result,
+        time.time() + 3600,
+    )
 
-    result = await kalman_service.get_kalman("TEST")
+    result = await get_kalman("TEST")
 
     assert result == fake_result
 
@@ -103,10 +138,19 @@ async def test_cache_miss_on_expired():
     from app.services import kalman_service
 
     fake_result = {"ticker": "TEST2", "signal": 0.5, "trend_direction": "up"}
-    kalman_service._kalman_cache["TEST2:2015-01-01::1d"] = (fake_result, time.time() - 1)
+    kalman_service._kalman_cache["TEST2:2015-01-01::1d:True:0.001:0.0001:1.0"] = (
+        fake_result,
+        time.time() - 1,
+    )
 
     with patch("app.services.kalman_service._compute_kalman", return_value=None) as mock_compute:
-        result = await kalman_service.get_kalman("TEST2")
+        result = await get_kalman("TEST2")
 
     assert result is None
-    mock_compute.assert_called_once_with("TEST2", "2015-01-01", None, "1d")
+    mock_compute.assert_called_once_with("TEST2", "2015-01-01", None, "1d", True, 0.001, 0.0001, 1.0)
+
+
+@pytest.mark.asyncio
+async def test_get_kalman_rejects_invalid_covariance():
+    with pytest.raises(KalmanDataError, match="observation_covariance"):
+        await get_kalman("TEST3", observation_covariance=0.0)

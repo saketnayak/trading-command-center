@@ -24,6 +24,10 @@ async def get_ticker_kalman(
     start: str = "2015-01-01",
     end: str | None = None,
     interval: str = "1d",
+    real_time: bool = True,
+    transition_covariance_level: float = 0.001,
+    transition_covariance_trend: float = 0.0001,
+    observation_covariance: float = 1.0,
     user: User = Depends(get_current_user),
 ):
     """Return Kalman trend analysis for a single ticker.
@@ -31,7 +35,16 @@ async def get_ticker_kalman(
     Returns null if yfinance data is unavailable or computation fails.
     """
     try:
-        return await get_kalman(ticker.upper(), start=start, end=end, interval=interval)
+        return await get_kalman(
+            ticker.upper(),
+            start=start,
+            end=end,
+            interval=interval,
+            real_time=real_time,
+            transition_covariance_level=transition_covariance_level,
+            transition_covariance_trend=transition_covariance_trend,
+            observation_covariance=observation_covariance,
+        )
     except KalmanDataError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -39,6 +52,10 @@ async def get_ticker_kalman(
 @router.get("/portfolio/{portfolio_id}/kalman")
 async def get_portfolio_kalman(
     portfolio_id: UUID,
+    real_time: bool = True,
+    transition_covariance_level: float = 0.001,
+    transition_covariance_trend: float = 0.0001,
+    observation_covariance: float = 1.0,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
@@ -58,6 +75,12 @@ async def get_portfolio_kalman(
 
     tickers = [h.ticker for h in snapshot.holdings]
     try:
-        return await get_kalman_for_portfolio(tickers)
+        return await get_kalman_for_portfolio(
+            tickers,
+            real_time=real_time,
+            transition_covariance_level=transition_covariance_level,
+            transition_covariance_trend=transition_covariance_trend,
+            observation_covariance=observation_covariance,
+        )
     except KalmanDataError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

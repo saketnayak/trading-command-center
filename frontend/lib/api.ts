@@ -423,17 +423,35 @@ export async function getTickerRegime(ticker: string): Promise<RegimeData | null
   return data ?? null;
 }
 
+interface KalmanOptions {
+  realTime?: boolean;
+  transitionCovarianceLevel?: number;
+  transitionCovarianceTrend?: number;
+  observationCovariance?: number;
+}
+
+function kalmanQuery(options: KalmanOptions = {}): string {
+  const params = new URLSearchParams();
+  if (options.realTime != null) params.set("real_time", String(options.realTime));
+  if (options.transitionCovarianceLevel != null) params.set("transition_covariance_level", String(options.transitionCovarianceLevel));
+  if (options.transitionCovarianceTrend != null) params.set("transition_covariance_trend", String(options.transitionCovarianceTrend));
+  if (options.observationCovariance != null) params.set("observation_covariance", String(options.observationCovariance));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
 export async function getPortfolioKalman(
-  portfolioId: string
+  portfolioId: string,
+  options: KalmanOptions = {}
 ): Promise<Record<string, KalmanData>> {
-  const r = await fetchWithAuth(`/portfolio/${portfolioId}/kalman`);
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/kalman${kalmanQuery(options)}`);
   if (!r.ok) return {};
   const data = await r.json();
   return data ?? {};
 }
 
-export async function getTickerKalman(ticker: string): Promise<KalmanData | null> {
-  const r = await fetchWithAuth(`/kalman/${ticker}`);
+export async function getTickerKalman(ticker: string, options: KalmanOptions = {}): Promise<KalmanData | null> {
+  const r = await fetchWithAuth(`/kalman/${ticker}${kalmanQuery(options)}`);
   if (!r.ok) return null;
   const data = await r.json();
   return data ?? null;

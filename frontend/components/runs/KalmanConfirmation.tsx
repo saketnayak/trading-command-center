@@ -72,7 +72,9 @@ export function KalmanConfirmation({ ticker, verdict }: Props) {
     <div className={`bg-elevated border ${borderColor} rounded-lg p-4 space-y-3`}>
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-fg">Kalman Trend Check</h3>
-        <span className="text-[10px] text-muted uppercase tracking-wide">yfinance · {kalman.interval}</span>
+        <span className="text-[10px] text-muted uppercase tracking-wide">
+          yfinance · {kalman.interval} · {kalman.mode}
+        </span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -107,13 +109,13 @@ export function KalmanConfirmation({ ticker, verdict }: Props) {
             <span className="font-mono text-fg-secondary">{kalman.latest_price.toFixed(2)}</span>
           </div>
           <div>
-            <span className="text-muted text-[10px] uppercase tracking-wide block">Smoothed Price</span>
+            <span className="text-muted text-[10px] uppercase tracking-wide block">Kalman Price</span>
             <span className="font-mono text-fg-secondary">{kalman.kalman_price.toFixed(2)}</span>
           </div>
           <div>
-            <span className="text-muted text-[10px] uppercase tracking-wide block">Causal Slope</span>
+            <span className="text-muted text-[10px] uppercase tracking-wide block">Latent Slope</span>
             <span className={`font-mono ${directionColor(kalman.trend_direction)}`}>
-              {kalman.filtered_trend.toFixed(4)}
+              {kalman.kalman_trend.toFixed(4)}
             </span>
           </div>
           <div>
@@ -126,7 +128,7 @@ export function KalmanConfirmation({ ticker, verdict }: Props) {
           <MiniKalmanChart chart={kalman.chart} />
           <div className="flex items-center justify-between text-[10px] text-muted">
             <span>Price</span>
-            <span className="text-blue-400">Kalman smooth</span>
+            <span className="text-blue-400">Kalman estimate</span>
           </div>
         </div>
       </div>

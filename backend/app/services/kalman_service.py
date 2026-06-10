@@ -19,6 +19,9 @@ _fetch_sem = asyncio.Semaphore(10)
 
 _VALID_INTERVALS = {"1d", "5d", "1wk", "1mo", "3mo"}
 _TICKER_RE = re.compile(r"^[A-Z0-9][A-Z0-9.\-=]{0,14}$")
+_DEFAULT_TRANSITION_COVARIANCE = np.array([[0.001, 0.0], [0.0, 0.0001]], dtype=float)
+_DEFAULT_OBSERVATION_COVARIANCE = np.array([[1.0]], dtype=float)
+_DEFAULT_INITIAL_STATE_COVARIANCE = np.eye(2, dtype=float) * 1_000_000.0
 
 
 class KalmanDataError(ValueError):
@@ -49,6 +52,13 @@ def _as_matrix(value: object, shape: tuple[int, int], name: str) -> np.ndarray:
     if not np.isfinite(matrix).all():
         raise KalmanDataError(f"{name} must contain only finite numbers")
     return matrix
+
+
+def _as_positive_float(value: float, name: str) -> float:
+    numeric = float(value)
+    if not np.isfinite(numeric) or numeric <= 0:
+        raise KalmanDataError(f"{name} must be a positive finite number")
+    return numeric
 
 
 def download_price_data(
@@ -114,8 +124,14 @@ def apply_kalman_filter(
     observation_covariance: object | None = None,
     initial_state_mean: object | None = None,
     initial_state_covariance: object | None = None,
+    real_time: bool = True,
 ) -> pd.DataFrame:
-    """Apply a 2-state Kalman model and return price, smoothed level, and trend."""
+    """Apply a 2-state Kalman model and return price, selected estimate, and trend.
+
+    When ``real_time`` is true, ``kalman_price`` and ``kalman_trend`` come from
+    ``KalmanFilter.filter()`` and are suitable for live tracking/backtests. When
+    false, they come from ``KalmanFilter.smooth()`` for offline historical work.
+    """
     clean_price = pd.to_numeric(price, errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
     clean_price = clean_price[clean_price > 0]
     if len(clean_price) < 20:
@@ -132,12 +148,12 @@ def apply_kalman_filter(
         "observation_matrix",
     )
     transition_cov = _as_matrix(
-        transition_covariance if transition_covariance is not None else [[0.01, 0.0], [0.0, 0.001]],
+        transition_covariance if transition_covariance is not None else _DEFAULT_TRANSITION_COVARIANCE,
         (2, 2),
         "transition_covariance",
     )
     observation_cov = _as_matrix(
-        observation_covariance if observation_covariance is not None else [[1.0]],
+        observation_covariance if observation_covariance is not None else _DEFAULT_OBSERVATION_COVARIANCE,
         (1, 1),
         "observation_covariance",
     )
@@ -148,7 +164,7 @@ def apply_kalman_filter(
     if state_mean.shape != (2,) or not np.isfinite(state_mean).all():
         raise KalmanDataError("initial_state_mean must have shape (2,)")
     state_cov = _as_matrix(
-        initial_state_covariance if initial_state_covariance is not None else np.eye(2),
+        initial_state_covariance if initial_state_covariance is not None else _DEFAULT_INITIAL_STATE_COVARIANCE,
         (2, 2),
         "initial_state_covariance",
     )
@@ -167,14 +183,17 @@ def apply_kalman_filter(
     observations = clean_price.to_numpy(dtype=float).reshape(-1, 1)
     smoothed_state, _ = kf.smooth(observations)
     filtered_state, _ = kf.filter(observations)
+    selected_state = filtered_state if real_time else smoothed_state
 
     return pd.DataFrame(
         {
             "price": clean_price,
-            "kalman_price": smoothed_state[:, 0],
-            "kalman_trend": smoothed_state[:, 1],
+            "kalman_price": selected_state[:, 0],
+            "kalman_trend": selected_state[:, 1],
             "filtered_price": filtered_state[:, 0],
             "filtered_trend": filtered_state[:, 1],
+            "smoothed_price": smoothed_state[:, 0],
+            "smoothed_trend": smoothed_state[:, 1],
         },
         index=clean_price.index,
     )
@@ -203,16 +222,28 @@ def _compute_kalman(
     start: str = "2015-01-01",
     end: str | None = None,
     interval: str = "1d",
+    real_time: bool = True,
+    transition_covariance_level: float = 0.001,
+    transition_covariance_trend: float = 0.0001,
+    observation_covariance: float = 1.0,
 ) -> dict | None:
     """Synchronous computation; run via asyncio.to_thread."""
     symbol = _validate_ticker(ticker)
     try:
+        q_level = _as_positive_float(transition_covariance_level, "transition_covariance_level")
+        q_trend = _as_positive_float(transition_covariance_trend, "transition_covariance_trend")
+        r_value = _as_positive_float(observation_covariance, "observation_covariance")
         data = download_price_data(symbol, start=start, end=end, interval=interval)
         price = prepare_price_series(data)
-        result = apply_kalman_filter(price)
+        result = apply_kalman_filter(
+            price,
+            transition_covariance=[[q_level, 0.0], [0.0, q_trend]],
+            observation_covariance=[[r_value]],
+            real_time=real_time,
+        )
 
         latest = result.iloc[-1]
-        signal = _compute_signal(float(latest["filtered_trend"]), float(latest["price"]))
+        signal = _compute_signal(float(latest["kalman_trend"]), float(latest["price"]))
         trend_direction: Literal["up", "down", "flat"]
         if signal >= 0.05:
             trend_direction = "up"
@@ -226,10 +257,15 @@ def _compute_kalman(
             "start": start,
             "end": end,
             "interval": interval,
+            "mode": "causal" if real_time else "historical",
+            "real_time": real_time,
+            "transition_covariance": [[q_level, 0.0], [0.0, q_trend]],
+            "observation_covariance": [[r_value]],
             "latest_price": round(float(latest["price"]), 4),
             "kalman_price": round(float(latest["kalman_price"]), 4),
             "kalman_trend": round(float(latest["kalman_trend"]), 6),
             "filtered_trend": round(float(latest["filtered_trend"]), 6),
+            "smoothed_trend": round(float(latest["smoothed_trend"]), 6),
             "signal": signal,
             "trend_direction": trend_direction,
             "observations": int(len(result)),
@@ -246,6 +282,10 @@ async def get_kalman(
     start: str = "2015-01-01",
     end: str | None = None,
     interval: str = "1d",
+    real_time: bool = True,
+    transition_covariance_level: float = 0.001,
+    transition_covariance_trend: float = 0.0001,
+    observation_covariance: float = 1.0,
 ) -> dict | None:
     """Return Kalman trend analysis for a ticker, from cache or freshly computed."""
     symbol = _validate_ticker(ticker)
@@ -253,7 +293,10 @@ async def get_kalman(
     _validate_date(end, "end")
     if interval not in _VALID_INTERVALS:
         raise KalmanDataError(f"interval must be one of {sorted(_VALID_INTERVALS)}")
-    cache_key = f"{symbol}:{start}:{end or ''}:{interval}"
+    q_level = _as_positive_float(transition_covariance_level, "transition_covariance_level")
+    q_trend = _as_positive_float(transition_covariance_trend, "transition_covariance_trend")
+    r_value = _as_positive_float(observation_covariance, "observation_covariance")
+    cache_key = f"{symbol}:{start}:{end or ''}:{interval}:{real_time}:{q_level}:{q_trend}:{r_value}"
     now = time.time()
     if cache_key in _kalman_cache:
         result, expiry = _kalman_cache[cache_key]
@@ -261,15 +304,42 @@ async def get_kalman(
             return result
 
     async with _fetch_sem:
-        result = await asyncio.to_thread(_compute_kalman, symbol, start, end, interval)
+        result = await asyncio.to_thread(
+            _compute_kalman,
+            symbol,
+            start,
+            end,
+            interval,
+            real_time,
+            q_level,
+            q_trend,
+            r_value,
+        )
 
     ttl = _CACHE_TTL if result is not None else 300
     _kalman_cache[cache_key] = (result, now + ttl)
     return result
 
 
-async def get_kalman_for_portfolio(tickers: list[str]) -> dict[str, dict]:
+async def get_kalman_for_portfolio(
+    tickers: list[str],
+    real_time: bool = True,
+    transition_covariance_level: float = 0.001,
+    transition_covariance_trend: float = 0.0001,
+    observation_covariance: float = 1.0,
+) -> dict[str, dict]:
     """Return Kalman trend analysis for all tickers concurrently, dropping failures."""
     normalized = [_validate_ticker(t) for t in tickers]
-    results = await asyncio.gather(*[get_kalman(t) for t in normalized])
+    results = await asyncio.gather(
+        *[
+            get_kalman(
+                t,
+                real_time=real_time,
+                transition_covariance_level=transition_covariance_level,
+                transition_covariance_trend=transition_covariance_trend,
+                observation_covariance=observation_covariance,
+            )
+            for t in normalized
+        ]
+    )
     return {t: r for t, r in zip(normalized, results) if r is not None}
