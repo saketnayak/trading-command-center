@@ -5,7 +5,10 @@ import pytest
 from httpx import AsyncClient, ASGITransport
 
 from main import app
+from app.models.api_key import ApiKey
 from app.models.ticker_metadata import TickerMetadata
+from app.models.user import User
+from app.services.encryption import encrypt_key
 
 
 async def _token(client: AsyncClient, email: str = "meta@test.com") -> str:
@@ -59,6 +62,95 @@ async def test_get_tickers_metadata_cache_hit():
             data = r.json()
             assert data["items"]["AAPL"]["company_name"] == "Apple Inc."
             mock_refresh.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_ticker_snapshot_uses_yfinance_chart_without_finnhub_key():
+    from app.database import AsyncSessionLocal
+
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as db:
+        db.add(
+            TickerMetadata(
+                ticker="MSFT",
+                asset_type="stock",
+                company_name="Microsoft Corporation",
+                display_name="Microsoft Corporation",
+                sector="Technology",
+                source="finnhub",
+                fetched_at=now,
+                expires_at=now + timedelta(days=7),
+            )
+        )
+        await db.commit()
+
+    fake_chart = {
+        "t": [1_700_000_000, 1_700_086_400],
+        "c": [400.0, 410.0],
+        "h": [405.0, 415.0],
+        "l": [395.0, 405.0],
+    }
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _token(client, "snapshot_yf@test.com")
+        with patch(
+            "app.routers.ticker._yf_candles",
+            new=AsyncMock(return_value=fake_chart),
+        ):
+            r = await client.get(
+                "/ticker/MSFT/snapshot",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+    assert r.status_code == 200
+    data = r.json()
+    assert data["chart"]["c"] == [400.0, 410.0]
+    assert data["change_1d_pct"] == pytest.approx(2.5)
+
+
+@pytest.mark.asyncio
+async def test_ticker_snapshot_uses_configured_finnhub_key_even_if_flagged_invalid():
+    from app.database import AsyncSessionLocal
+    from sqlalchemy import select
+
+    email = "snapshot_finnhub_flag@test.com"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _token(client, email)
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalar_one()
+        db.add(
+            ApiKey(
+                provider="finnhub",
+                encrypted_key=encrypt_key("configured-finnhub"),
+                is_valid=False,
+                created_by=user.id,
+            )
+        )
+        await db.commit()
+
+    fake_chart = {
+        "t": [1_700_000_000, 1_700_086_400],
+        "c": [100.0, 101.0],
+        "h": [102.0, 103.0],
+        "l": [99.0, 100.0],
+    }
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        with patch(
+            "app.routers.ticker._stock_candles",
+            new=AsyncMock(return_value=fake_chart),
+        ) as mock_stock_candles:
+            r = await client.get(
+                "/ticker/MSFT/snapshot",
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+    assert r.status_code == 200
+    assert r.json()["chart"]["c"] == [100.0, 101.0]
+    mock_stock_candles.assert_awaited_once_with("MSFT", "configured-finnhub")
 
 
 @pytest.mark.asyncio

@@ -24,6 +24,7 @@ from app.services.encryption import decrypt_key
 from app.services.ticker_metadata_service import get_ticker_metadata, normalize_ticker
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
+import app.services.yfinance_service as _yf
 
 router = APIRouter()
 
@@ -60,7 +61,7 @@ class TickerSnapshotResponse(BaseModel):
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
     result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
     row = result.scalar_one_or_none()
-    return decrypt_key(row.encrypted_key) if row and row.is_valid else None
+    return decrypt_key(row.encrypted_key) if row else None
 
 
 def _strip_html(text: str) -> str:
@@ -84,6 +85,38 @@ def _pct_from_candles(chart: dict) -> tuple[Optional[float], Optional[float], Op
 
 
 # ── Stock helpers ─────────────────────────────────────────────────────────────
+
+def _period_for_days(days: int) -> str:
+    if days <= 30:
+        return "1mo"
+    if days <= 90:
+        return "3mo"
+    if days <= 180:
+        return "6mo"
+    return "1y"
+
+
+def _frame_to_candles(frame) -> dict:
+    if frame is None or frame.empty or len(frame) < 2:
+        return {}
+    return {
+        "t": [int(ts.timestamp()) for ts in frame.index],
+        "c": frame["Close"].tolist(),
+        "h": frame["High"].tolist(),
+        "l": frame["Low"].tolist(),
+    }
+
+
+async def _yf_candles(ticker: str, days: int = 90) -> dict:
+    """Yahoo Finance fallback — no API key required (15-min delayed for US equities)."""
+    try:
+        frame = await _yf.fetch_history_period(
+            ticker, period=_period_for_days(days), interval="1d",
+        )
+        return _frame_to_candles(frame)
+    except Exception:
+        return {}
+
 
 async def _stock_candles(ticker: str, api_key: str, days: int = 90) -> dict:
     now = time.time()
@@ -239,6 +272,8 @@ async def get_ticker_snapshot(
 
     # ── Stock ─────────────────────────────────────────────────────────────────
     if not api_key:
+        chart = await _yf_candles(ticker)
+        d1, d7, d30 = _pct_from_candles(chart)
         return TickerSnapshotResponse(
             ticker=ticker,
             asset_type="stock",
@@ -248,6 +283,8 @@ async def get_ticker_snapshot(
             logo=metadata.logo_url,
             exchange=metadata.exchange,
             country=metadata.country,
+            change_1d_pct=d1, change_1w_pct=d7, change_1m_pct=d30,
+            chart=chart,
         )
 
     chart, fundamentals, news, next_e = await asyncio.gather(
@@ -256,6 +293,8 @@ async def get_ticker_snapshot(
         _stock_news(ticker, api_key),
         _next_earnings(ticker, api_key),
     )
+    if len(chart.get("c", [])) < 2:
+        chart = await _yf_candles(ticker)
     d1, d7, d30 = _pct_from_candles(chart)
     return TickerSnapshotResponse(
         ticker=ticker, asset_type="stock",

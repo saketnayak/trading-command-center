@@ -1,6 +1,8 @@
 import uuid
 import pytest
 from pathlib import Path
+from unittest.mock import AsyncMock
+
 from httpx import AsyncClient, ASGITransport
 from app.services.portfolio_parser import parse_portfolio_csv
 
@@ -79,6 +81,26 @@ def test_empty_file_raises_400():
     with pytest.raises(HTTPException) as exc:
         parse_portfolio_csv(b"ticker,shares,avg_cost\n")
     assert exc.value.status_code == 400
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_stock_price_falls_back_to_yfinance_when_finnhub_quote_fails(httpx_mock, monkeypatch):
+    from app.routers import portfolio as portfolio_router
+
+    portfolio_router._price_cache.clear()
+    httpx_mock.add_response(
+        url="https://finnhub.io/api/v1/quote?symbol=AAPL&token=blocked-finnhub",
+        status_code=403,
+        json={"error": "You don't have access to this resource."},
+    )
+    fallback = AsyncMock(return_value=199.5)
+    monkeypatch.setattr(portfolio_router._yf, "fetch_price", fallback)
+
+    price = await portfolio_router._fetch_price("AAPL", "blocked-finnhub")
+
+    assert price == pytest.approx(199.5)
+    fallback.assert_awaited_once_with("AAPL")
 
 
 @pytest.mark.unit

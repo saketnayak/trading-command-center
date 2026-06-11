@@ -1,6 +1,6 @@
 """
 Stock price fetching via Yahoo Finance (yfinance).
-Used as a no-key fallback when no Finnhub API key is configured.
+Used as a fallback when Finnhub is unavailable, rate-limited, or not configured.
 Data is 15-minute delayed for US equities. Returns None gracefully on failure.
 
 NOTE: yfinance is a synchronous library; all calls are wrapped in asyncio.to_thread.
@@ -12,6 +12,7 @@ import asyncio
 import logging
 import time
 import weakref
+from datetime import date, timedelta
 from typing import Optional
 
 import pandas as pd
@@ -35,13 +36,26 @@ def _get_yf_semaphore() -> asyncio.Semaphore:
     return _yf_semaphores[loop]
 
 
+def _fast_info_value(info, key: str):
+    try:
+        value = getattr(info, key)
+    except Exception:
+        value = None
+    if value is None:
+        try:
+            value = info.get(key)
+        except Exception:
+            value = None
+    return value
+
+
 def _sync_fetch_price(ticker: str) -> Optional[float]:
     """Synchronous price fetch via yfinance fast_info.
     Returns current/last traded price, falling back to previous close."""
     try:
         info = yf.Ticker(ticker).fast_info
-        last = getattr(info, "last_price", None)
-        prev = getattr(info, "previous_close", None)
+        last = _fast_info_value(info, "last_price")
+        prev = _fast_info_value(info, "previous_close")
         if last is not None and last != 0:
             return float(last)
         if prev is not None and prev != 0:
@@ -56,6 +70,43 @@ async def fetch_price(ticker: str) -> Optional[float]:
     """Async wrapper: fetches stock price via Yahoo Finance with concurrency throttling."""
     async with _get_yf_semaphore():
         return await asyncio.to_thread(_sync_fetch_price, ticker)
+
+
+def _sync_fetch_quote(ticker: str) -> Optional[dict]:
+    """Synchronous quote fetch via yfinance fast_info."""
+    try:
+        info = yf.Ticker(ticker).fast_info
+        last = _fast_info_value(info, "last_price")
+        previous_close = _fast_info_value(info, "previous_close")
+        day_high = _fast_info_value(info, "day_high")
+        day_low = _fast_info_value(info, "day_low")
+
+        price = float(last) if last is not None and last != 0 else None
+        prev = float(previous_close) if previous_close is not None and previous_close != 0 else None
+        if price is None:
+            price = prev
+        if price is None:
+            return None
+
+        change = price - prev if prev else None
+        change_pct = (change / prev * 100) if change is not None and prev else None
+        return {
+            "price": price,
+            "change_pct": change_pct,
+            "change": change,
+            "high": float(day_high) if day_high is not None and day_high != 0 else None,
+            "low": float(day_low) if day_low is not None and day_low != 0 else None,
+            "prev_close": prev,
+        }
+    except Exception:
+        logger.debug("yfinance quote fetch failed for %s", ticker)
+        return None
+
+
+async def fetch_quote(ticker: str) -> Optional[dict]:
+    """Async wrapper: fetches a stock quote via Yahoo Finance."""
+    async with _get_yf_semaphore():
+        return await asyncio.to_thread(_sync_fetch_quote, ticker)
 
 
 def prepare_ohlcv_frame(data: pd.DataFrame, symbol: str = "") -> pd.DataFrame:
@@ -188,3 +239,18 @@ async def fetch_history_period(
 
     _history_cache[cache_key] = (data.copy(), time.time() + _HISTORY_CACHE_TTL)
     return data.copy()
+
+
+async def fetch_historical_close(symbol: str, target_date: date) -> Optional[float]:
+    """Return the latest available close in a 7-day window ending at target_date."""
+    try:
+        start = (target_date - timedelta(days=7)).isoformat()
+        end = (target_date + timedelta(days=1)).isoformat()
+        frame = await fetch_history(symbol, start=start, end=end, interval="1d")
+        closes = frame["Close"].dropna()
+        if closes.empty:
+            return None
+        return float(closes.iloc[-1])
+    except Exception:
+        logger.debug("yfinance historical close fetch failed for %s", symbol)
+        return None

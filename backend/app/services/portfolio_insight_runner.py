@@ -30,7 +30,7 @@ _SECTOR_TTL = 86400
 
 async def _get_api_key(provider: str, db: AsyncSession) -> Optional[str]:
     row = (await db.execute(select(ApiKey).where(ApiKey.provider == provider))).scalar_one_or_none()
-    if not row or not row.is_valid:
+    if not row or (provider != "finnhub" and not row.is_valid):
         return None
     return decrypt_key(row.encrypted_key)
 

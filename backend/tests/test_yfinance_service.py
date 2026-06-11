@@ -87,6 +87,30 @@ async def test_fetch_history_period_uses_period_cache_key(monkeypatch):
     )
 
 
+@pytest.mark.asyncio
+async def test_fetch_historical_close_uses_latest_close_in_window(monkeypatch):
+    calls = []
+
+    async def fake_fetch_history(symbol: str, **kwargs):
+        calls.append((symbol, kwargs))
+        return make_history_frame(150.0)
+
+    monkeypatch.setattr(yfinance_service, "fetch_history", fake_fetch_history)
+
+    close = await yfinance_service.fetch_historical_close(
+        "aapl",
+        pd.Timestamp("2024-01-10").date(),
+    )
+
+    assert close == pytest.approx(151.0)
+    assert calls == [
+        (
+            "aapl",
+            {"start": "2024-01-03", "end": "2024-01-11", "interval": "1d"},
+        )
+    ]
+
+
 def test_prepare_ohlcv_frame_selects_required_columns():
     frame = pd.DataFrame(
         {

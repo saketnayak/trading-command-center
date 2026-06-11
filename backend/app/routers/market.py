@@ -1,7 +1,7 @@
 """
 Market-wide data endpoints — trending tickers, top movers, sector performance.
-All data sourced from Yahoo Finance (trending list), Finnhub quotes, and cached ticker metadata.
-Requires a valid Finnhub API key; returns empty lists gracefully without one.
+Uses Yahoo Finance for trending/quote fallback, Finnhub quotes when available,
+and cached ticker metadata.
 """
 import asyncio
 import time
@@ -20,6 +20,7 @@ from app.models.ticker_metadata import TickerMetadata
 from app.models.user import User
 from app.services.encryption import decrypt_key
 from app.services.ticker_metadata_service import get_many_ticker_metadata
+import app.services.yfinance_service as _yf
 
 router = APIRouter()
 
@@ -104,35 +105,44 @@ class SectorData(BaseModel):
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
     result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
     row = result.scalar_one_or_none()
-    return decrypt_key(row.encrypted_key) if row and row.is_valid else None
+    return decrypt_key(row.encrypted_key) if row else None
 
 
-async def _fetch_quote(ticker: str, api_key: str, client: httpx.AsyncClient) -> Optional[dict]:
+async def _fetch_quote(
+    ticker: str,
+    api_key: Optional[str],
+    client: httpx.AsyncClient,
+) -> Optional[dict]:
     now = time.time()
     if ticker in _quote_cache:
         data, expiry = _quote_cache[ticker]
         if now < expiry:
             return data
-    async with _FINNHUB_SEM:
-        try:
-            r = await client.get(f"{_FH}/quote", params={"symbol": ticker, "token": api_key})
-            r.raise_for_status()
-            raw = r.json()
-        except Exception:
-            return None
-    c = raw.get("c") or 0
-    pc = raw.get("pc") or 0
-    price = float(c) if c else (float(pc) if pc else None)
-    if price is None:
+    data = None
+    if api_key:
+        async with _FINNHUB_SEM:
+            try:
+                r = await client.get(f"{_FH}/quote", params={"symbol": ticker, "token": api_key})
+                r.raise_for_status()
+                raw = r.json()
+                c = raw.get("c") or 0
+                pc = raw.get("pc") or 0
+                price = float(c) if c else (float(pc) if pc else None)
+                if price is not None:
+                    data = {
+                        "price": price,
+                        "change_pct": raw.get("dp"),
+                        "change": raw.get("d"),
+                        "high": raw.get("h"),
+                        "low": raw.get("l"),
+                        "prev_close": float(pc) if pc else None,
+                    }
+            except Exception:
+                data = None
+    if data is None:
+        data = await _yf.fetch_quote(ticker)
+    if data is None:
         return None
-    data = {
-        "price": price,
-        "change_pct": raw.get("dp"),
-        "change": raw.get("d"),
-        "high": raw.get("h"),
-        "low": raw.get("l"),
-        "prev_close": float(pc) if pc else None,
-    }
     _quote_cache[ticker] = (data, now + _MARKET_TTL)
     return data
 
@@ -191,8 +201,6 @@ async def get_trending(
 ):
     """Return current trending US tickers from Yahoo Finance, enriched with Finnhub data."""
     api_key = await _get_finnhub_key(db)
-    if not api_key:
-        return []
     async with httpx.AsyncClient(timeout=8, headers={"User-Agent": "Mozilla/5.0"}) as client:
         tickers = await _get_trending_tickers(client)
         if not tickers:
@@ -213,8 +221,6 @@ async def get_movers(
 ):
     """Return top 5 gainers and top 5 losers from the curated MARKET_UNIVERSE."""
     api_key = await _get_finnhub_key(db)
-    if not api_key:
-        return MoversResponse(gainers=[], losers=[])
 
     async with httpx.AsyncClient(timeout=8) as client:
         quotes_list = await asyncio.gather(
@@ -245,8 +251,6 @@ async def get_sectors(
 ):
     """Return daily % change for all 11 SPDR sector ETFs."""
     api_key = await _get_finnhub_key(db)
-    if not api_key:
-        return []
     etf_tickers = [ticker for _, ticker in SECTOR_ETFS]
     async with httpx.AsyncClient(timeout=8) as client:
         quotes_list = await asyncio.gather(

@@ -87,13 +87,12 @@ async def _validate_key(provider: str, key: str) -> bool:
                 return r.status_code == 200
             if provider == "finnhub":
                 r = await client.get(f"https://finnhub.io/api/v1/quote?symbol=AAPL&token={key}", timeout=5)
-                if r.status_code == 401:
+                if r.status_code in {401, 403}:
                     return False
                 if r.status_code == 429:
                     return True  # rate-limited means key is real
                 data = r.json()
-                c = data.get("c")
-                return r.status_code == 200 and isinstance(c, (int, float)) and c != 0
+                return r.status_code == 200 and not data.get("error")
             if provider == "ollama":
                 r = await client.get(f"{key.rstrip('/')}/api/tags", timeout=5)
                 return r.status_code == 200

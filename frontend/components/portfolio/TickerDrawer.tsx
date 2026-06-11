@@ -215,7 +215,7 @@ function DrawerContent({
           </>
         )}
         {!isLoading && !hasChart && !isError && (
-          <p className="text-muted text-xs">Chart data unavailable — Finnhub key required for stocks.</p>
+          <p className="text-muted text-xs">Chart data unavailable for this ticker.</p>
         )}
       </Section>
 

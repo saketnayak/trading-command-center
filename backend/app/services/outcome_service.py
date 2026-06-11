@@ -10,12 +10,13 @@ from app.models.run import Run
 from app.services.encryption import decrypt_key
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
+import app.services.yfinance_service as _yf
 
 
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
     result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
     key_row = result.scalar_one_or_none()
-    if not key_row or not key_row.is_valid:
+    if not key_row:
         return None
     return decrypt_key(key_row.encrypted_key)
 
@@ -24,25 +25,24 @@ async def _fetch_closing_price(symbol: str, target_date: date, api_key: Optional
     if is_crypto(symbol):
         return await _crypto.fetch_historical_price(symbol, target_date, finnhub_key=api_key)
 
-    if not api_key:
-        return None
+    if api_key:
+        from datetime import datetime, timezone as tz
+        # Fetch a 7-day window ending at target_date to catch weekends/holidays; take the last close.
+        to_ts = int(datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=tz.utc).timestamp())
+        from_date = target_date - timedelta(days=7)
+        from_ts = int(datetime(from_date.year, from_date.month, from_date.day, tzinfo=tz.utc).timestamp())
+        url = f"https://finnhub.io/api/v1/stock/candle?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}&token={api_key}"
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                r = await client.get(url)
+                r.raise_for_status()
+                data = r.json()
+            if data.get("s") == "ok" and data.get("c"):
+                return float(data["c"][-1])
+        except Exception:
+            pass
 
-    from datetime import datetime, timezone as tz
-    # Fetch a 7-day window ending at target_date to catch weekends/holidays; take the last close.
-    to_ts = int(datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=tz.utc).timestamp())
-    from_date = target_date - timedelta(days=7)
-    from_ts = int(datetime(from_date.year, from_date.month, from_date.day, tzinfo=tz.utc).timestamp())
-    url = f"https://finnhub.io/api/v1/stock/candle?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}&token={api_key}"
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            data = r.json()
-        if data.get("s") == "ok" and data.get("c"):
-            return float(data["c"][-1])
-    except Exception:
-        pass
-    return None
+    return await _yf.fetch_historical_close(symbol, target_date)
 
 
 async def get_or_create_outcome(run_id: str, db: AsyncSession) -> RunOutcome:
@@ -90,21 +90,20 @@ async def get_or_create_outcome(run_id: str, db: AsyncSession) -> RunOutcome:
 
     if needs_fetch:
         api_key = await _get_finnhub_key(db)
-        # Crypto uses CoinGecko (no key needed); stocks require a Finnhub key.
-        if api_key or is_crypto(run.ticker):
-            for days in needs_fetch:
-                target = analysis_date + timedelta(days=days)
-                price = await _fetch_closing_price(run.ticker, target, api_key)
-                if days == 0:
-                    outcome.price_at_analysis = price
-                elif days == 7:
-                    outcome.price_7d = price
-                elif days == 14:
-                    outcome.price_14d = price
-                elif days == 30:
-                    outcome.price_30d = price
-                elif days == 90:
-                    outcome.price_90d = price
+        # Crypto uses CoinGecko first; stocks use Finnhub then Yahoo Finance.
+        for days in needs_fetch:
+            target = analysis_date + timedelta(days=days)
+            price = await _fetch_closing_price(run.ticker, target, api_key)
+            if days == 0:
+                outcome.price_at_analysis = price
+            elif days == 7:
+                outcome.price_7d = price
+            elif days == 14:
+                outcome.price_14d = price
+            elif days == 30:
+                outcome.price_30d = price
+            elif days == 90:
+                outcome.price_90d = price
 
     # Always commit — covers both the new-row case (flush above needs a commit)
     # and the price-update case. No-op if nothing changed on an existing row.

@@ -151,7 +151,7 @@ class CurrentResponse(BaseModel):
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
     result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
     key_row = result.scalar_one_or_none()
-    if not key_row or not key_row.is_valid:
+    if not key_row:
         return None
     return decrypt_key(key_row.encrypted_key)
 
@@ -194,6 +194,8 @@ async def _fetch_price(ticker: str, api_key: Optional[str]) -> Optional[float]:
                     price = None
             except Exception:
                 price = None
+            if price is None:
+                price = await _yf.fetch_price(ticker)
 
     # Don't cache None for the full hour — retry after 2 minutes so a transient
     # failure or a market-close race doesn't lock out prices for the whole TTL.
@@ -234,16 +236,16 @@ async def _fetch_prices_bulk(
             result[ticker] = price
             _price_cache[ticker] = (price, now + _CACHE_TTL)
 
-    # Stock portfolio prices require Finnhub so the API can clearly signal when
-    # real-time stock pricing is unavailable. Crypto prices still work above.
+    # Stocks use Finnhub when a key is configured; otherwise fall back to Yahoo
+    # Finance (15-min delayed). price_unavailable_reason still signals non-real-time.
     if uncached_stock:
-        if not api_key:
-            for ticker in uncached_stock:
-                result[ticker] = None
-        else:
-            stock_prices = await asyncio.gather(*[_fetch_price(t, api_key) for t in uncached_stock])
-            for ticker, price in zip(uncached_stock, stock_prices):
-                result[ticker] = price
+        stock_prices = await asyncio.gather(
+            *[_fetch_price(t, api_key) for t in uncached_stock]
+        )
+        for ticker, price in zip(uncached_stock, stock_prices):
+            result[ticker] = price
+            ttl = _CACHE_TTL if price is not None else 120
+            _price_cache[ticker] = (price, now + ttl)
 
     return result
 

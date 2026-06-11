@@ -49,7 +49,7 @@ class TickerMetadataResponse(BaseModel):
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
     result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
     row = result.scalar_one_or_none()
-    return decrypt_key(row.encrypted_key) if row and row.is_valid else None
+    return decrypt_key(row.encrypted_key) if row else None
 
 
 @router.get("/tickers/metadata", response_model=TickerMetadataResponse)
