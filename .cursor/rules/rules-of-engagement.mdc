@@ -1,0 +1,24 @@
+---
+description: Architectural, security, and UI guardrails for all code changes
+alwaysApply: true
+---
+
+# Rules Of Engagement
+
+Before proposing or editing code, validate the work against these guardrails:
+
+- Preserve the existing architecture. Add features as parallel, modular extensions unless the user explicitly asks for a refactor.
+- Mirror established local patterns for routers, services, ORM models, migrations, auth, validation, data fetching, state management, and UI composition.
+- Persist shared system configuration in the database. Do not use browser-only storage for settings that affect model execution or multiple users.
+- Treat client-side role checks as UX only. Backend routes must authenticate, authorize, validate, and reject unsafe requests.
+- Restrict system-wide configuration writes to admins. Return standard forbidden errors for non-admin writes and log denied attempts through native logging.
+- Allow authenticated reads for shared settings needed to run or interpret model outputs.
+- Validate inputs on both client and server. Backend validation is mandatory for numeric ranges, enum values, and model parameters.
+- Keep model execution deterministic and explicit. Defaults should be reasonable, documented, and overridable only through validated API inputs.
+- Avoid look-ahead bias by default for live or backtest-facing model output. Historical smoothing must be an explicit research mode.
+- Explain quant/model settings in UI with concise financial impact copy, not only technical definitions.
+- Render overlays so they escape clipping and respect stacking contexts. Use body-level portals when parent containers constrain overflow, and clamp popovers within the viewport.
+- Preserve accessibility basics for interactive controls: labels, clear disabled states, and predictable click/keyboard behavior.
+- Keep changes minimal and testable. Add focused tests for new service logic, persistence, validation, auth boundaries, and UI contracts.
+- Do not introduce new lint/type warnings in touched code. Note unrelated existing warnings without broad cleanup unless requested.
+- Summaries should state what changed, what was validated, and any residual risk. Do not restate prior implementation code unless explicitly requested.

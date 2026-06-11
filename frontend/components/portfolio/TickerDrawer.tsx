@@ -13,6 +13,7 @@ interface TickerDrawerProps {
   displayCurrency: string;
   onClose: () => void;
   hidePosition?: boolean;
+  waveEnabled?: boolean;
 }
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
@@ -96,7 +97,17 @@ function Divider() {
 
 // ── Drawer content ────────────────────────────────────────────────────────────
 
-function DrawerContent({ holding, displayCurrency, hidePosition }: { holding: PortfolioHolding; displayCurrency: string; hidePosition?: boolean }) {
+function DrawerContent({
+  holding,
+  displayCurrency,
+  hidePosition,
+  waveEnabled = true,
+}: {
+  holding: PortfolioHolding;
+  displayCurrency: string;
+  hidePosition?: boolean;
+  waveEnabled?: boolean;
+}) {
   const [chartDays, setChartDays] = useState<7 | 30 | 90>(30);
   const ticker = holding.ticker.toUpperCase();
 
@@ -204,7 +215,7 @@ function DrawerContent({ holding, displayCurrency, hidePosition }: { holding: Po
           </>
         )}
         {!isLoading && !hasChart && !isError && (
-          <p className="text-muted text-xs">Chart data unavailable — Finnhub key required for stocks.</p>
+          <p className="text-muted text-xs">Chart data unavailable for this ticker.</p>
         )}
       </Section>
 
@@ -253,8 +264,12 @@ function DrawerContent({ holding, displayCurrency, hidePosition }: { holding: Po
         </>
       )}
 
-      <Divider />
-      <WavePanel ticker={ticker} />
+      {waveEnabled && (
+        <>
+          <Divider />
+          <WavePanel ticker={ticker} />
+        </>
+      )}
 
       {/* Last analysis */}
       {holding.last_run && (
@@ -365,7 +380,7 @@ function timeAgo(unixSecs: number): string {
 
 // ── Drawer shell ──────────────────────────────────────────────────────────────
 
-export function TickerDrawer({ holding, displayCurrency, onClose, hidePosition }: TickerDrawerProps) {
+export function TickerDrawer({ holding, displayCurrency, onClose, hidePosition, waveEnabled = true }: TickerDrawerProps) {
   // Close on Esc
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -404,7 +419,12 @@ export function TickerDrawer({ holding, displayCurrency, onClose, hidePosition }
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-5 py-5">
           {holding && (
-            <DrawerContent holding={holding} displayCurrency={displayCurrency} hidePosition={hidePosition} />
+            <DrawerContent
+              holding={holding}
+              displayCurrency={displayCurrency}
+              hidePosition={hidePosition}
+              waveEnabled={waveEnabled}
+            />
           )}
         </div>
       </div>

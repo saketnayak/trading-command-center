@@ -1,5 +1,6 @@
 import pytest
 from pathlib import Path
+from unittest.mock import AsyncMock
 from httpx import AsyncClient, ASGITransport
 from main import app
 from app.services.auth import create_invite_token
@@ -246,8 +247,18 @@ async def test_snapshot_delete_rolls_back_to_previous():
 
 
 @pytest.mark.asyncio
-async def test_get_current_no_finnhub_key():
-    """Without Finnhub key, current_price is null and price_unavailable_reason is 'no_finnhub_key'."""
+async def test_get_current_no_finnhub_key(monkeypatch):
+    """Without Finnhub key, stock prices fall back to Yahoo Finance and the response still signals delayed data."""
+    from app.routers import portfolio as portfolio_router
+
+    portfolio_router._price_cache.clear()
+    fallback_prices = {"AAPL": 199.5, "NVDA": 410.0, "TSLA": 220.0}
+    monkeypatch.setattr(
+        portfolio_router._yf,
+        "fetch_price",
+        AsyncMock(side_effect=lambda ticker: fallback_prices.get(ticker)),
+    )
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         token = await _register_and_login(client, "nofinnhubkey@example.com")
         portfolio_id = await _create_portfolio(client, token)
@@ -264,8 +275,8 @@ async def test_get_current_no_finnhub_key():
         assert r_curr.status_code == 200
         body = r_curr.json()
         assert body["price_unavailable_reason"] == "no_finnhub_key"
-        for holding in body["holdings"]:
-            assert holding["current_price"] is None
+        prices_by_ticker = {h["ticker"]: h["current_price"] for h in body["holdings"]}
+        assert prices_by_ticker == fallback_prices
 
 
 @pytest.mark.asyncio

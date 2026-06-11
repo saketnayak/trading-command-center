@@ -2,11 +2,31 @@
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { getApiKeys, getUsers, inviteUser, updateProfile, getSmtpStatus, getMe, downloadDbBackup, restoreDbBackup, getInvestorProfile } from "@/lib/api";
+import {
+  getApiKeys,
+  getUsers,
+  inviteUser,
+  updateProfile,
+  getSmtpStatus,
+  getMe,
+  downloadDbBackup,
+  restoreDbBackup,
+  getInvestorProfile,
+  getAppSettings,
+  updateAppSettings,
+} from "@/lib/api";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { ApiKeyRow } from "@/components/settings/ApiKeyRow";
+import { InfoPopover } from "@/components/settings/InfoPopover";
 import { ServerUrlRow } from "@/components/settings/ServerUrlRow";
 import { TeamMemberRow } from "@/components/settings/TeamMemberRow";
+import {
+  APP_SETTINGS_DEFAULTS,
+  APP_SETTINGS_RANGES,
+  validateAppSettings,
+  type KalmanProcessingMode,
+  type AppSettings,
+} from "@/lib/appSettings";
 
 const CLOUD_PROVIDERS: { provider: string; label: string; placeholder: string; docsUrl: string }[] = [
   { provider: "openai",    label: "OpenAI",    placeholder: "sk-…",     docsUrl: "https://platform.openai.com/api-keys" },
@@ -44,6 +64,270 @@ function SubGroupLabel({ label }: { label: string }) {
     <div className="px-4 py-2 bg-input/40 border-b border-border">
       <span className="text-muted text-xs font-medium uppercase tracking-wide">{label}</span>
     </div>
+  );
+}
+
+const KALMAN_TOOLTIPS = {
+  observationCovariance:
+    "Controls sensitivity to market noise. Higher values treat daily price fluctuations as random noise, resulting in a smoother, lag-prone trend line. Lower values track raw prices tightly, increasing responsiveness but adding market noise.",
+  transitionCovariance:
+    "Controls how fast the underlying trend can change. Higher values assume the market regime or trend shifts rapidly, allowing the filter to catch trend reversals quickly. Lower values assume a stable structural trend, producing a rigid baseline.",
+  mode:
+    "'Live Tracking' utilizes only data up to day T to eliminate look-ahead bias, making it mandatory for backtesting and trading signals. 'Historical View' uses the entire dataset to build a perfectly smoothed history, ideal for retroactive macro research but unusable for live execution.",
+};
+
+interface AppSettingsDraft {
+  observationCovariance: string;
+  transitionCovariance: string;
+  mode: KalmanProcessingMode;
+  enableKalmanFilter: boolean;
+  enableElliottWave: boolean;
+  enableMarkovRegime: boolean;
+}
+
+function toDraft(settings: AppSettings): AppSettingsDraft {
+  return {
+    observationCovariance: String(settings.observationCovariance),
+    transitionCovariance: String(settings.transitionCovariance),
+    mode: settings.mode,
+    enableKalmanFilter: settings.enableKalmanFilter,
+    enableElliottWave: settings.enableElliottWave,
+    enableMarkovRegime: settings.enableMarkovRegime,
+  };
+}
+
+function ModuleToggle({
+  label,
+  checked,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className={`flex items-center justify-between gap-4 rounded-md border border-input-border bg-input/40 px-3 py-2 ${disabled ? "opacity-60" : ""}`}>
+      <span className="text-xs text-fg-secondary">{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 accent-blue-600"
+      />
+    </label>
+  );
+}
+
+function StrategySettingsPanel({ isAdmin }: { isAdmin: boolean }) {
+  const queryClient = useQueryClient();
+  const { data: persistedSettings = APP_SETTINGS_DEFAULTS, isLoading } = useQuery({
+    queryKey: ["app-settings"],
+    queryFn: getAppSettings,
+    retry: false,
+  });
+  const [draft, setDraft] = useState<AppSettingsDraft | null>(null);
+  const [openInfo, setOpenInfo] = useState<keyof typeof KALMAN_TOOLTIPS | null>(null);
+  const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
+  const [error, setError] = useState("");
+  const values = draft ?? toDraft(persistedSettings);
+
+  function currentSettings(): AppSettings {
+    return {
+      observationCovariance: Number(values.observationCovariance),
+      transitionCovariance: Number(values.transitionCovariance),
+      mode: values.mode,
+      enableKalmanFilter: values.enableKalmanFilter,
+      enableElliottWave: values.enableElliottWave,
+      enableMarkovRegime: values.enableMarkovRegime,
+    };
+  }
+
+  const mutation = useMutation({
+    mutationFn: updateAppSettings,
+    onSuccess: (settings) => {
+      setDraft(toDraft(settings));
+      setStatus("success");
+      setError("");
+      queryClient.invalidateQueries({ queryKey: ["app-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["ticker-kalman"] });
+      queryClient.invalidateQueries({ queryKey: ["ticker-regime"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-regime"] });
+      queryClient.invalidateQueries({ queryKey: ["ticker-wave"] });
+      queryClient.invalidateQueries({ queryKey: ["portfolio-wave"] });
+      queryClient.invalidateQueries({ queryKey: ["wave-analyze"] });
+    },
+    onError: (err: Error) => {
+      setStatus("error");
+      setError(err.message);
+    },
+  });
+
+  function handleSave() {
+    const settings = currentSettings();
+    const validationError = validateAppSettings(settings);
+    if (validationError) {
+      setStatus("error");
+      setError(validationError);
+      return;
+    }
+
+    mutation.mutate(settings);
+  }
+
+  function resetDefaults() {
+    setDraft(toDraft(APP_SETTINGS_DEFAULTS));
+    if (isAdmin) mutation.mutate(APP_SETTINGS_DEFAULTS);
+  }
+
+  const inputClass = "bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500";
+  const disabled = !isAdmin || isLoading || mutation.isPending;
+
+  return (
+    <SectionCard
+      title="Strategy Configuration"
+      description="Controls analytical module visibility and Kalman trend/noise defaults."
+    >
+      <div className="px-4 py-4 flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+          <InfoPopover
+            label="Observation Covariance (R)"
+            tooltip={KALMAN_TOOLTIPS.observationCovariance}
+            open={openInfo === "observationCovariance"}
+            onToggle={() => setOpenInfo(openInfo === "observationCovariance" ? null : "observationCovariance")}
+          />
+          <div className="flex-1">
+            <input
+              type="number"
+              min={APP_SETTINGS_RANGES.observationCovariance.min}
+              max={APP_SETTINGS_RANGES.observationCovariance.max}
+              step="0.0001"
+              value={values.observationCovariance}
+              onChange={(e) => {
+                setDraft({ ...values, observationCovariance: e.target.value });
+                setStatus("idle");
+              }}
+              disabled={disabled}
+              className={inputClass}
+            />
+            <p className="mt-1 text-[10px] text-muted">Range: 0.0001 to 10.0. Default: 0.1.</p>
+          </div>
+        </div>
+
+        <Divider />
+
+        <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+          <InfoPopover
+            label="Transition Covariance (Q)"
+            tooltip={KALMAN_TOOLTIPS.transitionCovariance}
+            open={openInfo === "transitionCovariance"}
+            onToggle={() => setOpenInfo(openInfo === "transitionCovariance" ? null : "transitionCovariance")}
+          />
+          <div className="flex-1">
+            <input
+              type="number"
+              min={APP_SETTINGS_RANGES.transitionCovariance.min}
+              max={APP_SETTINGS_RANGES.transitionCovariance.max}
+              step="0.0001"
+              value={values.transitionCovariance}
+              onChange={(e) => {
+                setDraft({ ...values, transitionCovariance: e.target.value });
+                setStatus("idle");
+              }}
+              disabled={disabled}
+              className={inputClass}
+            />
+            <p className="mt-1 text-[10px] text-muted">Range: 0.0001 to 1.0. Default: 0.01.</p>
+          </div>
+        </div>
+
+        <Divider />
+
+        <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-4">
+          <InfoPopover
+            label="Processing Mode"
+            tooltip={KALMAN_TOOLTIPS.mode}
+            open={openInfo === "mode"}
+            onToggle={() => setOpenInfo(openInfo === "mode" ? null : "mode")}
+          />
+          <select
+            value={values.mode}
+            onChange={(e) => {
+              setDraft({ ...values, mode: e.target.value as KalmanProcessingMode });
+              setStatus("idle");
+            }}
+            disabled={disabled}
+            className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+          >
+            <option value="causal">Live Tracking (Causal)</option>
+            <option value="historical">Historical View (Smoothed)</option>
+          </select>
+        </div>
+
+        <Divider />
+
+        <div className="space-y-2">
+          <div>
+            <p className="text-muted text-xs font-medium uppercase tracking-wide">Strategy Modules</p>
+            <p className="text-[10px] text-muted mt-0.5">
+              Disable a module to hide its charts, badges, and confirmation cards across the app.
+            </p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <ModuleToggle
+              label="Enable Kalman Filter Module"
+              checked={values.enableKalmanFilter}
+              disabled={disabled}
+              onChange={(checked) => {
+                setDraft({ ...values, enableKalmanFilter: checked });
+                setStatus("idle");
+              }}
+            />
+            <ModuleToggle
+              label="Enable Elliott Wave Module"
+              checked={values.enableElliottWave}
+              disabled={disabled}
+              onChange={(checked) => {
+                setDraft({ ...values, enableElliottWave: checked });
+                setStatus("idle");
+              }}
+            />
+            <ModuleToggle
+              label="Enable Markov Regime Module"
+              checked={values.enableMarkovRegime}
+              disabled={disabled}
+              onChange={(checked) => {
+                setDraft({ ...values, enableMarkovRegime: checked });
+                setStatus("idle");
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3 pt-1">
+          <button
+            onClick={handleSave}
+            disabled={disabled}
+            className="bg-blue-600 hover:bg-blue-700 text-fg rounded-sm px-4 py-1.5 text-xs disabled:opacity-50"
+          >
+            {mutation.isPending ? "Saving..." : "Save Strategy Settings"}
+          </button>
+          <button
+            onClick={resetDefaults}
+            disabled={!isAdmin || mutation.isPending}
+            className="text-xs text-muted hover:text-fg-secondary disabled:opacity-50"
+          >
+            Reset defaults
+          </button>
+          {!isAdmin && <span className="text-muted text-xs">Admin access required to modify.</span>}
+          {isLoading && <span className="text-muted text-xs">Loading settings...</span>}
+          {status === "success" && <span className="text-green-400 text-xs">Saved.</span>}
+          {status === "error" && <span className="text-red-400 text-xs">{error}</span>}
+        </div>
+      </div>
+    </SectionCard>
   );
 }
 
@@ -293,6 +577,8 @@ export default function SettingsPage() {
             )}
           </div>
         </SectionCard>
+
+        <StrategySettingsPanel isAdmin={isAdmin} />
 
         {/* LLM Providers */}
         {isAdmin && (

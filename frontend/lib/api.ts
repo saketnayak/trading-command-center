@@ -1,7 +1,8 @@
 import { getSession, signOut } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, TickerMetadataResponse, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, TrimSignalsResponse, WaveSummary } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, TickerMetadataResponse, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, KalmanData, TrimSignalsResponse, WaveSummary } from "./types";
 import type { AnalyzeResponse } from "./wave/types";
 import type { ResponseLanguage } from "./responseLanguage";
+import type { AppSettings } from "./appSettings";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -418,6 +419,89 @@ export async function getPortfolioRegime(
 
 export async function getTickerRegime(ticker: string): Promise<RegimeData | null> {
   const r = await fetchWithAuth(`/regime/${ticker}`);
+  if (!r.ok) return null;
+  const data = await r.json();
+  return data ?? null;
+}
+
+interface AppSettingsResponse {
+  observation_covariance: number;
+  transition_covariance: number;
+  processing_mode: "causal" | "historical";
+  enable_kalman_filter: boolean;
+  enable_elliott_wave: boolean;
+  enable_markov_regime: boolean;
+  updated_at: string | null;
+}
+
+function fromAppSettingsResponse(data: AppSettingsResponse): AppSettings {
+  return {
+    observationCovariance: data.observation_covariance,
+    transitionCovariance: data.transition_covariance,
+    mode: data.processing_mode,
+    enableKalmanFilter: data.enable_kalman_filter,
+    enableElliottWave: data.enable_elliott_wave,
+    enableMarkovRegime: data.enable_markov_regime,
+  };
+}
+
+export async function getAppSettings(): Promise<AppSettings> {
+  const r = await fetchWithAuth("/settings");
+  if (!r.ok) throw new Error("Failed to fetch settings");
+  return fromAppSettingsResponse(await r.json());
+}
+
+export async function updateAppSettings(settings: AppSettings): Promise<AppSettings> {
+  const r = await fetchWithAuth("/settings", {
+    method: "PUT",
+    body: JSON.stringify({
+      observation_covariance: settings.observationCovariance,
+      transition_covariance: settings.transitionCovariance,
+      processing_mode: settings.mode,
+      enable_kalman_filter: settings.enableKalmanFilter,
+      enable_elliott_wave: settings.enableElliottWave,
+      enable_markov_regime: settings.enableMarkovRegime,
+    }),
+  });
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    throw new Error(body?.detail ?? "Failed to update settings");
+  }
+  return fromAppSettingsResponse(await r.json());
+}
+
+interface KalmanOptions {
+  realTime?: boolean;
+  transitionCovariance?: number;
+  transitionCovarianceLevel?: number;
+  transitionCovarianceTrend?: number;
+  observationCovariance?: number;
+}
+
+function kalmanQuery(options: KalmanOptions = {}): string {
+  const params = new URLSearchParams();
+  if (options.realTime != null) params.set("real_time", String(options.realTime));
+  const qLevel = options.transitionCovarianceLevel ?? options.transitionCovariance;
+  const qTrend = options.transitionCovarianceTrend ?? options.transitionCovariance;
+  if (qLevel != null) params.set("transition_covariance_level", String(qLevel));
+  if (qTrend != null) params.set("transition_covariance_trend", String(qTrend));
+  if (options.observationCovariance != null) params.set("observation_covariance", String(options.observationCovariance));
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export async function getPortfolioKalman(
+  portfolioId: string,
+  options: KalmanOptions = {}
+): Promise<Record<string, KalmanData>> {
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/kalman${kalmanQuery(options)}`);
+  if (!r.ok) return {};
+  const data = await r.json();
+  return data ?? {};
+}
+
+export async function getTickerKalman(ticker: string, options: KalmanOptions = {}): Promise<KalmanData | null> {
+  const r = await fetchWithAuth(`/kalman/${ticker}${kalmanQuery(options)}`);
   if (!r.ok) return null;
   const data = await r.json();
   return data ?? null;

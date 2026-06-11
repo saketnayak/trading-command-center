@@ -356,6 +356,14 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   const [trimOnly, setTrimOnly] = useState(false);
   const newTickerRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (!trimSignals) setTrimOnly(false);
+  }, [trimSignals]);
+
+  useEffect(() => {
+    if (!regime || Object.keys(regime).length === 0) setFilterRegime("");
+  }, [regime]);
+
   function handleSort(key: SortKey) {
     if (sortKey === key) {
       if (sortDir === "asc") setSortDir("desc");
@@ -503,7 +511,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
 
   const hasFundamentals = fundamentals && Object.keys(fundamentals).length > 0;
   const hasRegime = regime && Object.keys(regime).length > 0;
-  const colSpan = 8 + (hasRegime ? 1 : 0);
+  const hasTrimSignals = trimSignals != null;
+  const colSpan = 7 + (hasRegime ? 1 : 0) + (hasTrimSignals ? 1 : 0);
 
   return (
     <div className="space-y-3">
@@ -582,17 +591,19 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           </div>
         )}
 
-        <button
-          type="button"
-          onClick={() => setTrimOnly((v) => !v)}
-          className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
-            trimOnly
-              ? "bg-orange-500/20 text-orange-300 border-orange-500/50"
-              : "bg-transparent text-muted border-input-border hover:border-border-strong"
-          }`}
-        >
-          Trim signals only
-        </button>
+        {hasTrimSignals && (
+          <button
+            type="button"
+            onClick={() => setTrimOnly((v) => !v)}
+            className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+              trimOnly
+                ? "bg-orange-500/20 text-orange-300 border-orange-500/50"
+                : "bg-transparent text-muted border-input-border hover:border-border-strong"
+            }`}
+          >
+            Trim signals only
+          </button>
+        )}
 
         {isFiltered && (
           <div className="flex items-center gap-1.5 ml-1">
@@ -622,7 +633,9 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
               {hasRegime && (
                 <th className="hidden lg:table-cell text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">AI vs Regime</th>
               )}
-              <th className="hidden lg:table-cell text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">Trim</th>
+              {hasTrimSignals && (
+                <th className="hidden lg:table-cell text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">Trim</th>
+              )}
               <th className="text-left px-3 py-3">Actions</th>
             </tr>
           </thead>
@@ -827,9 +840,11 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
                       })()}
 
                       {/* Trim */}
-                      <td className="hidden lg:table-cell px-3 py-2">
-                        <TrimBadge entry={trimSignals?.[h.id]} />
-                      </td>
+                      {hasTrimSignals && (
+                        <td className="hidden lg:table-cell px-3 py-2">
+                          <TrimBadge entry={trimSignals?.[h.id]} />
+                        </td>
+                      )}
 
                       {/* Actions */}
                       <td className="px-3 py-2">

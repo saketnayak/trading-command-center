@@ -8,14 +8,13 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+from app.services.yfinance_service import fetch_history_period
+
 logger = logging.getLogger(__name__)
 
 # In-process cache: ticker -> (result_dict, expiry_unix_ts)
 _regime_cache: dict[str, tuple[dict, float]] = {}
 _CACHE_TTL = 14400  # 4 hours
-
-# Semaphore: cap concurrent yfinance fetches to avoid Yahoo Finance rate limits
-_fetch_sem = asyncio.Semaphore(10)
 
 _STATES = ["Bear", "Sideways", "Bull"]
 _STATE_IDX = {s: i for i, s in enumerate(_STATES)}
@@ -99,18 +98,12 @@ def _walk_forward_stats(close: pd.Series, labels: pd.Series, min_train: int = 25
     return {"sharpe": round(sharpe, 4), "max_drawdown": round(max_dd, 4)}
 
 
-def _compute_regime(ticker: str) -> Optional[dict]:
+def _compute_regime(df: pd.DataFrame, ticker: str) -> Optional[dict]:
     """Synchronous computation — run via asyncio.to_thread."""
     try:
-        import yfinance as yf
-        df = yf.download(ticker, period="10y", interval="1d", auto_adjust=True, progress=False)
         if df.empty or len(df) < 260:
             logger.warning("markov: insufficient data for %s (%d rows)", ticker, len(df))
             return None
-
-        # Handle MultiIndex columns from yfinance (common when downloading single ticker)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
 
         close = df["Close"].dropna()
         if len(close) < 260:
@@ -180,8 +173,15 @@ async def get_regime(ticker: str) -> Optional[dict]:
         if now < expiry:
             return result
 
-    async with _fetch_sem:
-        result = await asyncio.to_thread(_compute_regime, ticker)
+    try:
+        df = await fetch_history_period(ticker, period="10y", interval="1d", auto_adjust=True)
+    except ValueError:
+        logger.exception("markov: computation failed for %s", ticker)
+        result = None
+        _regime_cache[ticker] = (result, now + 300)
+        return result
+
+    result = await asyncio.to_thread(_compute_regime, df, ticker)
 
     ttl = _CACHE_TTL if result is not None else 300  # short TTL on failure
     _regime_cache[ticker] = (result, now + ttl)

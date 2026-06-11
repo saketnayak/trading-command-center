@@ -14,6 +14,7 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.portfolio import Portfolio, PortfolioSnapshot
 from app.models.user import User
+from app.services.settings_service import get_app_settings
 from app.services.wave_service import (
     DEFAULT_INTERVAL,
     DEFAULT_PERIOD,
@@ -41,9 +42,13 @@ async def get_ticker_wave_summary(
     period: VALID_PERIODS = DEFAULT_PERIOD,
     interval: VALID_INTERVALS = DEFAULT_INTERVAL,
     profile: VALID_PROFILES = "full_confluence",
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """Compact Elliott/Fib summary for badges and confirmation cards."""
+    settings = await get_app_settings(db)
+    if not settings["enable_elliott_wave"]:
+        raise HTTPException(status_code=404, detail="Elliott Wave module is disabled")
     result = await get_wave_summary(
         ticker.upper(),
         period=period,
@@ -57,9 +62,13 @@ async def get_ticker_wave_summary(
 async def post_ticker_wave_analyze(
     ticker: str,
     body: WaveAnalyzeRequest = WaveAnalyzeRequest(),
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """Full analysis including chart payload for Plotly rendering."""
+    settings = await get_app_settings(db)
+    if not settings["enable_elliott_wave"]:
+        raise HTTPException(status_code=404, detail="Elliott Wave module is disabled")
     result = await analyze_wave(
         ticker.upper(),
         period=body.period,
@@ -84,6 +93,10 @@ async def get_portfolio_wave_summaries(
     user: User = Depends(get_current_user),
 ):
     """Batch wave summaries for all holdings in the latest portfolio snapshot."""
+    settings = await get_app_settings(db)
+    if not settings["enable_elliott_wave"]:
+        return {}
+
     p_result = await db.execute(
         select(Portfolio).where(Portfolio.id == portfolio_id, Portfolio.user_id == user.id)
     )

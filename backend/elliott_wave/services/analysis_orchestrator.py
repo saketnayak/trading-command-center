@@ -61,6 +61,7 @@ class AnalysisOrchestrator:
         zigzag_price_mode: Literal["close", "high_low"] = "close",
         tools: ToolSelection | None = None,
         profile: AnalysisProfile | None = None,
+        ohlcv: pd.DataFrame | None = None,
     ) -> tuple[pd.DataFrame, AnalysisContext, AnalysisResult]:
         selected = (
             ToolSelection.from_profile(profile)
@@ -69,7 +70,10 @@ class AnalysisOrchestrator:
         )
 
         instrument = self._resolver.resolve(symbol=symbol, isin=isin)
-        df = self._provider.get_history(instrument.symbol, period=period, interval=interval)
+        if ohlcv is not None:
+            df = ohlcv
+        else:
+            df = self._provider.get_history(instrument.symbol, period=period, interval=interval)
 
         context = AnalysisContext(
             instrument=instrument,

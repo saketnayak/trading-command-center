@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { analyzeWave } from "@/lib/api";
+import { analyzeWave, getAppSettings } from "@/lib/api";
 import { AnalysisChart } from "@/components/wave/AnalysisChart";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type {
@@ -27,11 +27,19 @@ export default function WaveChartPage() {
   const symbol = decodeURIComponent(ticker).toUpperCase();
   const [visibility, setVisibility] = useState<ChartVisibilityOptions>(DEFAULT_VISIBILITY);
 
+  const { data: strategySettings, isLoading: settingsLoading } = useQuery({
+    queryKey: ["app-settings"],
+    queryFn: getAppSettings,
+    retry: false,
+  });
+  const waveEnabled = strategySettings?.enableElliottWave !== false;
+
   const { data, isLoading, isError, error } = useQuery<AnalyzeResponse>({
     queryKey: ["wave-analyze", symbol],
     queryFn: () => analyzeWave(symbol),
     staleTime: 1000 * 60 * 60 * 4,
     retry: false,
+    enabled: !settingsLoading && waveEnabled,
   });
 
   const { data: metadataByTicker = {} } = useTickerMetadata([symbol]);
@@ -58,17 +66,28 @@ export default function WaveChartPage() {
         </div>
       </header>
 
-      {isLoading && (
+      {settingsLoading && (
         <div className="m-4 flex-1 rounded-lg border border-border bg-input/50 animate-pulse" />
       )}
 
-      {(isError || !data) && !isLoading && (
+      {!settingsLoading && !waveEnabled && (
+        <div className="m-4 rounded-lg border border-border bg-elevated p-6 text-sm text-muted">
+          <h2 className="mb-2 text-base font-semibold text-fg">Module Unavailable</h2>
+          <p>The Elliott Wave module is currently disabled by an administrator.</p>
+        </div>
+      )}
+
+      {!settingsLoading && waveEnabled && isLoading && (
+        <div className="m-4 flex-1 rounded-lg border border-border bg-input/50 animate-pulse" />
+      )}
+
+      {!settingsLoading && waveEnabled && (isError || !data) && !isLoading && (
         <div className="m-4 rounded-lg border border-border bg-elevated p-4 text-sm text-muted">
           {error instanceof Error ? error.message : "Analysis unavailable for this ticker."}
         </div>
       )}
 
-      {data && (
+      {!settingsLoading && waveEnabled && data && (
         <section className="flex min-h-0 flex-1 flex-col gap-3 p-3">
           <SummaryStrip
             scenario={scenario}

@@ -15,6 +15,7 @@ import {
   batchAnalyzePortfolio,
   getProviderModels,
   getBehavioralAlerts,
+  getAppSettings,
 } from "@/lib/api";
 import type { Portfolio, PortfolioHolding, BehavioralAlertsResponse, RegimeData, WaveSummary, TrimSignalEntry, TrimSignalsResponse } from "@/lib/types";
 import { isCrypto } from "@/lib/asset";
@@ -238,6 +239,14 @@ export default function PortfolioPage() {
   const hasHoldings = (current?.holdings?.length ?? 0) > 0;
   const allCrypto = hasHoldings && (current?.holdings ?? []).every((h) => isCrypto(h.ticker));
 
+  const { data: strategySettings } = useQuery({
+    queryKey: ["app-settings"],
+    queryFn: getAppSettings,
+    retry: false,
+  });
+  const markovEnabled = strategySettings?.enableMarkovRegime !== false;
+  const waveEnabled = strategySettings?.enableElliottWave !== false;
+
   // Fetch fundamentals when holdings tab is active.
   // Crypto uses CoinGecko (no key needed); stocks need a Finnhub key.
   const { data: fundamentals } = useQuery({
@@ -250,21 +259,21 @@ export default function PortfolioPage() {
   const { data: regime = {} } = useQuery<Record<string, RegimeData>>({
     queryKey: ["portfolio-regime", selectedId],
     queryFn: () => getPortfolioRegime(selectedId!),
-    enabled: selectedId != null && tab === "holdings",
+    enabled: selectedId != null && tab === "holdings" && markovEnabled,
     staleTime: 1000 * 60 * 60 * 4,  // 4h — matches backend cache TTL
   });
 
   const { data: wave = {} } = useQuery<Record<string, WaveSummary>>({
     queryKey: ["portfolio-wave", selectedId],
     queryFn: () => getPortfolioWave(selectedId!),
-    enabled: selectedId != null && tab === "holdings",
+    enabled: selectedId != null && tab === "holdings" && waveEnabled,
     staleTime: 1000 * 60 * 60 * 4,
   });
 
   const { data: trimSignals } = useQuery<TrimSignalsResponse>({
     queryKey: ["portfolio-trim-signals", selectedId],
     queryFn: () => getPortfolioTrimSignals(selectedId!),
-    enabled: selectedId != null && tab === "holdings",
+    enabled: selectedId != null && tab === "holdings" && markovEnabled,
     staleTime: 1000 * 60 * 30,
   });
 
@@ -466,23 +475,25 @@ export default function PortfolioPage() {
                     holdings={current.holdings}
                     onAnalyzeStale={() => setBatchOpen(true)}
                     fundamentals={fundamentals}
-                    regime={regime}
-                    trimSignals={trimByHoldingId}
+                    regime={markovEnabled ? regime : undefined}
+                    trimSignals={markovEnabled ? trimByHoldingId : undefined}
                   />
                 )}
-                <SellCandidatesPanel
-                  entries={trimSignals?.entries ?? []}
-                  computedAt={trimSignals?.computed_at}
-                />
+                {markovEnabled && (
+                  <SellCandidatesPanel
+                    entries={trimSignals?.entries ?? []}
+                    computedAt={trimSignals?.computed_at}
+                  />
+                )}
                 <HoldingsTable
                   portfolioId={selectedId}
                   holdings={current.holdings}
                   priceUnavailableReason={current.price_unavailable_reason}
                   displayCurrency={current.display_currency ?? "USD"}
                   fundamentals={fundamentals}
-                  regime={regime}
-                  wave={wave}
-                  trimSignals={trimByHoldingId}
+                  regime={markovEnabled ? regime : undefined}
+                  wave={waveEnabled ? wave : undefined}
+                  trimSignals={markovEnabled ? trimByHoldingId : undefined}
                   onTickerClick={setDrawerHolding}
                 />
               </div>
@@ -533,6 +544,7 @@ export default function PortfolioPage() {
         holding={drawerHolding}
         displayCurrency={current?.display_currency ?? "USD"}
         onClose={() => setDrawerHolding(null)}
+        waveEnabled={waveEnabled}
       />
     </>
   );

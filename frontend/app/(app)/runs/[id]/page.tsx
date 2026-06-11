@@ -6,10 +6,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { TraderDecision } from "@/components/runs/TraderDecision";
 import { AnalystReports } from "@/components/runs/AnalystReports";
 import { BullBearDebate } from "@/components/runs/BullBearDebate";
-import { getRun, getReport, getRunOutcome, updateRun } from "@/lib/api";
+import { getAppSettings, getRun, getReport, getRunOutcome, updateRun } from "@/lib/api";
 import { DownloadMenu } from "@/components/runs/DownloadMenu";
 import { OutcomeCard } from "@/components/runs/OutcomeCard";
 import { MarkovConfirmation } from "@/components/runs/MarkovConfirmation";
+import { KalmanConfirmation } from "@/components/runs/KalmanConfirmation";
 import { WaveConfirmation } from "@/components/wave/WaveConfirmation";
 import { LanguageFlag } from "@/components/runs/RunContextIcons";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
@@ -182,6 +183,12 @@ export default function RunResultsPage() {
     { enabled: !!run }
   );
 
+  const { data: strategySettings } = useQuery({
+    queryKey: ["app-settings"],
+    queryFn: getAppSettings,
+    retry: false,
+  });
+
   const isRunning = run?.status === "pending" || run?.status === "running";
 
   if (runLoading) {
@@ -260,8 +267,9 @@ export default function RunResultsPage() {
           report={report}
           metadata={run ? tickerMetadata[run.ticker.toUpperCase()] : undefined}
         />
-        {run && <MarkovConfirmation ticker={run.ticker} verdict={run.verdict} />}
-        {run && (
+        {run && strategySettings?.enableMarkovRegime !== false && <MarkovConfirmation ticker={run.ticker} verdict={run.verdict} />}
+        {run && strategySettings?.enableKalmanFilter !== false && <KalmanConfirmation ticker={run.ticker} verdict={run.verdict} />}
+        {run && strategySettings?.enableElliottWave !== false && (
           <WaveConfirmation
             ticker={run.ticker}
             verdict={run.verdict}
