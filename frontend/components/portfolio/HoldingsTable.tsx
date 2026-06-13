@@ -10,12 +10,14 @@ import { IconButton, IconLink } from "@/components/ui/IconButton";
 import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import { WaveBadge } from "@/components/wave/WaveBadge";
-import type { PortfolioHolding, FundamentalsData, RegimeData, WaveSummary, TrimSignalEntry } from "@/lib/types";
+import type { PortfolioHolding, FundamentalsData, RegimeData, WaveSummary, TrimSignalEntry, FinnhubUnavailableReason } from "@/lib/types";
+import { finnhubUnavailableMessage } from "@/lib/finnhubMessages";
 
 interface HoldingsTableProps {
   portfolioId: string;
   holdings: PortfolioHolding[];
   priceUnavailableReason: string | null;
+  fundamentalsUnavailableReason?: FinnhubUnavailableReason | null;
   displayCurrency: string;
   fundamentals?: Record<string, FundamentalsData>;
   regime?: Record<string, RegimeData>;
@@ -340,7 +342,7 @@ function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, displayCurrency, fundamentals, regime, wave, trimSignals, onTickerClick }: HoldingsTableProps) {
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, fundamentalsUnavailableReason, displayCurrency, fundamentals, regime, wave, trimSignals, onTickerClick }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "" });
@@ -514,6 +516,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
   const hasTrimSignals = trimSignals != null;
   const colSpan = 7 + (hasRegime ? 1 : 0) + (hasTrimSignals ? 1 : 0);
 
+  const fundamentalsMessage = finnhubUnavailableMessage(fundamentalsUnavailableReason, "fundamentals");
+
   return (
     <div className="space-y-3">
       {priceUnavailableReason === "no_finnhub_key" && (
@@ -521,6 +525,11 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, d
           Showing delayed prices via Yahoo Finance — add your Finnhub API key in{" "}
           <Link href="/settings" className="text-blue-400 hover:underline">Settings</Link>{" "}
           for real-time data.
+        </div>
+      )}
+      {fundamentalsMessage && (
+        <div className="text-xs text-amber-400/90 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2">
+          {fundamentalsMessage}
         </div>
       )}
 

@@ -58,6 +58,32 @@ export interface ApiKeyStatus {
   is_valid: boolean;
   validated_at: string | null;
   masked_key: string;
+  capabilities?: Record<string, FinnhubCapabilityStatus> | null;
+  last_error_code?: FinnhubUnavailableReason | null;
+  last_error_message?: string | null;
+  capabilities_checked_at?: string | null;
+}
+
+export type FinnhubUnavailableReason =
+  | "no_finnhub_key"
+  | "invalid_key"
+  | "access_denied"
+  | "premium_required"
+  | "rate_limited"
+  | "provider_unavailable"
+  | "malformed_response";
+
+export interface FinnhubCapabilityStatus {
+  ok: boolean;
+  reason?: FinnhubUnavailableReason | null;
+  message?: string | null;
+}
+
+export interface ProviderWarning {
+  provider: string;
+  capability: string;
+  reason: FinnhubUnavailableReason;
+  message: string;
 }
 
 export interface RunStats {
@@ -240,6 +266,7 @@ export interface TickerSnapshot {
     eps_actual: number | null;
     hour: string | null;
   } | null;
+  provider_warnings?: ProviderWarning[];
 }
 
 export interface TickerMetadata {
@@ -333,6 +360,21 @@ export interface PortfolioInsight {
 export interface GenerateInsightRequest {
   llm_provider: string;
   llm_model: string;
+}
+
+export interface PortfolioEarningsResponse {
+  events: EarningsEvent[];
+  earnings_unavailable_reason: FinnhubUnavailableReason | null;
+}
+
+export interface PortfolioFundamentalsResponse {
+  data: Record<string, FundamentalsData>;
+  fundamentals_unavailable_reason: FinnhubUnavailableReason | null;
+}
+
+export interface PortfolioNewsResponse {
+  articles: NewsArticle[];
+  news_unavailable_reason: FinnhubUnavailableReason | null;
 }
 
 export interface EarningsEvent {

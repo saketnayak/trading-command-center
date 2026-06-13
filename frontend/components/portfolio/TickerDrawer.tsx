@@ -347,6 +347,19 @@ function DrawerContent({
         </>
       )}
 
+      {snap?.provider_warnings && snap.provider_warnings.length > 0 && (
+        <div className="space-y-1">
+          {snap.provider_warnings.map((warning) => (
+            <div
+              key={`${warning.capability}-${warning.reason}`}
+              className="text-xs text-amber-400/90 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2"
+            >
+              {warning.message}
+            </div>
+          ))}
+        </div>
+      )}
+
       {isError && (
         <p className="text-xs text-muted text-center py-2">
           Could not load ticker details.

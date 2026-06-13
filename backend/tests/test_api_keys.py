@@ -1,5 +1,6 @@
 import pytest
 from httpx import AsyncClient, ASGITransport
+from unittest.mock import AsyncMock, patch
 from main import app
 
 
@@ -75,11 +76,15 @@ async def test_upsert_finnhub_key_accepts_authorized_empty_quote(httpx_mock):
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         token = await _admin_token(client)
-        r = await client.post(
-            "/api-keys",
-            json={"provider": "finnhub", "key": "valid-finnhub"},
-            headers={"Authorization": f"Bearer {token}"},
-        )
+        with patch(
+            "app.routers.api_keys.probe_capabilities",
+            new=AsyncMock(return_value={"quote": {"ok": True}}),
+        ):
+            r = await client.post(
+                "/api-keys",
+                json={"provider": "finnhub", "key": "valid-finnhub"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
 
     assert r.status_code == 200
     assert r.json()["is_valid"] is True

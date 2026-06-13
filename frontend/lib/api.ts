@@ -1,5 +1,5 @@
 import { getSession, signOut } from "next-auth/react";
-import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, TickerMetadataResponse, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, KalmanData, TrimSignalsResponse, WaveSummary } from "./types";
+import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, TickerMetadataResponse, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, KalmanData, TrimSignalsResponse, WaveSummary, PortfolioEarningsResponse, PortfolioFundamentalsResponse, PortfolioNewsResponse } from "./types";
 import type { AnalyzeResponse } from "./wave/types";
 import type { ResponseLanguage } from "./responseLanguage";
 import type { AppSettings } from "./appSettings";
@@ -392,20 +392,24 @@ export async function batchAnalyzePortfolio(
   return r.json();
 }
 
-export async function getPortfolioEarnings(portfolioId: string, daysAhead = 30): Promise<EarningsEvent[]> {
+export async function getPortfolioEarnings(portfolioId: string, daysAhead = 30): Promise<PortfolioEarningsResponse> {
   const r = await fetchWithAuth(`/portfolio/${portfolioId}/earnings?days_ahead=${daysAhead}`);
   if (!r.ok) throw new Error("Failed to fetch earnings");
   const data = await r.json();
-  if (data.price_unavailable_reason === "no_finnhub_key") throw new Error("no_finnhub_key");
-  return data.events ?? [];
+  return {
+    events: data.events ?? [],
+    earnings_unavailable_reason: data.earnings_unavailable_reason ?? data.price_unavailable_reason ?? null,
+  };
 }
 
-export async function getPortfolioFundamentals(portfolioId: string): Promise<Record<string, FundamentalsData>> {
+export async function getPortfolioFundamentals(portfolioId: string): Promise<PortfolioFundamentalsResponse> {
   const r = await fetchWithAuth(`/portfolio/${portfolioId}/fundamentals`);
   if (!r.ok) throw new Error("Failed to fetch fundamentals");
   const data = await r.json();
-  if (data.price_unavailable_reason === "no_finnhub_key") throw new Error("no_finnhub_key");
-  return data.data ?? {};
+  return {
+    data: data.data ?? {},
+    fundamentals_unavailable_reason: data.fundamentals_unavailable_reason ?? data.price_unavailable_reason ?? null,
+  };
 }
 
 export async function getPortfolioRegime(
@@ -545,12 +549,14 @@ export async function getPortfolioTrimSignals(
   return data ?? { entries: [], computed_at: "" };
 }
 
-export async function getPortfolioNews(portfolioId: string, days = 7): Promise<NewsArticle[]> {
+export async function getPortfolioNews(portfolioId: string, days = 7): Promise<PortfolioNewsResponse> {
   const r = await fetchWithAuth(`/portfolio/${portfolioId}/news?days=${days}`);
   if (!r.ok) throw new Error("Failed to fetch news");
   const data = await r.json();
-  if (data.price_unavailable_reason === "no_finnhub_key") throw new Error("no_finnhub_key");
-  return data.articles ?? [];
+  return {
+    articles: data.articles ?? [],
+    news_unavailable_reason: data.news_unavailable_reason ?? data.price_unavailable_reason ?? null,
+  };
 }
 
 export async function downloadDbBackup(): Promise<Blob> {

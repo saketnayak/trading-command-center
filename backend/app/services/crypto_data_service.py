@@ -11,6 +11,11 @@ from typing import Optional
 
 import httpx
 
+from app.services.finnhub_client import (
+    FinnhubCapability,
+    fetch_json,
+)
+
 _CG_BASE = "https://api.coingecko.com/api/v3"
 
 # Symbol → CoinGecko coin ID mapping for common coins.
@@ -122,26 +127,21 @@ async def _coingecko_id(symbol: str) -> Optional[str]:
 
 async def _finnhub_price(symbol: str, finnhub_key: str, now: float) -> Optional[float]:
     """Single Finnhub crypto/candle call — shared by fetch_price and fetch_prices_batch."""
-    try:
-        to_ts = int(now)
-        from_ts = to_ts - 86400
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(
-                "https://finnhub.io/api/v1/crypto/candle",
-                params={
-                    "symbol": f"BINANCE:{symbol}USDT",
-                    "resolution": "D",
-                    "from": from_ts,
-                    "to": to_ts,
-                    "token": finnhub_key,
-                },
-            )
-            r.raise_for_status()
-            data = r.json()
-        if data.get("s") == "ok" and data.get("c"):
-            return float(data["c"][-1])
-    except Exception:
-        pass
+    to_ts = int(now)
+    from_ts = to_ts - 86400
+    raw, error = await fetch_json(
+        "/crypto/candle",
+        finnhub_key,
+        FinnhubCapability.CRYPTO_CANDLE,
+        params={
+            "symbol": f"BINANCE:{symbol}USDT",
+            "resolution": "D",
+            "from": from_ts,
+            "to": to_ts,
+        },
+    )
+    if error is None and isinstance(raw, dict) and raw.get("s") == "ok" and raw.get("c"):
+        return float(raw["c"][-1])
     return None
 
 
@@ -270,26 +270,22 @@ async def fetch_historical_price(
 
     # ── Finnhub fallback ───────────────────────────────────────────────────────
     if finnhub_key:
-        try:
-            to_dt = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=tz.utc)
-            from_dt = to_dt - timedelta(days=7)
-            async with httpx.AsyncClient(timeout=10) as client:
-                r = await client.get(
-                    "https://finnhub.io/api/v1/crypto/candle",
-                    params={
-                        "symbol": f"BINANCE:{symbol}USDT",
-                        "resolution": "D",
-                        "from": int(from_dt.timestamp()),
-                        "to": int(to_dt.timestamp()),
-                        "token": finnhub_key,
-                    },
-                )
-                r.raise_for_status()
-                data = r.json()
-            if data.get("s") == "ok" and data.get("c"):
-                return float(data["c"][-1])
-        except Exception:
-            pass
+        to_dt = datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=tz.utc)
+        from_dt = to_dt - timedelta(days=7)
+        raw, _error = await fetch_json(
+            "/crypto/candle",
+            finnhub_key,
+            FinnhubCapability.CRYPTO_CANDLE,
+            params={
+                "symbol": f"BINANCE:{symbol}USDT",
+                "resolution": "D",
+                "from": int(from_dt.timestamp()),
+                "to": int(to_dt.timestamp()),
+            },
+            timeout=10,
+        )
+        if isinstance(raw, dict) and raw.get("s") == "ok" and raw.get("c"):
+            return float(raw["c"][-1])
 
     return None
 

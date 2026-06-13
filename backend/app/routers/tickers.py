@@ -4,14 +4,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.api_key import ApiKey
 from app.models.user import User
-from app.services.encryption import decrypt_key
+from app.services.finnhub_client import get_finnhub_key
 from app.services.ticker_metadata_service import (
     get_many_ticker_metadata,
     metadata_to_dict,
@@ -47,9 +45,7 @@ class TickerMetadataResponse(BaseModel):
 
 
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
-    result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
-    row = result.scalar_one_or_none()
-    return decrypt_key(row.encrypted_key) if row else None
+    return await get_finnhub_key(db)
 
 
 @router.get("/tickers/metadata", response_model=TickerMetadataResponse)

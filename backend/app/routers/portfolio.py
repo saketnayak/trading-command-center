@@ -23,6 +23,14 @@ from app.models.run import Run, RunStatus
 from app.models.report import Report
 from app.models.api_key import ApiKey
 from app.services.encryption import decrypt_key
+from app.services.finnhub_client import (
+    FinnhubCapability,
+    FinnhubError,
+    aggregate_unavailable_reason,
+    fetch_json,
+    get_finnhub_key,
+    should_cache_error,
+)
 from app.services.portfolio_parser import parse_portfolio_csv
 from app.services.ticker_metadata_service import get_many_ticker_metadata
 from app.services.trim_signal_service import score_trim_signal
@@ -149,11 +157,7 @@ class CurrentResponse(BaseModel):
 # ── Finnhub price helpers ─────────────────────────────────────────────────────
 
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
-    result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
-    key_row = result.scalar_one_or_none()
-    if not key_row:
-        return None
-    return decrypt_key(key_row.encrypted_key)
+    return await get_finnhub_key(db)
 
 
 async def _fetch_price(ticker: str, api_key: Optional[str]) -> Optional[float]:
@@ -174,14 +178,17 @@ async def _fetch_price(ticker: str, api_key: Optional[str]) -> Optional[float]:
             # to configure a Finnhub key for real-time data.
             price = await _yf.fetch_price(ticker)
         else:
-            url = f"https://finnhub.io/api/v1/quote?symbol={ticker}&token={api_key}"
             data: dict = {}
             try:
                 async with _get_finnhub_semaphore():
-                    async with httpx.AsyncClient(timeout=8) as client:
-                        r = await client.get(url)
-                        r.raise_for_status()
-                        data = r.json()
+                    raw, _error = await fetch_json(
+                        "/quote",
+                        api_key,
+                        FinnhubCapability.QUOTE,
+                        params={"symbol": ticker},
+                    )
+                    if _error is None:
+                        data = raw if isinstance(raw, dict) else {}
                 # c == 0 means market is closed / data unavailable; fall back to
                 # previous close (pc) so prices still show on weekends/after-hours.
                 c = data.get("c")
@@ -1100,46 +1107,47 @@ async def batch_analyze_holdings(
 
 # ── Earnings Calendar ─────────────────────────────────────────────────────────
 
-_earnings_cache: dict[str, tuple[list, float]] = {}
+_earnings_cache: dict[str, tuple[list, float, FinnhubError | None]] = {}
 _EARNINGS_TTL = 21600  # 6 hours
 
 
-async def _fetch_earnings(ticker: str, api_key: str, days_ahead: int) -> list[dict]:
+async def _fetch_earnings(ticker: str, api_key: str, days_ahead: int) -> tuple[list[dict], FinnhubError | None]:
     if is_crypto(ticker):
-        return []  # Crypto has no earnings calendar
+        return [], None  # Crypto has no earnings calendar
     cache_key = f"{ticker}:{days_ahead}"
     now = time.time()
     if cache_key in _earnings_cache:
-        data, expiry = _earnings_cache[cache_key]
+        data, expiry, cached_error = _earnings_cache[cache_key]
         if now < expiry:
-            return data
-    try:
-        today = date.today()
-        to_date = today + timedelta(days=days_ahead)
-        url = (
-            f"https://finnhub.io/api/v1/calendar/earnings"
-            f"?from={today}&to={to_date}&symbol={ticker}&token={api_key}"
-        )
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            raw = r.json().get("earningsCalendar", [])
-        data = [
-            {
-                "ticker": e.get("symbol", ticker),
-                "date": e.get("date"),
-                "hour": e.get("hour"),
-                "eps_estimate": e.get("epsEstimate"),
-                "revenue_estimate": e.get("revenueEstimate"),
-                "eps_actual": e.get("epsActual"),
-                "revenue_actual": e.get("revenueActual"),
-            }
-            for e in raw
-        ]
-    except Exception:
-        data = []
-    _earnings_cache[cache_key] = (data, now + _EARNINGS_TTL)
-    return data
+            return data, cached_error
+    today = date.today()
+    to_date = today + timedelta(days=days_ahead)
+    raw, error = await fetch_json(
+        "/calendar/earnings",
+        api_key,
+        FinnhubCapability.EARNINGS_CALENDAR,
+        params={"from": today, "to": to_date, "symbol": ticker},
+    )
+    if error:
+        if not should_cache_error(error):
+            return [], error
+        _earnings_cache[cache_key] = ([], now + 120, error)
+        return [], error
+    events = raw.get("earningsCalendar", []) if isinstance(raw, dict) else []
+    data = [
+        {
+            "ticker": e.get("symbol", ticker),
+            "date": e.get("date"),
+            "hour": e.get("hour"),
+            "eps_estimate": e.get("epsEstimate"),
+            "revenue_estimate": e.get("revenueEstimate"),
+            "eps_actual": e.get("epsActual"),
+            "revenue_actual": e.get("revenueActual"),
+        }
+        for e in events
+    ]
+    _earnings_cache[cache_key] = (data, now + _EARNINGS_TTL, None)
+    return data, None
 
 
 @router.get("/portfolio/{portfolio_id}/earnings")
@@ -1160,26 +1168,36 @@ async def get_portfolio_earnings(
     )
     snapshot = snap_result.scalar_one_or_none()
     if not snapshot or not snapshot.holdings:
-        return {"price_unavailable_reason": None, "events": []}
+        return {"price_unavailable_reason": None, "earnings_unavailable_reason": None, "events": []}
 
     av_key = await _get_finnhub_key(db)
     if not av_key:
-        return {"price_unavailable_reason": "no_finnhub_key", "events": []}
+        return {
+            "price_unavailable_reason": "no_finnhub_key",
+            "earnings_unavailable_reason": "no_finnhub_key",
+            "events": [],
+        }
 
     all_events: list[dict] = []
+    errors: list[FinnhubError | None] = []
     results = await asyncio.gather(
         *[_fetch_earnings(h.ticker, av_key, days_ahead) for h in snapshot.holdings]
     )
-    for events in results:
+    for events, error in results:
         all_events.extend(events)
+        errors.append(error)
 
     all_events.sort(key=lambda x: x.get("date") or "")
-    return {"price_unavailable_reason": None, "events": all_events}
+    return {
+        "price_unavailable_reason": None,
+        "earnings_unavailable_reason": aggregate_unavailable_reason(errors),
+        "events": all_events,
+    }
 
 
 # ── Fundamentals ──────────────────────────────────────────────────────────────
 
-_fundamentals_cache: dict[str, tuple[dict, float]] = {}
+_fundamentals_cache: dict[str, tuple[dict, float, FinnhubError | None]] = {}
 _FUNDAMENTALS_TTL = 21600  # 6 hours
 
 
@@ -1192,44 +1210,49 @@ def compute_peg(pe: float | None, eps_growth_3y: float | None) -> float | None:
     return round(pe / eps_growth_3y, 2)
 
 
-async def _fetch_fundamentals(ticker: str, api_key: Optional[str]) -> dict:
+async def _fetch_fundamentals(ticker: str, api_key: Optional[str]) -> tuple[dict, FinnhubError | None]:
     now = time.time()
     if ticker in _fundamentals_cache:
-        data, expiry = _fundamentals_cache[ticker]
+        data, expiry, cached_error = _fundamentals_cache[ticker]
         if now < expiry:
-            return data
+            return data, cached_error
 
     if is_crypto(ticker):
         data = await _crypto.fetch_metrics(ticker)
         data["asset_type"] = "crypto"
-    elif api_key:
-        try:
-            url = f"https://finnhub.io/api/v1/stock/metric?symbol={ticker}&metric=all&token={api_key}"
-            async with httpx.AsyncClient(timeout=8) as client:
-                r = await client.get(url)
-                r.raise_for_status()
-                m = r.json().get("metric", {})
-            pe = m.get("peAnnual") if m.get("peAnnual") is not None else m.get("peTTM")
-            eps_growth_3y = m.get("epsGrowth3Y")
-            data = {
-                "asset_type": "stock",
-                "pe_ratio": pe,
-                "beta": m.get("beta"),
-                "week52_high": m.get("52WeekHigh"),
-                "week52_low": m.get("52WeekLow"),
-                "dividend_yield": m.get("dividendYieldIndicatedAnnual"),
-                "eps_ttm": m.get("epsBasicExclExtraItemsTTM"),
-                "market_cap": m.get("marketCapitalization"),
-                "eps_growth_3y": eps_growth_3y,
-                "peg_ratio": compute_peg(pe, eps_growth_3y),
-            }
-        except Exception:
-            data = {"asset_type": "stock"}
-    else:
-        return {}
-
-    _fundamentals_cache[ticker] = (data, now + _FUNDAMENTALS_TTL)
-    return data
+        _fundamentals_cache[ticker] = (data, now + _FUNDAMENTALS_TTL, None)
+        return data, None
+    if not api_key:
+        return {}, None
+    raw, error = await fetch_json(
+        "/stock/metric",
+        api_key,
+        FinnhubCapability.STOCK_METRIC,
+        params={"symbol": ticker, "metric": "all"},
+    )
+    if error:
+        data = {"asset_type": "stock"}
+        if not should_cache_error(error):
+            return data, error
+        _fundamentals_cache[ticker] = (data, now + 120, error)
+        return data, error
+    m = raw.get("metric", {}) if isinstance(raw, dict) else {}
+    pe = m.get("peAnnual") if m.get("peAnnual") is not None else m.get("peTTM")
+    eps_growth_3y = m.get("epsGrowth3Y")
+    data = {
+        "asset_type": "stock",
+        "pe_ratio": pe,
+        "beta": m.get("beta"),
+        "week52_high": m.get("52WeekHigh"),
+        "week52_low": m.get("52WeekLow"),
+        "dividend_yield": m.get("dividendYieldIndicatedAnnual"),
+        "eps_ttm": m.get("epsBasicExclExtraItemsTTM"),
+        "market_cap": m.get("marketCapitalization"),
+        "eps_growth_3y": eps_growth_3y,
+        "peg_ratio": compute_peg(pe, eps_growth_3y),
+    }
+    _fundamentals_cache[ticker] = (data, now + _FUNDAMENTALS_TTL, None)
+    return data, None
 
 
 @router.get("/portfolio/{portfolio_id}/fundamentals")
@@ -1249,60 +1272,78 @@ async def get_portfolio_fundamentals(
     )
     snapshot = snap_result.scalar_one_or_none()
     if not snapshot or not snapshot.holdings:
-        return {"price_unavailable_reason": None, "data": {}}
+        return {
+            "price_unavailable_reason": None,
+            "fundamentals_unavailable_reason": None,
+            "data": {},
+        }
 
     av_key = await _get_finnhub_key(db)
     tickers = [h.ticker for h in snapshot.holdings]
     # Crypto metrics come from CoinGecko (no key needed); stocks need Finnhub key.
     has_stock = any(not is_crypto(t) for t in tickers)
     if has_stock and not av_key:
-        return {"price_unavailable_reason": "no_finnhub_key", "data": {}}
+        return {
+            "price_unavailable_reason": "no_finnhub_key",
+            "fundamentals_unavailable_reason": "no_finnhub_key",
+            "data": {},
+        }
 
+    errors: list[FinnhubError | None] = []
     results = await asyncio.gather(*[_fetch_fundamentals(t, av_key) for t in tickers])
-    return {"price_unavailable_reason": None, "data": dict(zip(tickers, results))}
+    data: dict[str, dict] = {}
+    for ticker, (fundamentals, error) in zip(tickers, results):
+        data[ticker] = fundamentals
+        if error and not is_crypto(ticker):
+            errors.append(error)
+    return {
+        "price_unavailable_reason": None,
+        "fundamentals_unavailable_reason": aggregate_unavailable_reason(errors),
+        "data": data,
+    }
 
 
 # ── News Feed ─────────────────────────────────────────────────────────────────
 
-_news_cache: dict[str, tuple[list, float]] = {}
+_news_cache: dict[str, tuple[list, float, FinnhubError | None]] = {}
 _NEWS_TTL = 3600  # 1 hour
 
 
-async def _fetch_news(ticker: str, api_key: str, days: int) -> list[dict]:
+async def _fetch_news(ticker: str, api_key: str, days: int) -> tuple[list[dict], FinnhubError | None]:
     cache_key = f"{ticker}:{days}"
     now = time.time()
     if cache_key in _news_cache:
-        data, expiry = _news_cache[cache_key]
+        data, expiry, cached_error = _news_cache[cache_key]
         if now < expiry:
-            return data
-    try:
-        today = date.today()
-        from_date = today - timedelta(days=days)
-        url = (
-            f"https://finnhub.io/api/v1/company-news"
-            f"?symbol={ticker}&from={from_date}&to={today}&token={api_key}"
-        )
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(url)
-            r.raise_for_status()
-            raw = r.json()
-        data = [
-            {
-                "ticker": ticker,
-                "datetime": item.get("datetime"),
-                "headline": item.get("headline", ""),
-                "summary": (item.get("summary") or "")[:300],
-                "url": item.get("url", ""),
-                "source": item.get("source", ""),
-                "image": item.get("image", ""),
-            }
-            for item in (raw if isinstance(raw, list) else [])
-            if item.get("headline")
-        ]
-    except Exception:
-        data = []
-    _news_cache[cache_key] = (data, now + _NEWS_TTL)
-    return data
+            return data, cached_error
+    today = date.today()
+    from_date = today - timedelta(days=days)
+    raw, error = await fetch_json(
+        "/company-news",
+        api_key,
+        FinnhubCapability.COMPANY_NEWS,
+        params={"symbol": ticker, "from": from_date, "to": today},
+    )
+    if error:
+        if not should_cache_error(error):
+            return [], error
+        _news_cache[cache_key] = ([], now + 120, error)
+        return [], error
+    data = [
+        {
+            "ticker": ticker,
+            "datetime": item.get("datetime"),
+            "headline": item.get("headline", ""),
+            "summary": (item.get("summary") or "")[:300],
+            "url": item.get("url", ""),
+            "source": item.get("source", ""),
+            "image": item.get("image", ""),
+        }
+        for item in (raw if isinstance(raw, list) else [])
+        if item.get("headline")
+    ]
+    _news_cache[cache_key] = (data, now + _NEWS_TTL, None)
+    return data, None
 
 
 @router.get("/portfolio/{portfolio_id}/news")
@@ -1324,21 +1365,35 @@ async def get_portfolio_news(
     )
     snapshot = snap_result.scalar_one_or_none()
     if not snapshot or not snapshot.holdings:
-        return {"price_unavailable_reason": None, "articles": []}
+        return {
+            "price_unavailable_reason": None,
+            "news_unavailable_reason": None,
+            "articles": [],
+        }
 
     av_key = await _get_finnhub_key(db)
     if not av_key:
-        return {"price_unavailable_reason": "no_finnhub_key", "articles": []}
+        return {
+            "price_unavailable_reason": "no_finnhub_key",
+            "news_unavailable_reason": "no_finnhub_key",
+            "articles": [],
+        }
 
+    all_articles: list[dict] = []
+    errors: list[FinnhubError | None] = []
     results = await asyncio.gather(
         *[_fetch_news(h.ticker, av_key, days) for h in snapshot.holdings]
     )
-    all_articles: list[dict] = []
-    for articles in results:
+    for articles, error in results:
         all_articles.extend(articles)
+        errors.append(error)
 
     all_articles.sort(key=lambda x: x.get("datetime") or 0, reverse=True)
-    return {"price_unavailable_reason": None, "articles": all_articles[:limit]}
+    return {
+        "price_unavailable_reason": None,
+        "news_unavailable_reason": aggregate_unavailable_reason(errors),
+        "articles": all_articles[:limit],
+    }
 
 
 # ── Sector gaps ───────────────────────────────────────────────────────────────

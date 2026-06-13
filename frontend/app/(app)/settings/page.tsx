@@ -621,10 +621,12 @@ export default function SettingsPage() {
             <ApiKeyRow
               provider="finnhub"
               label="Finnhub"
-              description="Live portfolio prices + outcome tracking (+7/14/30/90d)"
+              description="Live portfolio prices, fundamentals, news, and outcome tracking"
               placeholder="Your Finnhub API key"
               docsUrl="https://finnhub.io/dashboard"
               isSet={apiKeys.find((k) => k.provider === "finnhub")?.is_valid ?? false}
+              capabilities={apiKeys.find((k) => k.provider === "finnhub")?.capabilities}
+              capabilityWarning={apiKeys.find((k) => k.provider === "finnhub")?.last_error_message ?? null}
               onSaved={refetchKeys}
             />
           </SectionCard>

@@ -98,6 +98,7 @@ Import your holdings from any broker CSV or add tickers manually. Once a [free F
 | **Key fundamentals** | Expandable row per holding: P/E, Beta, 52-week range, dividend yield, EPS (TTM), market cap |
 | **PEG valuation** | Per-holding PEG ratio (P/E ÷ 3-year EPS growth) classified as **Undervalued** (< 1.0), **Fairly valued** (≤ 1.5), or **Overvalued**; filter the holdings grid by valuation band. N/A when earnings are negative or growth data is unavailable |
 | **News feed** | Merged, time-sorted company news for all holdings; per-ticker color badges |
+| **Finnhub access checks** | Detects missing, invalid, rate-limited, or premium-gated Finnhub access and shows clear messages instead of empty data |
 | **Market regime detection** | Per-holding **Markov regime** badge (Bull / Sideways / Bear) fitted on ~10 years of daily returns, with a directional signal (−1 to +1), walk-forward Sharpe, and max drawdown. Expand any row for the full 3×3 state-transition matrix. The stats bar shows the portfolio-wide regime distribution and average signal, and you can filter holdings by regime. On a run, an **AI-vs-regime** badge flags whether the AI verdict agrees or conflicts with the detected regime |
 | **Sell-side signals** | Holdings are scored as trim candidates and surfaced as a "Sell Candidates" banner, combining PEG valuation, Markov regime, unrealized P&L, position weight, and the latest AI verdict |
 | **Analyze all stale** | One click to batch-queue AI analysis for every holding not reviewed in the last 7 days |
@@ -216,6 +217,8 @@ Go to **Settings → API Keys**.
 **Add a Finnhub key (strongly recommended — free):**
 
 Finnhub powers live portfolio prices, outcome tracking, earnings calendar, fundamentals, and company news. The free tier (60 req/min, no daily cap) covers all AgentFloor features. Get one at [finnhub.io](https://finnhub.io).
+
+AgentFloor checks Finnhub endpoint access in Settings and warns when a key lacks required plan rights, such as premium-only news.
 
 ### Step 2 — Set up your portfolio
 
