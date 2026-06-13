@@ -25,6 +25,7 @@ async def _fetch_closing_price(symbol: str, target_date: date, api_key: Optional
 
     if api_key:
         from datetime import datetime, timezone as tz
+        # Fetch a 7-day window ending at target_date to catch weekends/holidays; take the last close.
         to_ts = int(datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=tz.utc).timestamp())
         from_date = target_date - timedelta(days=7)
         from_ts = int(datetime(from_date.year, from_date.month, from_date.day, tzinfo=tz.utc).timestamp())
