@@ -45,14 +45,16 @@ async def _fetch_sector(ticker: str, finnhub_key: Optional[str]) -> str:
     if is_crypto(ticker):
         sector = await _crypto.fetch_category(ticker)
     elif finnhub_key:
-        try:
-            url = f"https://finnhub.io/api/v1/stock/profile2?symbol={ticker}&token={finnhub_key}"
-            async with httpx.AsyncClient(timeout=8) as client:
-                r = await client.get(url)
-                r.raise_for_status()
-                data = r.json()
-            sector = data.get("finnhubIndustry") or data.get("gics_sector") or "Unknown"
-        except Exception:
+        from app.services.finnhub_client import FinnhubCapability, fetch_json
+        raw, error = await fetch_json(
+            "/stock/profile2",
+            finnhub_key,
+            FinnhubCapability.STOCK_PROFILE,
+            params={"symbol": ticker},
+        )
+        if error is None and isinstance(raw, dict):
+            sector = raw.get("finnhubIndustry") or raw.get("gics_sector") or "Unknown"
+        else:
             sector = "Unknown"
     else:
         sector = "Unknown"

@@ -1,24 +1,22 @@
 from datetime import date, timedelta
 from typing import Optional
-import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app.models.api_key import ApiKey
 from app.models.outcome import RunOutcome
 from app.models.report import Report
 from app.models.run import Run
-from app.services.encryption import decrypt_key
+from app.services.finnhub_client import (
+    FinnhubCapability,
+    fetch_json,
+    get_finnhub_key,
+)
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
 import app.services.yfinance_service as _yf
 
 
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
-    result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
-    key_row = result.scalar_one_or_none()
-    if not key_row:
-        return None
-    return decrypt_key(key_row.encrypted_key)
+    return await get_finnhub_key(db)
 
 
 async def _fetch_closing_price(symbol: str, target_date: date, api_key: Optional[str]) -> Optional[float]:
@@ -31,16 +29,20 @@ async def _fetch_closing_price(symbol: str, target_date: date, api_key: Optional
         to_ts = int(datetime(target_date.year, target_date.month, target_date.day, 23, 59, 59, tzinfo=tz.utc).timestamp())
         from_date = target_date - timedelta(days=7)
         from_ts = int(datetime(from_date.year, from_date.month, from_date.day, tzinfo=tz.utc).timestamp())
-        url = f"https://finnhub.io/api/v1/stock/candle?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}&token={api_key}"
-        try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                r = await client.get(url)
-                r.raise_for_status()
-                data = r.json()
-            if data.get("s") == "ok" and data.get("c"):
-                return float(data["c"][-1])
-        except Exception:
-            pass
+        raw, error = await fetch_json(
+            "/stock/candle",
+            api_key,
+            FinnhubCapability.STOCK_CANDLE,
+            params={
+                "symbol": symbol,
+                "resolution": "D",
+                "from": from_ts,
+                "to": to_ts,
+            },
+            timeout=10,
+        )
+        if error is None and isinstance(raw, dict) and raw.get("s") == "ok" and raw.get("c"):
+            return float(raw["c"][-1])
 
     return await _yf.fetch_historical_close(symbol, target_date)
 

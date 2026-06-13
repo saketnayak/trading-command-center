@@ -1,6 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { getPortfolioNews } from "@/lib/api";
+import { finnhubUnavailableMessage } from "@/lib/finnhubMessages";
 
 interface Props {
   portfolioId: string;
@@ -23,25 +24,35 @@ function timeAgo(unixTs: number): string {
   return `${Math.floor(secs / 86400)}d ago`;
 }
 
-const NO_KEY_MSG = (
-  <div className="text-muted text-sm py-6 text-center">
-    Could not load news. Add a <a href="/settings" className="text-blue-400 hover:underline">Finnhub API key in Settings</a>.
-  </div>
-);
+function UnavailableMessage({ message }: { message: string }) {
+  return (
+    <div className="text-muted text-sm py-6 text-center space-y-1">
+      <p>{message}</p>
+      <p>
+        <a href="/settings" className="text-blue-400 hover:underline">Open Settings</a>
+      </p>
+    </div>
+  );
+}
 
 export function NewsPanel({ portfolioId, priceUnavailableReason }: Props) {
   const noKey = priceUnavailableReason === "no_finnhub_key";
 
-  const { data: articles = [], isLoading, isError } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["portfolio-news", portfolioId],
     queryFn: () => getPortfolioNews(portfolioId, 7),
     staleTime: 1000 * 60 * 15,
     enabled: !noKey,
   });
 
-  if (noKey) return NO_KEY_MSG;
+  const articles = data?.articles ?? [];
+  const unavailableReason = data?.news_unavailable_reason ?? (noKey ? "no_finnhub_key" : null);
+  const unavailableMessage = finnhubUnavailableMessage(unavailableReason, "news");
 
-  // Assign stable colors to each ticker
+  if (noKey && unavailableMessage) {
+    return <UnavailableMessage message={unavailableMessage} />;
+  }
+
   const tickerList = Array.from(new Set(articles.map((a) => a.ticker)));
   const colorMap: Record<string, string> = {};
   tickerList.forEach((t, i) => {
@@ -54,10 +65,12 @@ export function NewsPanel({ portfolioId, priceUnavailableReason }: Props) {
 
   if (isError) {
     return (
-      <div className="text-muted text-sm py-6 text-center">
-        Could not load news. Add a Finnhub API key in Settings.
-      </div>
+      <UnavailableMessage message="Could not load news. Check your Finnhub API key in Settings." />
     );
+  }
+
+  if (unavailableMessage && articles.length === 0) {
+    return <UnavailableMessage message={unavailableMessage} />;
   }
 
   if (articles.length === 0) {
@@ -70,6 +83,11 @@ export function NewsPanel({ portfolioId, priceUnavailableReason }: Props) {
 
   return (
     <div className="space-y-2">
+      {unavailableMessage && (
+        <div className="text-xs text-amber-400/90 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2">
+          {unavailableMessage}
+        </div>
+      )}
       <p className="text-xs text-muted">
         Latest news for your holdings (last 7 days), sorted by recency.
       </p>

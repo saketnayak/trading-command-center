@@ -13,22 +13,25 @@ from typing import Optional
 import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.api_key import ApiKey
 from app.models.user import User
-from app.services.encryption import decrypt_key
 from app.services.ticker_metadata_service import get_ticker_metadata, normalize_ticker
+from app.services.finnhub_client import (
+    FinnhubCapability,
+    FinnhubError,
+    fetch_json,
+    get_finnhub_key,
+    should_cache_error,
+)
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
 import app.services.yfinance_service as _yf
 
 router = APIRouter()
 
-_FH = "https://finnhub.io/api/v1"
 _CG = "https://api.coingecko.com/api/v3"
 
 _candle_cache: dict[str, tuple[dict, float]] = {}
@@ -36,6 +39,13 @@ _CANDLE_TTL  =  3_600   # 1 h
 
 
 # ── Pydantic schema ───────────────────────────────────────────────────────────
+
+class ProviderWarning(BaseModel):
+    provider: str = "finnhub"
+    capability: str
+    reason: str
+    message: str
+
 
 class TickerSnapshotResponse(BaseModel):
     ticker: str
@@ -54,14 +64,21 @@ class TickerSnapshotResponse(BaseModel):
     chart: dict = {}           # {t:[unix…], c:[close…], h:[high…], l:[low…]}
     news: list[dict] = []      # [{headline, url, datetime, source, image}]
     next_earnings: Optional[dict] = None   # {date, eps_estimate, eps_actual, hour}
+    provider_warnings: list[ProviderWarning] = []
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
-    result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
-    row = result.scalar_one_or_none()
-    return decrypt_key(row.encrypted_key) if row else None
+    return await get_finnhub_key(db)
+
+
+def _warning_from_error(error: FinnhubError) -> ProviderWarning:
+    return ProviderWarning(
+        capability=error.capability.value,
+        reason=error.reason.value,
+        message=error.message,
+    )
 
 
 def _strip_html(text: str) -> str:
@@ -118,93 +135,97 @@ async def _yf_candles(ticker: str, days: int = 90) -> dict:
         return {}
 
 
-async def _stock_candles(ticker: str, api_key: str, days: int = 90) -> dict:
+async def _stock_candles(ticker: str, api_key: str, days: int = 90) -> tuple[dict, FinnhubError | None]:
     now = time.time()
     key = f"{ticker}:{days}"
     if key in _candle_cache and now < _candle_cache[key][1]:
-        return _candle_cache[key][0]
-    try:
-        async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.get(
-                f"{_FH}/stock/candle",
-                params={"symbol": ticker, "resolution": "D",
-                        "from": int(now) - days * 86_400, "to": int(now),
-                        "token": api_key},
-            )
-            r.raise_for_status()
-            raw = r.json()
-        data = (
-            {"t": raw["t"], "c": raw["c"], "h": raw["h"], "l": raw["l"]}
-            if raw.get("s") == "ok" else {}
-        )
-    except Exception:
+        return _candle_cache[key][0], None
+    raw, error = await fetch_json(
+        "/stock/candle",
+        api_key,
+        FinnhubCapability.STOCK_CANDLE,
+        params={
+            "symbol": ticker,
+            "resolution": "D",
+            "from": int(now) - days * 86_400,
+            "to": int(now),
+        },
+        timeout=10,
+    )
+    if error:
         data = {}
+        if not should_cache_error(error):
+            return data, error
+        _candle_cache[key] = (data, now + 120)
+        return data, error
+    data = (
+        {"t": raw["t"], "c": raw["c"], "h": raw["h"], "l": raw["l"]}
+        if isinstance(raw, dict) and raw.get("s") == "ok" else {}
+    )
     _candle_cache[key] = (data, now + _CANDLE_TTL)
-    return data
+    return data, None
 
 
-async def _stock_fundamentals(ticker: str, api_key: str) -> dict:
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(
-                f"{_FH}/stock/metric",
-                params={"symbol": ticker, "metric": "all", "token": api_key},
-            )
-            r.raise_for_status()
-            m = r.json().get("metric", {})
+async def _stock_fundamentals(ticker: str, api_key: str) -> tuple[dict, FinnhubError | None]:
+    raw, error = await fetch_json(
+        "/stock/metric",
+        api_key,
+        FinnhubCapability.STOCK_METRIC,
+        params={"symbol": ticker, "metric": "all"},
+    )
+    if error:
+        return {}, error
+    m = raw.get("metric", {}) if isinstance(raw, dict) else {}
+    return {
+        "pe_ratio":      m.get("peAnnual") if m.get("peAnnual") is not None else m.get("peTTM"),
+        "beta":          m.get("beta"),
+        "week52_high":   m.get("52WeekHigh"),
+        "week52_low":    m.get("52WeekLow"),
+        "dividend_yield":m.get("dividendYieldIndicatedAnnual"),
+        "eps_ttm":       m.get("epsBasicExclExtraItemsTTM"),
+        "market_cap":    m.get("marketCapitalization"),  # millions
+    }, None
+
+
+async def _stock_news(ticker: str, api_key: str) -> tuple[list[dict], FinnhubError | None]:
+    today = date.today()
+    raw, error = await fetch_json(
+        "/company-news",
+        api_key,
+        FinnhubCapability.COMPANY_NEWS,
+        params={"symbol": ticker, "from": today - timedelta(days=14), "to": today},
+    )
+    if error:
+        return [], error
+    return [
+        {"headline": a["headline"], "url": a.get("url", ""),
+         "datetime": a.get("datetime"), "source": a.get("source", ""),
+         "image": a.get("image", "")}
+        for a in (raw if isinstance(raw, list) else [])
+        if a.get("headline")
+    ][:5], None
+
+
+async def _next_earnings(ticker: str, api_key: str) -> tuple[Optional[dict], FinnhubError | None]:
+    today = date.today()
+    raw, error = await fetch_json(
+        "/calendar/earnings",
+        api_key,
+        FinnhubCapability.EARNINGS_CALENDAR,
+        params={"from": today, "to": today + timedelta(days=90), "symbol": ticker},
+    )
+    if error:
+        return None, error
+    events = raw.get("earningsCalendar", []) if isinstance(raw, dict) else []
+    if events:
+        e = events[0]
         return {
-            "pe_ratio":      m.get("peAnnual") or m.get("peTTM"),
-            "beta":          m.get("beta"),
-            "week52_high":   m.get("52WeekHigh"),
-            "week52_low":    m.get("52WeekLow"),
-            "dividend_yield":m.get("dividendYieldIndicatedAnnual"),
-            "eps_ttm":       m.get("epsBasicExclExtraItemsTTM"),
-            "market_cap":    m.get("marketCapitalization"),  # millions
-        }
-    except Exception:
-        return {}
-
-
-async def _stock_news(ticker: str, api_key: str) -> list[dict]:
-    today = date.today()
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(
-                f"{_FH}/company-news",
-                params={"symbol": ticker, "from": today - timedelta(days=14),
-                        "to": today, "token": api_key},
-            )
-            r.raise_for_status()
-            raw = r.json()
-        return [
-            {"headline": a["headline"], "url": a.get("url", ""),
-             "datetime": a.get("datetime"), "source": a.get("source", ""),
-             "image": a.get("image", "")}
-            for a in (raw if isinstance(raw, list) else [])
-            if a.get("headline")
-        ][:5]
-    except Exception:
-        return []
-
-
-async def _next_earnings(ticker: str, api_key: str) -> Optional[dict]:
-    today = date.today()
-    try:
-        async with httpx.AsyncClient(timeout=8) as client:
-            r = await client.get(
-                f"{_FH}/calendar/earnings",
-                params={"from": today, "to": today + timedelta(days=90),
-                        "symbol": ticker, "token": api_key},
-            )
-            r.raise_for_status()
-            events = r.json().get("earningsCalendar", [])
-        if events:
-            e = events[0]
-            return {"date": e.get("date"), "eps_estimate": e.get("epsEstimate"),
-                    "eps_actual": e.get("epsActual"), "hour": e.get("hour")}
-    except Exception:
-        pass
-    return None
+            "date": e.get("date"),
+            "eps_estimate": e.get("epsEstimate"),
+            "eps_actual": e.get("epsActual"),
+            "hour": e.get("hour"),
+        }, None
+    return None, None
 
 
 # ── Crypto helpers ────────────────────────────────────────────────────────────
@@ -293,9 +314,18 @@ async def get_ticker_snapshot(
         _stock_news(ticker, api_key),
         _next_earnings(ticker, api_key),
     )
-    if len(chart.get("c", [])) < 2:
-        chart = await _yf_candles(ticker)
-    d1, d7, d30 = _pct_from_candles(chart)
+    chart_data, chart_error = chart
+    fundamentals_data, fundamentals_error = fundamentals
+    news_data, news_error = news
+    next_earnings_data, earnings_error = next_e
+    warnings = [
+        _warning_from_error(err)
+        for err in (chart_error, fundamentals_error, news_error, earnings_error)
+        if err is not None
+    ]
+    if len(chart_data.get("c", [])) < 2:
+        chart_data = await _yf_candles(ticker)
+    d1, d7, d30 = _pct_from_candles(chart_data)
     return TickerSnapshotResponse(
         ticker=ticker, asset_type="stock",
         name=metadata.company_name or metadata.display_name,
@@ -305,6 +335,7 @@ async def get_ticker_snapshot(
         exchange=metadata.exchange,
         country=metadata.country,
         change_1d_pct=d1, change_1w_pct=d7, change_1m_pct=d30,
-        fundamentals=fundamentals, chart=chart,
-        news=news, next_earnings=next_e,
+        fundamentals=fundamentals_data, chart=chart_data,
+        news=news_data, next_earnings=next_earnings_data,
+        provider_warnings=warnings,
     )

@@ -141,7 +141,7 @@ async def test_ticker_snapshot_uses_configured_finnhub_key_even_if_flagged_inval
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         with patch(
             "app.routers.ticker._stock_candles",
-            new=AsyncMock(return_value=fake_chart),
+            new=AsyncMock(return_value=(fake_chart, None)),
         ) as mock_stock_candles:
             r = await client.get(
                 "/ticker/MSFT/snapshot",

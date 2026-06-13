@@ -5,32 +5,41 @@ and cached ticker metadata.
 """
 import asyncio
 import time
+import weakref
 from typing import Optional
 
 import httpx
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_user
-from app.models.api_key import ApiKey
 from app.models.ticker_metadata import TickerMetadata
 from app.models.user import User
-from app.services.encryption import decrypt_key
+from app.services.finnhub_client import (
+    FinnhubCapability,
+    fetch_json,
+    get_finnhub_key,
+)
 from app.services.ticker_metadata_service import get_many_ticker_metadata
 import app.services.yfinance_service as _yf
 
 router = APIRouter()
 
-_FH = "https://finnhub.io/api/v1"
 _MARKET_TTL = 1800   # 30 min — quote cache
 
 # Limit concurrent outgoing Finnhub requests to avoid bursting the free-tier
 # rate limit (60 req/min). Semaphore(10) keeps peak concurrency well below
 # that while still parallelising effectively.
-_FINNHUB_SEM = asyncio.Semaphore(10)
+_finnhub_semaphores: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _get_finnhub_semaphore() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    if loop not in _finnhub_semaphores:
+        _finnhub_semaphores[loop] = asyncio.Semaphore(10)
+    return _finnhub_semaphores[loop]
 
 # Curated universe of ~55 well-known US stocks used to compute top movers.
 MARKET_UNIVERSE = [
@@ -103,9 +112,7 @@ class SectorData(BaseModel):
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
-    result = await db.execute(select(ApiKey).where(ApiKey.provider == "finnhub"))
-    row = result.scalar_one_or_none()
-    return decrypt_key(row.encrypted_key) if row else None
+    return await get_finnhub_key(db)
 
 
 async def _fetch_quote(
@@ -120,11 +127,15 @@ async def _fetch_quote(
             return data
     data = None
     if api_key:
-        async with _FINNHUB_SEM:
-            try:
-                r = await client.get(f"{_FH}/quote", params={"symbol": ticker, "token": api_key})
-                r.raise_for_status()
-                raw = r.json()
+        async with _get_finnhub_semaphore():
+            raw, error = await fetch_json(
+                "/quote",
+                api_key,
+                FinnhubCapability.QUOTE,
+                params={"symbol": ticker},
+                client=client,
+            )
+            if error is None and isinstance(raw, dict):
                 c = raw.get("c") or 0
                 pc = raw.get("pc") or 0
                 price = float(c) if c else (float(pc) if pc else None)
@@ -137,8 +148,6 @@ async def _fetch_quote(
                         "low": raw.get("l"),
                         "prev_close": float(pc) if pc else None,
                     }
-            except Exception:
-                data = None
     if data is None:
         data = await _yf.fetch_quote(ticker)
     if data is None:

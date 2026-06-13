@@ -1,6 +1,7 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { getPortfolioEarnings } from "@/lib/api";
+import { finnhubUnavailableMessage } from "@/lib/finnhubMessages";
 import type { PortfolioHolding } from "@/lib/types";
 
 interface Props {
@@ -27,23 +28,34 @@ function fmtNum(n: number | null, prefix = ""): string {
   return `${prefix}${n.toFixed(2)}`;
 }
 
-const NO_KEY_MSG = (
-  <div className="text-muted text-sm py-6 text-center">
-    Could not load earnings data. Add a <a href="/settings" className="text-blue-400 hover:underline">Finnhub API key in Settings</a>.
-  </div>
-);
+function UnavailableMessage({ message }: { message: string }) {
+  return (
+    <div className="text-muted text-sm py-6 text-center space-y-1">
+      <p>{message}</p>
+      <p>
+        <a href="/settings" className="text-blue-400 hover:underline">Open Settings</a>
+      </p>
+    </div>
+  );
+}
 
 export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }: Props) {
   const noKey = priceUnavailableReason === "no_finnhub_key";
 
-  const { data: events = [], isLoading, isError } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: ["portfolio-earnings", portfolioId],
     queryFn: () => getPortfolioEarnings(portfolioId, 60),
     staleTime: 1000 * 60 * 30,
     enabled: !noKey,
   });
 
-  if (noKey) return NO_KEY_MSG;
+  const events = data?.events ?? [];
+  const unavailableReason = data?.earnings_unavailable_reason ?? (noKey ? "no_finnhub_key" : null);
+  const unavailableMessage = finnhubUnavailableMessage(unavailableReason, "earnings");
+
+  if (noKey && unavailableMessage) {
+    return <UnavailableMessage message={unavailableMessage} />;
+  }
 
   const staleSet = new Set(
     holdings
@@ -57,10 +69,12 @@ export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }:
 
   if (isError) {
     return (
-      <div className="text-muted text-sm py-6 text-center">
-        Could not load earnings data. Add a Finnhub API key in Settings.
-      </div>
+      <UnavailableMessage message="Could not load earnings data. Check your Finnhub API key in Settings." />
     );
+  }
+
+  if (unavailableMessage && events.length === 0) {
+    return <UnavailableMessage message={unavailableMessage} />;
   }
 
   if (events.length === 0) {
@@ -73,6 +87,11 @@ export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }:
 
   return (
     <div className="space-y-2">
+      {unavailableMessage && (
+        <div className="text-xs text-amber-400/90 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2">
+          {unavailableMessage}
+        </div>
+      )}
       <p className="text-xs text-muted">
         Upcoming earnings dates for your holdings (next 60 days). Dates flagged{" "}
         <span className="text-yellow-400">yellow</span> have stale or missing analysis.
@@ -94,50 +113,32 @@ export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }:
             {events.map((e, i) => {
               const days = daysUntil(e.date);
               const isStale = staleSet.has(e.ticker);
-              const isPast = days < 0;
               return (
                 <tr
                   key={`${e.ticker}-${e.date}-${i}`}
-                  className={`border-t border-border ${isPast ? "opacity-50" : "hover:bg-input/30"}`}
+                  className={`border-t border-border ${isStale ? "bg-yellow-900/10" : ""}`}
                 >
-                  <td className={`px-4 py-2 font-mono font-semibold ${isStale && !isPast ? "text-yellow-400" : "text-purple-400"}`}>
-                    {e.ticker}
-                    {isStale && !isPast && (
-                      <span className="ml-1.5 text-[10px] bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-sm px-1">
-                        STALE
-                      </span>
-                    )}
+                  <td className="px-4 py-2.5 font-mono text-xs">{e.ticker}</td>
+                  <td className={`px-4 py-2.5 text-xs ${isStale ? "text-yellow-400" : ""}`}>{e.date}</td>
+                  <td className={`px-4 py-2.5 text-right text-xs ${days <= 7 ? "text-orange-400" : ""}`}>
+                    {days}
                   </td>
-                  <td className="px-4 py-2 text-fg-secondary">{e.date}</td>
-                  <td className="px-4 py-2 text-right tabular-nums">
-                    <span
-                      className={
-                        isPast
-                          ? "text-muted"
-                          : days <= 7
-                          ? "text-orange-400 font-semibold"
-                          : days <= 14
-                          ? "text-yellow-400"
-                          : "text-fg-secondary"
-                      }
-                    >
-                      {isPast ? `${Math.abs(days)}d ago` : `${days}d`}
-                    </span>
+                  <td className="hidden lg:table-cell px-4 py-2.5 text-right text-xs font-mono">
+                    {fmtNum(e.eps_estimate)}
                   </td>
-                  <td className="hidden lg:table-cell px-4 py-2 text-right tabular-nums text-fg-secondary">{fmtNum(e.eps_estimate, "$")}</td>
-                  <td className="hidden lg:table-cell px-4 py-2 text-right tabular-nums">
-                    {e.eps_actual != null ? (
-                      <span className={e.eps_actual >= (e.eps_estimate ?? 0) ? "text-green-400" : "text-red-400"}>
-                        {fmtNum(e.eps_actual, "$")}
-                      </span>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
+                  <td className={`hidden lg:table-cell px-4 py-2.5 text-right text-xs font-mono ${
+                    e.eps_actual != null && e.eps_estimate != null
+                      ? e.eps_actual >= e.eps_estimate ? "text-green-400" : "text-red-400"
+                      : ""
+                  }`}>
+                    {fmtNum(e.eps_actual)}
                   </td>
-                  <td className="hidden lg:table-cell px-4 py-2 text-right tabular-nums text-fg-secondary">
+                  <td className="hidden lg:table-cell px-4 py-2.5 text-right text-xs font-mono">
                     {e.revenue_estimate != null ? (e.revenue_estimate / 1e9).toFixed(2) : "—"}
                   </td>
-                  <td className="hidden lg:table-cell px-4 py-2 text-right text-muted text-xs">{e.quarter_ending ?? "—"}</td>
+                  <td className="hidden lg:table-cell px-4 py-2.5 text-right text-xs text-muted">
+                    {e.quarter_ending ?? "—"}
+                  </td>
                 </tr>
               );
             })}

@@ -63,7 +63,7 @@ async def test_refresh_stock_upserts_row():
     }
     with patch(
         "app.services.ticker_metadata_service._fetch_stock_profile",
-        new=AsyncMock(return_value=(mapped, raw)),
+        new=AsyncMock(return_value=(mapped, raw, None)),
     ):
         async with AsyncSessionLocal() as db:
             row = await ticker_metadata_service.refresh_ticker_metadata(

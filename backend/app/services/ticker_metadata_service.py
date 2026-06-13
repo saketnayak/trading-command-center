@@ -6,17 +6,20 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.ticker_metadata import TickerMetadata
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
+from app.services.finnhub_client import (
+    FinnhubCapability,
+    FinnhubError,
+    fetch_json,
+)
 
 logger = logging.getLogger(__name__)
 
-_FH = "https://finnhub.io/api/v1"
 _METADATA_TTL = timedelta(days=7)
 _FAILURE_TTL = timedelta(minutes=15)
 def normalize_ticker(ticker: str) -> str:
@@ -73,16 +76,17 @@ def _market_cap_from_profile(raw: dict) -> float | None:
         return None
 
 
-async def _fetch_stock_profile(ticker: str, api_key: str) -> tuple[dict[str, Any], dict]:
-    async with httpx.AsyncClient(timeout=8) as client:
-        r = await client.get(
-            f"{_FH}/stock/profile2",
-            params={"symbol": ticker, "token": api_key},
-        )
-        r.raise_for_status()
-        raw = r.json()
+async def _fetch_stock_profile(ticker: str, api_key: str) -> tuple[dict[str, Any], dict, FinnhubError | None]:
+    raw, error = await fetch_json(
+        "/stock/profile2",
+        api_key,
+        FinnhubCapability.STOCK_PROFILE,
+        params={"symbol": ticker},
+    )
+    if error:
+        return {}, {}, error
     if not raw or not raw.get("name"):
-        return {}, raw
+        return {}, raw if isinstance(raw, dict) else {}, None
     mapped = {
         "asset_type": "stock",
         "company_name": raw.get("name"),
@@ -98,7 +102,7 @@ async def _fetch_stock_profile(ticker: str, api_key: str) -> tuple[dict[str, Any
         "ipo_date": _parse_ipo_date(raw.get("ipo")),
         "source": "finnhub",
     }
-    return mapped, raw
+    return mapped, raw, None
 
 
 async def _fetch_crypto_profile(ticker: str) -> tuple[dict[str, Any], dict]:
@@ -135,16 +139,23 @@ async def refresh_ticker_metadata(
 
     mapped: dict[str, Any] = {}
     payload: dict = {}
+    profile_error: FinnhubError | None = None
     try:
         if is_crypto(normalized):
             mapped, payload = await _fetch_crypto_profile(normalized)
         elif finnhub_key:
-            mapped, payload = await _fetch_stock_profile(normalized, finnhub_key)
+            mapped, payload, profile_error = await _fetch_stock_profile(normalized, finnhub_key)
         else:
             mapped = {"asset_type": "stock", "source": "none"}
     except Exception as exc:
         logger.warning("ticker metadata refresh failed for %s: %s", normalized, exc)
         mapped = {}
+    if profile_error:
+        logger.info(
+            "ticker metadata entitlement failure for %s: %s",
+            normalized,
+            profile_error.reason.value,
+        )
 
     success = bool(mapped.get("company_name") or mapped.get("display_name"))
     ttl = _METADATA_TTL if success else _FAILURE_TTL

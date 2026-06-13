@@ -249,12 +249,14 @@ export default function PortfolioPage() {
 
   // Fetch fundamentals when holdings tab is active.
   // Crypto uses CoinGecko (no key needed); stocks need a Finnhub key.
-  const { data: fundamentals } = useQuery({
+  const { data: fundamentalsResult } = useQuery({
     queryKey: ["portfolio-fundamentals", selectedId],
     queryFn: () => getPortfolioFundamentals(selectedId!),
     enabled: selectedId != null && tab === "holdings" && (allCrypto || current?.price_unavailable_reason !== "no_finnhub_key"),
     staleTime: 1000 * 60 * 30,
   });
+  const fundamentals = fundamentalsResult?.data;
+  const fundamentalsUnavailableReason = fundamentalsResult?.fundamentals_unavailable_reason ?? null;
 
   const { data: regime = {} } = useQuery<Record<string, RegimeData>>({
     queryKey: ["portfolio-regime", selectedId],
@@ -489,6 +491,7 @@ export default function PortfolioPage() {
                   portfolioId={selectedId}
                   holdings={current.holdings}
                   priceUnavailableReason={current.price_unavailable_reason}
+                  fundamentalsUnavailableReason={fundamentalsUnavailableReason}
                   displayCurrency={current.display_currency ?? "USD"}
                   fundamentals={fundamentals}
                   regime={markovEnabled ? regime : undefined}
