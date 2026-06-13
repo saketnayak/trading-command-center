@@ -527,7 +527,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
           for real-time data.
         </div>
       )}
-      {fundamentalsMessage && !hasFundamentals && (
+      {fundamentalsMessage && (
         <div className="text-xs text-amber-400/90 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2">
           {fundamentalsMessage}
         </div>
