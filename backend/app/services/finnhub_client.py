@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass
@@ -302,25 +303,32 @@ async def probe_capabilities(api_key: str) -> dict[str, dict[str, Any]]:
         ),
     ]
 
-    results: dict[str, dict[str, Any]] = {}
+    async def _probe(
+        capability: FinnhubCapability,
+        path: str,
+        params: dict[str, Any],
+        client: httpx.AsyncClient,
+    ) -> tuple[str, dict[str, Any]]:
+        _, error = await fetch_json(
+            path,
+            api_key,
+            capability,
+            params=params,
+            client=client,
+        )
+        if error is None:
+            return capability.value, FinnhubCapabilityStatus(ok=True).to_dict()
+        return capability.value, FinnhubCapabilityStatus(
+            ok=False,
+            reason=error.reason.value,
+            message=error.message,
+        ).to_dict()
+
     async with httpx.AsyncClient(timeout=5) as client:
-        for capability, path, params in probes:
-            _, error = await fetch_json(
-                path,
-                api_key,
-                capability,
-                params=params,
-                client=client,
-            )
-            if error is None:
-                results[capability.value] = FinnhubCapabilityStatus(ok=True).to_dict()
-            else:
-                results[capability.value] = FinnhubCapabilityStatus(
-                    ok=False,
-                    reason=error.reason.value,
-                    message=error.message,
-                ).to_dict()
-    return results
+        completed = await asyncio.gather(
+            *[_probe(capability, path, params, client) for capability, path, params in probes]
+        )
+    return dict(completed)
 
 
 def capabilities_summary(capabilities: dict[str, dict[str, Any]] | None) -> tuple[str | None, str | None]:

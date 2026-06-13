@@ -5,6 +5,7 @@ and cached ticker metadata.
 """
 import asyncio
 import time
+import weakref
 from typing import Optional
 
 import httpx
@@ -31,7 +32,14 @@ _MARKET_TTL = 1800   # 30 min — quote cache
 # Limit concurrent outgoing Finnhub requests to avoid bursting the free-tier
 # rate limit (60 req/min). Semaphore(10) keeps peak concurrency well below
 # that while still parallelising effectively.
-_FINNHUB_SEM = asyncio.Semaphore(10)
+_finnhub_semaphores: weakref.WeakKeyDictionary = weakref.WeakKeyDictionary()
+
+
+def _get_finnhub_semaphore() -> asyncio.Semaphore:
+    loop = asyncio.get_running_loop()
+    if loop not in _finnhub_semaphores:
+        _finnhub_semaphores[loop] = asyncio.Semaphore(10)
+    return _finnhub_semaphores[loop]
 
 # Curated universe of ~55 well-known US stocks used to compute top movers.
 MARKET_UNIVERSE = [
@@ -119,7 +127,7 @@ async def _fetch_quote(
             return data
     data = None
     if api_key:
-        async with _FINNHUB_SEM:
+        async with _get_finnhub_semaphore():
             raw, error = await fetch_json(
                 "/quote",
                 api_key,
