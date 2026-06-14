@@ -1249,7 +1249,9 @@ async def _fetch_fundamentals(ticker: str, api_key: Optional[str]) -> tuple[dict
         "eps_ttm": m.get("epsBasicExclExtraItemsTTM"),
         "market_cap": m.get("marketCapitalization"),
         "eps_growth_3y": eps_growth_3y,
-        "peg_ratio": compute_peg(pe, eps_growth_3y),
+        "peg_ratio": compute_peg(pe, eps_growth_3y)
+        if pe is not None and eps_growth_3y not in (None, 0)
+        else None,
     }
     _fundamentals_cache[ticker] = (data, now + _FUNDAMENTALS_TTL, None)
     return data, None
@@ -1807,6 +1809,10 @@ async def get_portfolio_regime(
 
 # ── Trim Signals ──────────────────────────────────────────────────────────────
 
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
 @router.get("/portfolio/{portfolio_id}/trim-signals", response_model=TrimSignalsResponse)
 async def get_portfolio_trim_signals(
     portfolio_id: UUID,
@@ -1815,7 +1821,7 @@ async def get_portfolio_trim_signals(
 ):
     settings = await get_app_settings(db)
     if not settings["enable_markov_regime"]:
-        return TrimSignalsResponse(entries=[], computed_at=datetime.utcnow().isoformat() + "Z")
+        return TrimSignalsResponse(entries=[], computed_at=_utc_now_iso())
 
     p_result = await db.execute(
         select(Portfolio).where(Portfolio.id == portfolio_id, Portfolio.user_id == user.id)
@@ -1832,7 +1838,7 @@ async def get_portfolio_trim_signals(
     )
     snapshot = snap_result.scalar_one_or_none()
     if not snapshot or not snapshot.holdings:
-        return TrimSignalsResponse(entries=[], computed_at=datetime.utcnow().isoformat() + "Z")
+        return TrimSignalsResponse(entries=[], computed_at=_utc_now_iso())
 
     tickers = [h.ticker for h in snapshot.holdings]
 
@@ -1919,5 +1925,5 @@ async def get_portfolio_trim_signals(
     entries.sort(key=lambda e: e.score, reverse=True)
     return TrimSignalsResponse(
         entries=entries,
-        computed_at=datetime.utcnow().isoformat() + "Z",
+        computed_at=_utc_now_iso(),
     )

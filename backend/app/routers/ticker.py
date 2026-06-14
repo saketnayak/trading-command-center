@@ -177,7 +177,7 @@ async def _stock_fundamentals(ticker: str, api_key: str) -> tuple[dict, FinnhubE
         return {}, error
     m = raw.get("metric", {}) if isinstance(raw, dict) else {}
     return {
-        "pe_ratio":      m.get("peAnnual") or m.get("peTTM"),
+        "pe_ratio":      m.get("peAnnual") if m.get("peAnnual") is not None else m.get("peTTM"),
         "beta":          m.get("beta"),
         "week52_high":   m.get("52WeekHigh"),
         "week52_low":    m.get("52WeekLow"),
