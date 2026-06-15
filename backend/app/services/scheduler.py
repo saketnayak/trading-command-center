@@ -1,15 +1,28 @@
 """APScheduler wrapper — fires scheduled watchlist runs and daily portfolio insights."""
+import logging
 import zoneinfo
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
+
 from apscheduler import AsyncScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
+
 from app.database import AsyncSessionLocal
+from app.models.run import Run, RunStatus
 from app.models.watchlist import WatchlistItem, Watchlist
-from app.models.run import Run
 from app.services.job_manager import start_run
-from app.utils.asset_type import is_crypto
+from app.utils.cron_validation import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    normalize_schedule_cron,
+    parse_cron_trigger,
+    validate_schedule_timezone,
+)
+
+logger = logging.getLogger(__name__)
+
+_scheduler: AsyncScheduler | None = None
 
 
 def _is_nine_am_in_timezone(tz_name: str) -> bool:
@@ -20,54 +33,106 @@ def _is_nine_am_in_timezone(tz_name: str) -> bool:
         return datetime.now(timezone.utc).hour == 9
 
 
-def _crypto_safe_analysts(ticker: str, analysts: list[str]) -> list[str]:
-    """Remove fundamentals analyst for crypto tickers — it has no meaningful data."""
-    if is_crypto(ticker):
-        return [a for a in analysts if a != "fundamentals"]
-    return analysts
-
-_scheduler: AsyncScheduler | None = None
+@dataclass(frozen=True)
+class _WatchlistScheduleSpec:
+    item_id: str
+    cron: str
+    timezone: str
 
 
 async def _fire_watchlist_item(item_id: str) -> None:
-    async with AsyncSessionLocal() as db:
-        item = await db.get(WatchlistItem, item_id)
-        if not item or not item.enabled:
-            return
-        wl = await db.get(Watchlist, item.watchlist_id)
-        run = Run(
-            created_by=wl.created_by,
-            ticker=item.ticker,
-            analysis_date=date.today(),
-            llm_provider=item.llm_provider,
-            llm_model=item.llm_model,
-            depth=item.depth,
-            analysts=_crypto_safe_analysts(item.ticker, item.analysts or ["market", "social", "news", "fundamentals"]),
-            response_language=item.response_language,
-            label=f"Scheduled: {item.ticker}",
-        )
-        db.add(run)
-        item.last_run_at = datetime.now(timezone.utc)
-        item.last_run_id = run.id
-        await db.commit()
-        await db.refresh(run)
-        await start_run(str(run.id), {
-            "ticker": run.ticker,
-            "analysis_date": str(run.analysis_date),
-            "llm_provider": run.llm_provider,
-            "llm_model": run.llm_model,
-            "depth": run.depth,
-            "analysts": run.analysts,
-            "response_language": run.response_language,
-        })
+    try:
+        async with AsyncSessionLocal() as db:
+            item = await db.get(WatchlistItem, item_id)
+            if not item or not item.enabled or not item.schedule_cron:
+                return
+
+            if item.last_run_id:
+                last_run = await db.get(Run, item.last_run_id)
+                if last_run and last_run.status in (RunStatus.pending, RunStatus.running):
+                    logger.info(
+                        "Skipping scheduled run for %s — prior run %s still %s",
+                        item.ticker,
+                        item.last_run_id,
+                        last_run.status.value,
+                    )
+                    return
+
+            wl = await db.get(Watchlist, item.watchlist_id)
+            if not wl:
+                logger.warning("Watchlist missing for scheduled item %s", item_id)
+                return
+
+            from app.utils.asset_type import is_crypto
+            from app.utils.tradingagents_analysts import normalize_analysts
+
+            analysts = normalize_analysts(
+                item.analysts or ["market", "social", "news", "fundamentals"],
+                exclude_fundamentals=is_crypto(item.ticker),
+            )
+            run = Run(
+                created_by=wl.created_by,
+                ticker=item.ticker,
+                analysis_date=date.today(),
+                llm_provider=item.llm_provider,
+                llm_model=item.llm_model,
+                depth=item.depth,
+                analysts=analysts,
+                response_language=item.response_language,
+                label=f"Scheduled: {item.ticker}",
+            )
+            db.add(run)
+            item.last_run_at = datetime.now(timezone.utc)
+            item.last_run_id = run.id
+            await db.commit()
+            await db.refresh(run)
+            await start_run(str(run.id), {
+                "ticker": run.ticker,
+                "analysis_date": str(run.analysis_date),
+                "llm_provider": run.llm_provider,
+                "llm_model": run.llm_model,
+                "depth": run.depth,
+                "analysts": run.analysts,
+                "response_language": run.response_language,
+            })
+    except Exception:
+        logger.exception("Scheduled watchlist run failed for item %s", item_id)
+
+
+def _build_watchlist_schedule_specs(items: list[WatchlistItem]) -> list[_WatchlistScheduleSpec]:
+    specs: list[_WatchlistScheduleSpec] = []
+    for item in items:
+        cron = normalize_schedule_cron(item.schedule_cron)
+        if not cron:
+            continue
+        tz_name = validate_schedule_timezone(item.schedule_timezone or DEFAULT_SCHEDULE_TIMEZONE)
+        try:
+            parse_cron_trigger(cron, tz_name)
+        except ValueError as exc:
+            logger.warning(
+                "Skipping watchlist item %s (%s): %s",
+                item.id,
+                item.ticker,
+                exc,
+            )
+            continue
+        specs.append(_WatchlistScheduleSpec(str(item.id), cron, tz_name))
+    return specs
+
+
+async def _sync_next_run_times(db, scheduler: AsyncScheduler) -> None:
+    fire_times = {
+        schedule.id[3:]: schedule.next_fire_time
+        for schedule in await scheduler.get_schedules()
+        if schedule.id.startswith("wl_")
+    }
+    all_items = (await db.execute(select(WatchlistItem))).scalars().all()
+    for item in all_items:
+        item.next_run_at = fire_times.get(str(item.id))
 
 
 async def _reload_jobs(scheduler: AsyncScheduler) -> None:
-    """Remove all watchlist jobs and re-add from DB."""
-    for job in await scheduler.get_schedules():
-        if job.id.startswith("wl_"):
-            await scheduler.remove_schedule(job.id)
-
+    """Remove all watchlist jobs and re-add from DB. Invalid rows are skipped without wiping valid schedules."""
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(WatchlistItem)
@@ -75,14 +140,25 @@ async def _reload_jobs(scheduler: AsyncScheduler) -> None:
             .where(WatchlistItem.enabled == True, WatchlistItem.schedule_cron.isnot(None))  # noqa: E712
         )
         items = result.scalars().all()
-        for item in items:
-            await scheduler.add_schedule(
-                _fire_watchlist_item,
-                CronTrigger.from_crontab(item.schedule_cron),
-                id=f"wl_{item.id}",
-                args=[str(item.id)],
-                conflict_policy="replace",
-            )
+        specs = _build_watchlist_schedule_specs(items)
+
+    for job in await scheduler.get_schedules():
+        if job.id.startswith("wl_"):
+            await scheduler.remove_schedule(job.id)
+
+    for spec in specs:
+        trigger = parse_cron_trigger(spec.cron, spec.timezone)
+        await scheduler.add_schedule(
+            _fire_watchlist_item,
+            trigger,
+            id=f"wl_{spec.item_id}",
+            args=[spec.item_id],
+            conflict_policy="replace",
+        )
+
+    async with AsyncSessionLocal() as db:
+        await _sync_next_run_times(db, scheduler)
+        await db.commit()
 
 
 async def _fire_daily_portfolio_insights() -> None:
@@ -212,3 +288,10 @@ async def stop_scheduler() -> None:
 async def reload_jobs() -> None:
     if _scheduler:
         await _reload_jobs(_scheduler)
+
+
+def get_scheduler_state() -> dict:
+    """Return scheduler health for diagnostics endpoints."""
+    if not _scheduler:
+        return {"running": False, "jobs": []}
+    return {"running": True, "state": str(_scheduler.state)}

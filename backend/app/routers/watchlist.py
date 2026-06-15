@@ -1,7 +1,7 @@
 from uuid import UUID
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -10,6 +10,12 @@ from app.models.watchlist import Watchlist, WatchlistItem
 from app.models.user import User
 from app.dependencies import get_current_user
 from app.utils.response_language import DEFAULT_RESPONSE_LANGUAGE, normalize_response_language
+from app.utils.cron_validation import (
+    DEFAULT_SCHEDULE_TIMEZONE,
+    normalize_schedule_cron,
+    parse_cron_trigger,
+    validate_schedule_timezone,
+)
 
 router = APIRouter()
 
@@ -25,15 +31,33 @@ class WatchlistItemCreate(BaseModel):
     analysts: list[str] = _DEFAULT_ANALYSTS
     response_language: str = DEFAULT_RESPONSE_LANGUAGE
     schedule_cron: str | None = None
+    schedule_timezone: str = DEFAULT_SCHEDULE_TIMEZONE
 
     @field_validator("response_language")
     @classmethod
     def validate_response_language(cls, v: str | None) -> str:
         return normalize_response_language(v)
 
+    @field_validator("schedule_cron")
+    @classmethod
+    def normalize_cron(cls, v: str | None) -> str | None:
+        return normalize_schedule_cron(v)
+
+    @field_validator("schedule_timezone")
+    @classmethod
+    def validate_timezone(cls, v: str) -> str:
+        return validate_schedule_timezone(v)
+
+    @model_validator(mode="after")
+    def validate_schedule(self) -> "WatchlistItemCreate":
+        if self.schedule_cron:
+            parse_cron_trigger(self.schedule_cron, self.schedule_timezone)
+        return self
+
 
 class WatchlistItemUpdate(BaseModel):
     schedule_cron: str | None = None
+    schedule_timezone: str | None = None
     enabled: bool | None = None
     llm_provider: str | None = None
     llm_model: str | None = None
@@ -48,6 +72,18 @@ class WatchlistItemUpdate(BaseModel):
             return None
         return normalize_response_language(v)
 
+    @field_validator("schedule_cron")
+    @classmethod
+    def normalize_cron(cls, v: str | None) -> str | None:
+        return normalize_schedule_cron(v)
+
+    @field_validator("schedule_timezone")
+    @classmethod
+    def validate_timezone(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return validate_schedule_timezone(v)
+
 
 class WatchlistItemResponse(BaseModel):
     id: UUID
@@ -59,6 +95,7 @@ class WatchlistItemResponse(BaseModel):
     analysts: list[str]
     response_language: str
     schedule_cron: str | None
+    schedule_timezone: str
     enabled: bool
     last_run_at: datetime | None
     last_run_id: UUID | None
@@ -128,6 +165,7 @@ async def add_watchlist_item(
         analysts=analysts,
         response_language=req.response_language,
         schedule_cron=req.schedule_cron,
+        schedule_timezone=req.schedule_timezone,
     )
     db.add(item)
     await db.commit()
@@ -150,7 +188,16 @@ async def update_watchlist_item(
     wl = await db.get(Watchlist, item.watchlist_id)
     if str(wl.created_by) != str(user.id):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Not authorized")
-    for field, value in req.model_dump(exclude_none=True).items():
+    updates = req.model_dump(exclude_unset=True)
+    if "schedule_cron" in updates or "schedule_timezone" in updates:
+        cron = updates.get("schedule_cron", item.schedule_cron)
+        tz = updates.get("schedule_timezone", item.schedule_timezone or DEFAULT_SCHEDULE_TIMEZONE)
+        if cron:
+            try:
+                parse_cron_trigger(cron, tz)
+            except ValueError as exc:
+                raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc)) from exc
+    for field, value in updates.items():
         setattr(item, field, value)
     await db.commit()
     await db.refresh(item)
@@ -180,15 +227,19 @@ async def remove_watchlist_item(
 @router.get("/watchlist/scheduler/jobs")
 async def get_scheduler_jobs(_user: User = Depends(get_current_user)):
     """Return currently registered APScheduler job IDs and next run times."""
-    from app.services.scheduler import _scheduler
-    if not _scheduler:
+    from app.services.scheduler import _scheduler, get_scheduler_state
+    state = get_scheduler_state()
+    if not state["running"] or not _scheduler:
         return {"running": False, "jobs": []}
     schedules = await _scheduler.get_schedules()
     jobs = [
-        {"id": s.id, "next_fire_time": str(s.next_fire_time) if hasattr(s, "next_fire_time") else None}
+        {
+            "id": s.id,
+            "next_fire_time": s.next_fire_time.isoformat() if s.next_fire_time else None,
+        }
         for s in schedules if s.id.startswith("wl_")
     ]
-    return {"running": True, "state": str(_scheduler._state), "jobs": jobs}
+    return {"running": True, "state": state["state"], "jobs": jobs}
 
 
 @router.post("/watchlist/items/{item_id}/run", status_code=status.HTTP_201_CREATED)
