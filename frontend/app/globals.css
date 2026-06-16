@@ -253,3 +253,22 @@
 .upload-drawer-csv-importer .CSVImporter_ProgressDisplay__progressBarIndicator {
   background: rgb(168 85 247);
 }
+
+/* react-js-cron on watchlist page */
+.watchlist-cron-builder .react-js-cron {
+  color: var(--af-fg);
+}
+
+.watchlist-cron-builder .react-js-cron-field {
+  margin-bottom: 0.5rem;
+}
+
+.watchlist-cron-builder .react-js-cron-select .ant-select-selector {
+  background: var(--af-page) !important;
+  border-color: var(--af-input-border) !important;
+  color: var(--af-fg) !important;
+}
+
+.watchlist-cron-builder .react-js-cron-select .ant-select-selection-item {
+  color: var(--af-fg) !important;
+}

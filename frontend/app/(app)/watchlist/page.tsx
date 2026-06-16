@@ -10,7 +10,6 @@ import {
   updateWatchlistItem,
   triggerWatchlistRun,
   getProviderModels,
-  getSchedulerJobs,
 } from "@/lib/api";
 import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
@@ -19,6 +18,11 @@ import { IconButton } from "@/components/ui/IconButton";
 import { AnalystIcons, LanguageFlag } from "@/components/runs/RunContextIcons";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
+import {
+  DEFAULT_WATCHLIST_CRON,
+  WatchlistScheduleBuilder,
+} from "@/components/watchlist/WatchlistScheduleBuilder";
+import { CronLabel } from "@/components/watchlist/CronLabel";
 
 import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
 
@@ -34,214 +38,6 @@ const PLACEHOLDERS: Record<string, string> = {
   vllm: "mistralai/Mistral-7B-Instruct-v0.3",
 };
 
-const DAYS = [
-  { label: "Mon", value: 1 },
-  { label: "Tue", value: 2 },
-  { label: "Wed", value: 3 },
-  { label: "Thu", value: 4 },
-  { label: "Fri", value: 5 },
-  { label: "Sat", value: 6 },
-  { label: "Sun", value: 0 },
-];
-
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-const MINUTES = [0, 15, 30, 45];
-
-type Frequency = "daily" | "weekdays" | "weekly" | "custom_days" | "manual";
-
-function getBrowserTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
-  } catch {
-    return "UTC";
-  }
-}
-
-function buildCron(freq: Frequency, hour: number, minute: number, days: number[]): string | null {
-  if (freq === "manual") return null;
-  const h = hour;
-  const m = minute;
-  if (freq === "daily") return `${m} ${h} * * *`;
-  if (freq === "weekdays") return `${m} ${h} * * 1-5`;
-  if (freq === "weekly") return `${m} ${h} * * ${days[0] ?? 1}`;
-  if (freq === "custom_days") {
-    if (days.length === 0) return null;
-    return `${m} ${h} * * ${days.sort((a, b) => a - b).join(",")}`;
-  }
-  return null;
-}
-
-function pad(n: number) { return String(n).padStart(2, "0"); }
-function fmtHour(h: number) {
-  const ampm = h < 12 ? "AM" : "PM";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:00 ${ampm}`;
-}
-function fmtTime(h: number, m: number) {
-  const ampm = h < 12 ? "AM" : "PM";
-  const h12 = h % 12 === 0 ? 12 : h % 12;
-  return `${h12}:${pad(m)} ${ampm}`;
-}
-
-// ─── Schedule Builder ────────────────────────────────────────────────────────
-
-interface ScheduleBuilderProps {
-  onChange: (cron: string | null) => void;
-  timezone?: string;
-}
-
-function ScheduleBuilder({ onChange, timezone = getBrowserTimezone() }: ScheduleBuilderProps) {
-  const [freq, setFreq] = useState<Frequency>("weekdays");
-  const [hour, setHour] = useState(9);
-  const [minute, setMinute] = useState(0);
-  const [selectedDays, setSelectedDays] = useState<number[]>([1]);
-
-  const showDayPicker = freq === "weekly" || freq === "custom_days";
-  const multiDay = freq === "custom_days";
-
-  const cron = buildCron(freq, hour, minute, selectedDays);
-
-  useEffect(() => { onChange(cron); }, [freq, hour, minute, selectedDays]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  function toggleDay(val: number) {
-    if (multiDay) {
-      setSelectedDays((prev) =>
-        prev.includes(val)
-          ? prev.length > 1 ? prev.filter((d) => d !== val) : prev
-          : [...prev, val]
-      );
-    } else {
-      setSelectedDays([val]);
-    }
-  }
-
-  const selectCls = "bg-page border border-input-border text-fg text-sm rounded-lg px-3 py-2 focus:outline-hidden focus:border-blue-500";
-
-  return (
-    <div className="flex flex-col gap-3">
-      {/* Row 1: frequency + time */}
-      <div className="flex flex-wrap gap-3 items-end">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">Frequency</label>
-          <select value={freq} onChange={(e) => setFreq(e.target.value as Frequency)} className={selectCls}>
-            <option value="daily">Every day</option>
-            <option value="weekdays">Weekdays (Mon – Fri)</option>
-            <option value="weekly">Weekly (pick one day)</option>
-            <option value="custom_days">Custom days</option>
-            <option value="manual">Manual only</option>
-          </select>
-        </div>
-
-        {freq !== "manual" && (
-          <>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted">Hour</label>
-              <select value={hour} onChange={(e) => setHour(Number(e.target.value))} className={selectCls}>
-                {HOURS.map((h) => (
-                  <option key={h} value={h}>{fmtHour(h)}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex flex-col gap-1">
-              <label className="text-xs text-muted">Minute</label>
-              <select value={minute} onChange={(e) => setMinute(Number(e.target.value))} className={selectCls}>
-                {MINUTES.map((m) => (
-                  <option key={m} value={m}>:{pad(m)}</option>
-                ))}
-              </select>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Row 2: day picker */}
-      {showDayPicker && (
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">
-            {multiDay ? "Days (select multiple)" : "Day"}
-          </label>
-          <div className="flex gap-2">
-            {DAYS.map(({ label, value }) => {
-              const active = selectedDays.includes(value);
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => toggleDay(value)}
-                  className={`w-10 h-9 rounded-lg text-xs font-semibold border transition-colors ${
-                    active
-                      ? "bg-blue-600 border-blue-500 text-fg"
-                      : "bg-page border-input-border text-muted hover:border-border-strong"
-                  }`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Cron preview */}
-      <div className="flex items-center gap-2 mt-1 flex-wrap">
-        <span className="text-xs text-muted">Schedule:</span>
-        <code className="text-xs text-blue-300 bg-page border border-border px-2 py-0.5 rounded-sm">
-          {cron ?? "manual trigger"}
-        </code>
-        {cron && (
-          <span className="text-xs text-muted">
-            {freq === "daily" && `Runs every day at ${fmtTime(hour, minute)}`}
-            {freq === "weekdays" && `Runs Mon–Fri at ${fmtTime(hour, minute)}`}
-            {freq === "weekly" && `Runs every ${DAYS.find((d) => d.value === selectedDays[0])?.label ?? ""} at ${fmtTime(hour, minute)}`}
-            {freq === "custom_days" && `Runs on ${selectedDays.map((v) => DAYS.find((d) => d.value === v)?.label).join(", ")} at ${fmtTime(hour, minute)}`}
-            {" "}
-            ({timezone})
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ─── CronLabel (table display) ───────────────────────────────────────────────
-
-function CronLabel({ cron, timezone, nextRunAt }: { cron: string | null; timezone?: string; nextRunAt?: string | null }) {
-  if (!cron) return <span className="text-muted text-xs">Manual only</span>;
-  const tzSuffix = timezone ? ` ${timezone}` : "";
-  // try to produce a human label from known patterns
-  const daily = cron.match(/^(\d+) (\d+) \* \* \*$/);
-  if (daily) return (
-    <span className="text-fg-secondary text-xs">
-      Daily {fmtTime(Number(daily[2]), Number(daily[1]))}{tzSuffix}
-      {nextRunAt && <span className="block text-muted">Next: {new Date(nextRunAt).toLocaleString()}</span>}
-    </span>
-  );
-  const wdays = cron.match(/^(\d+) (\d+) \* \* 1-5$/);
-  if (wdays) return (
-    <span className="text-fg-secondary text-xs">
-      Weekdays {fmtTime(Number(wdays[2]), Number(wdays[1]))}{tzSuffix}
-      {nextRunAt && <span className="block text-muted">Next: {new Date(nextRunAt).toLocaleString()}</span>}
-    </span>
-  );
-  const weekly = cron.match(/^(\d+) (\d+) \* \* (\d)$/);
-  if (weekly) {
-    const day = DAYS.find((d) => d.value === Number(weekly[3]));
-    return (
-      <span className="text-fg-secondary text-xs">
-        {day?.label ?? `Day ${weekly[3]}`} {fmtTime(Number(weekly[2]), Number(weekly[1]))}{tzSuffix}
-        {nextRunAt && <span className="block text-muted">Next: {new Date(nextRunAt).toLocaleString()}</span>}
-      </span>
-    );
-  }
-  return (
-    <span className="text-fg-secondary text-xs font-mono">
-      {cron}{timezone ? ` (${timezone})` : ""}
-      {nextRunAt && <span className="block text-muted font-sans">Next: {new Date(nextRunAt).toLocaleString()}</span>}
-    </span>
-  );
-}
-
 // ─── Add Item Form ────────────────────────────────────────────────────────────
 
 function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemRequest) => void; isPending: boolean }) {
@@ -251,8 +47,7 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
   const [depth, setDepth] = useState<"quick" | "standard" | "deep">("standard");
   const [analysts, setAnalysts] = useState<string[]>(DEFAULT_ANALYSTS);
   const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>(DEFAULT_RESPONSE_LANGUAGE);
-  const [cron, setCron] = useState<string | null>("0 9 * * 1-5");
-  const scheduleTimezone = getBrowserTimezone();
+  const [cron, setCron] = useState<string | null>(DEFAULT_WATCHLIST_CRON);
 
   const isLocal = LOCAL_PROVIDERS.includes(provider);
 
@@ -281,7 +76,6 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
       analysts,
       response_language: responseLanguage,
       schedule_cron: cron,
-      schedule_timezone: scheduleTimezone,
     });
     setTicker("");
   }
@@ -290,7 +84,6 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Row 1: ticker + provider + model + depth */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <div className="flex flex-col gap-1">
           <label className="text-xs text-muted">Ticker</label>
@@ -342,7 +135,6 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
         </div>
       </div>
 
-      {/* Row 2: analysts */}
       <div className="flex flex-col gap-1">
         <label className="text-xs text-muted">Analysts</label>
         <div className="flex flex-wrap gap-2">
@@ -358,13 +150,14 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
         </div>
       </div>
 
-      {/* Row 3: schedule builder */}
       <div className="border-t border-border pt-4">
         <p className="text-xs text-muted uppercase tracking-wide font-semibold mb-3">Schedule</p>
-        <ScheduleBuilder onChange={setCron} timezone={scheduleTimezone} />
+        <WatchlistScheduleBuilder
+          cron={cron}
+          onCronChange={setCron}
+        />
       </div>
 
-      {/* Add button */}
       <button
         onClick={handleAdd}
         disabled={!ticker || analysts.length === 0 || isPending}
@@ -383,12 +176,12 @@ function ItemRow({ item, onRemove, onToggle, onRunNow, onSaveSchedule, metadata 
   onRemove: () => void;
   onToggle: () => void;
   onRunNow: () => void;
-  onSaveSchedule: (cron: string | null, timezone: string) => void;
+  onSaveSchedule: (cron: string | null) => void;
   metadata?: TickerMetadata;
 }) {
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [draftCron, setDraftCron] = useState<string | null>(item.schedule_cron);
-  const scheduleTimezone = item.schedule_timezone || getBrowserTimezone();
+  const [scheduleEditorKey, setScheduleEditorKey] = useState(0);
 
   return (
     <>
@@ -409,7 +202,7 @@ function ItemRow({ item, onRemove, onToggle, onRunNow, onSaveSchedule, metadata 
         </div>
       </td>
       <td className="hidden lg:table-cell px-4 py-3">
-        <CronLabel cron={item.schedule_cron} timezone={item.schedule_timezone} nextRunAt={item.next_run_at} />
+        <CronLabel cron={item.schedule_cron} nextRunAt={item.next_run_at} />
       </td>
       <td className="px-4 py-3 text-xs">
         {item.last_run_at && item.last_run_id ? (
@@ -441,6 +234,7 @@ function ItemRow({ item, onRemove, onToggle, onRunNow, onSaveSchedule, metadata 
             tone="default"
             onClick={() => {
               setDraftCron(item.schedule_cron);
+              setScheduleEditorKey((k) => k + 1);
               setEditingSchedule((v) => !v);
             }}
           />
@@ -464,14 +258,19 @@ function ItemRow({ item, onRemove, onToggle, onRunNow, onSaveSchedule, metadata 
     {editingSchedule && (
       <tr className="border-t border-border bg-page/40">
         <td colSpan={9} className="px-4 py-4">
-          <div className="flex flex-col gap-3 max-w-3xl">
+          <div className="flex flex-col gap-3 max-w-4xl">
             <p className="text-xs text-muted uppercase tracking-wide font-semibold">Edit schedule for {item.ticker}</p>
-            <ScheduleBuilder onChange={setDraftCron} timezone={scheduleTimezone} />
+            <WatchlistScheduleBuilder
+              key={`${item.id}-${scheduleEditorKey}`}
+              instanceKey={`${item.id}-${item.schedule_cron ?? "manual"}-${scheduleEditorKey}`}
+              cron={draftCron}
+              onCronChange={setDraftCron}
+            />
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => {
-                  onSaveSchedule(draftCron, scheduleTimezone);
+                  onSaveSchedule(draftCron);
                   setEditingSchedule(false);
                 }}
                 className="bg-blue-600 hover:bg-blue-500 text-fg text-xs font-medium px-3 py-1.5 rounded-lg"
@@ -502,11 +301,6 @@ export default function WatchlistPage() {
   const [showAddTicker, setShowAddTicker] = useState(true);
 
   const { data: watchlist, isLoading } = useQuery({ queryKey: ["watchlist"], queryFn: getWatchlist });
-  const { data: schedulerJobs } = useQuery({
-    queryKey: ["watchlist-scheduler"],
-    queryFn: getSchedulerJobs,
-    refetchInterval: 60_000,
-  });
   const { data: tickerMetadata = {} } = useTickerMetadata(
     watchlist?.items.map((item) => item.ticker) ?? [],
     { enabled: !!watchlist && watchlist.items.length > 0 }
@@ -537,8 +331,8 @@ export default function WatchlistPage() {
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: ({ id, schedule_cron, schedule_timezone }: { id: string; schedule_cron: string | null; schedule_timezone: string }) =>
-      updateWatchlistItem(id, { schedule_cron, schedule_timezone }),
+    mutationFn: ({ id, schedule_cron }: { id: string; schedule_cron: string | null }) =>
+      updateWatchlistItem(id, { schedule_cron }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["watchlist"] });
       qc.invalidateQueries({ queryKey: ["watchlist-scheduler"] });
@@ -551,21 +345,6 @@ export default function WatchlistPage() {
           <Link href="/runs" className="text-blue-400 hover:underline text-sm">← Back to History</Link>
           <h1 className="text-lg font-semibold text-fg">Watchlist</h1>
         </div>
-
-        {schedulerJobs && (
-          <div className={`text-xs px-3 py-2 rounded-lg border ${
-            schedulerJobs.running
-              ? "border-green-800/50 bg-green-950/20 text-green-300"
-              : "border-yellow-800/50 bg-yellow-950/20 text-yellow-300"
-          }`}>
-            Scheduler {schedulerJobs.running ? "running" : "stopped"}
-            {schedulerJobs.running && (
-              <span className="text-muted ml-2">
-                {schedulerJobs.jobs.length} scheduled job{schedulerJobs.jobs.length === 1 ? "" : "s"}
-              </span>
-            )}
-          </div>
-        )}
 
         <div className="bg-elevated border border-input-border rounded-xl p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
@@ -621,8 +400,8 @@ export default function WatchlistPage() {
                       onRemove={() => removeMutation.mutate(item.id)}
                       onToggle={() => toggleMutation.mutate({ id: item.id, enabled: !item.enabled })}
                       onRunNow={() => runNowMutation.mutate(item.id)}
-                      onSaveSchedule={(schedule_cron, schedule_timezone) =>
-                        scheduleMutation.mutate({ id: item.id, schedule_cron, schedule_timezone })
+                      onSaveSchedule={(schedule_cron) =>
+                        scheduleMutation.mutate({ id: item.id, schedule_cron })
                       }
                       metadata={tickerMetadata[item.ticker.toUpperCase()]}
                     />
