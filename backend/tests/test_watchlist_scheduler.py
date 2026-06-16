@@ -30,7 +30,6 @@ async def test_add_watchlist_item_rejects_invalid_cron():
                 "llm_provider": "openai",
                 "llm_model": "gpt-4o-mini",
                 "schedule_cron": "not-a-cron",
-                "schedule_timezone": "UTC",
             })
 
         assert r.status_code == 422
@@ -48,7 +47,6 @@ async def test_add_watchlist_item_normalizes_empty_cron_to_null():
                 "llm_provider": "openai",
                 "llm_model": "gpt-4o-mini",
                 "schedule_cron": "   ",
-                "schedule_timezone": "UTC",
             })
 
         assert r.status_code == 201
@@ -57,7 +55,7 @@ async def test_add_watchlist_item_normalizes_empty_cron_to_null():
 
 
 @pytest.mark.asyncio
-async def test_patch_watchlist_item_validates_cron_with_existing_timezone():
+async def test_patch_watchlist_item_validates_cron():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         token = await _register_and_login(client)
         headers = {"Authorization": f"Bearer {token}"}
@@ -68,7 +66,6 @@ async def test_patch_watchlist_item_validates_cron_with_existing_timezone():
                 "llm_provider": "openai",
                 "llm_model": "gpt-4o-mini",
                 "schedule_cron": "0 9 * * 1-5",
-                "schedule_timezone": "Europe/Berlin",
             })
             item_id = created.json()["id"]
 

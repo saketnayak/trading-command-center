@@ -15,7 +15,7 @@ async def lifespan(_app: FastAPI):
     async with AsyncSessionLocal() as db:
         await db.execute(
             update(Run)
-            .where(Run.status == RunStatus.running)
+            .where(Run.status.in_([RunStatus.running, RunStatus.pending]))
             .values(status=RunStatus.failed, completed_at=datetime.now(timezone.utc))
         )
         await db.commit()

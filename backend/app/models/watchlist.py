@@ -27,7 +27,6 @@ class WatchlistItem(Base):
     analysts: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     response_language: Mapped[str] = mapped_column(String(16), default="en-US")
     schedule_cron: Mapped[str | None] = mapped_column(String, nullable=True)
-    schedule_timezone: Mapped[str] = mapped_column(String(64), default="UTC", server_default="UTC")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     last_run_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_run_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("runs.id", ondelete="SET NULL"), nullable=True)

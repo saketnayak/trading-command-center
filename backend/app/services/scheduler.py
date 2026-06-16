@@ -2,7 +2,7 @@
 import logging
 import zoneinfo
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from apscheduler import AsyncScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -13,16 +13,21 @@ from app.database import AsyncSessionLocal
 from app.models.run import Run, RunStatus
 from app.models.watchlist import WatchlistItem, Watchlist
 from app.services.job_manager import start_run
-from app.utils.cron_validation import (
-    DEFAULT_SCHEDULE_TIMEZONE,
-    normalize_schedule_cron,
-    parse_cron_trigger,
-    validate_schedule_timezone,
-)
+from app.utils.cron_validation import normalize_schedule_cron, parse_cron_trigger
 
 logger = logging.getLogger(__name__)
 
 _scheduler: AsyncScheduler | None = None
+
+
+async def _get_watchlist_next_fire_time(item_id: str) -> datetime | None:
+    if not _scheduler:
+        return None
+    schedule_id = f"wl_{item_id}"
+    for schedule in await _scheduler.get_schedules():
+        if schedule.id == schedule_id:
+            return schedule.next_fire_time
+    return None
 
 
 def _is_nine_am_in_timezone(tz_name: str) -> bool:
@@ -37,7 +42,6 @@ def _is_nine_am_in_timezone(tz_name: str) -> bool:
 class _WatchlistScheduleSpec:
     item_id: str
     cron: str
-    timezone: str
 
 
 async def _fire_watchlist_item(item_id: str) -> None:
@@ -47,20 +51,33 @@ async def _fire_watchlist_item(item_id: str) -> None:
             if not item or not item.enabled or not item.schedule_cron:
                 return
 
-            if item.last_run_id:
-                last_run = await db.get(Run, item.last_run_id)
-                if last_run and last_run.status in (RunStatus.pending, RunStatus.running):
-                    logger.info(
-                        "Skipping scheduled run for %s — prior run %s still %s",
-                        item.ticker,
-                        item.last_run_id,
-                        last_run.status.value,
-                    )
-                    return
-
             wl = await db.get(Watchlist, item.watchlist_id)
             if not wl:
                 logger.warning("Watchlist missing for scheduled item %s", item_id)
+                return
+
+            item.next_run_at = await _get_watchlist_next_fire_time(str(item.id))
+
+            in_flight = (
+                await db.execute(
+                    select(Run)
+                    .where(
+                        Run.created_by == wl.created_by,
+                        Run.ticker == item.ticker,
+                        Run.status.in_([RunStatus.pending, RunStatus.running]),
+                    )
+                    .order_by(Run.created_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if in_flight:
+                logger.info(
+                    "Skipping scheduled run for %s — run %s still %s",
+                    item.ticker,
+                    in_flight.id,
+                    in_flight.status.value,
+                )
+                await db.commit()
                 return
 
             from app.utils.asset_type import is_crypto
@@ -73,7 +90,7 @@ async def _fire_watchlist_item(item_id: str) -> None:
             run = Run(
                 created_by=wl.created_by,
                 ticker=item.ticker,
-                analysis_date=date.today(),
+                analysis_date=datetime.now().date(),
                 llm_provider=item.llm_provider,
                 llm_model=item.llm_model,
                 depth=item.depth,
@@ -82,6 +99,7 @@ async def _fire_watchlist_item(item_id: str) -> None:
                 label=f"Scheduled: {item.ticker}",
             )
             db.add(run)
+            await db.flush()
             item.last_run_at = datetime.now(timezone.utc)
             item.last_run_id = run.id
             await db.commit()
@@ -105,9 +123,8 @@ def _build_watchlist_schedule_specs(items: list[WatchlistItem]) -> list[_Watchli
         cron = normalize_schedule_cron(item.schedule_cron)
         if not cron:
             continue
-        tz_name = validate_schedule_timezone(item.schedule_timezone or DEFAULT_SCHEDULE_TIMEZONE)
         try:
-            parse_cron_trigger(cron, tz_name)
+            parse_cron_trigger(cron)
         except ValueError as exc:
             logger.warning(
                 "Skipping watchlist item %s (%s): %s",
@@ -116,7 +133,7 @@ def _build_watchlist_schedule_specs(items: list[WatchlistItem]) -> list[_Watchli
                 exc,
             )
             continue
-        specs.append(_WatchlistScheduleSpec(str(item.id), cron, tz_name))
+        specs.append(_WatchlistScheduleSpec(str(item.id), cron))
     return specs
 
 
@@ -147,7 +164,7 @@ async def _reload_jobs(scheduler: AsyncScheduler) -> None:
             await scheduler.remove_schedule(job.id)
 
     for spec in specs:
-        trigger = parse_cron_trigger(spec.cron, spec.timezone)
+        trigger = parse_cron_trigger(spec.cron)
         await scheduler.add_schedule(
             _fire_watchlist_item,
             trigger,
