@@ -36,6 +36,8 @@ import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsMo
 import { SellCandidatesPanel } from "@/components/portfolio/SellCandidatesPanel";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
+import { PageShell } from "@/components/layout/PageShell";
+import { PageTitle } from "@/components/layout/PageHeader";
 
 type Tab = "holdings" | "insights" | "earnings" | "news" | "trending" | "discover" | "chat" | "thesis";
 
@@ -359,8 +361,8 @@ export default function PortfolioPage() {
 
   return (
     <>
-    <main className="max-w-screen-2xl mx-auto px-4 py-4 sm:px-6 sm:py-6 space-y-4">
-        <h1 className="text-lg font-semibold text-fg">Portfolio</h1>
+    <PageShell width="full" gap="4">
+        <PageTitle>Portfolio</PageTitle>
 
         <div className="flex items-center gap-4">
           <PortfolioSwitcher
@@ -534,7 +536,7 @@ export default function PortfolioPage() {
             )}
           </>
         )}
-      </main>
+      </PageShell>
 
       {batchOpen && selectedId && (
         <BatchAnalyzeModal

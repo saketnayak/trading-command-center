@@ -2,6 +2,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { getPortfolioEarnings } from "@/lib/api";
 import { finnhubUnavailableMessage } from "@/lib/finnhubMessages";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { PortfolioHolding } from "@/lib/types";
 
 interface Props {
@@ -50,6 +52,9 @@ export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }:
   });
 
   const events = data?.events ?? [];
+  const { data: tickerMetadata = {} } = useTickerMetadata(events.map((e) => e.ticker), {
+    enabled: events.length > 0,
+  });
   const unavailableReason = data?.earnings_unavailable_reason ?? (noKey ? "no_finnhub_key" : null);
   const unavailableMessage = finnhubUnavailableMessage(unavailableReason, "earnings");
 
@@ -118,7 +123,12 @@ export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }:
                   key={`${e.ticker}-${e.date}-${i}`}
                   className={`border-t border-border ${isStale ? "bg-yellow-900/10" : ""}`}
                 >
-                  <td className="px-4 py-2.5 font-mono text-xs">{e.ticker}</td>
+                  <td className="px-4 py-2.5">
+                    <TickerLabel
+                      ticker={e.ticker}
+                      metadata={tickerMetadata[e.ticker.toUpperCase()]}
+                    />
+                  </td>
                   <td className={`px-4 py-2.5 text-xs ${isStale ? "text-yellow-400" : ""}`}>{e.date}</td>
                   <td className={`px-4 py-2.5 text-right text-xs ${days <= 7 ? "text-orange-400" : ""}`}>
                     {days}
