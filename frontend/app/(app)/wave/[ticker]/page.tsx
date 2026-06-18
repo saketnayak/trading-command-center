@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { analyzeWave, getAppSettings } from "@/lib/api";
 import { AnalysisChart } from "@/components/wave/AnalysisChart";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
+import { TOP_NAV_HEIGHT_REM } from "@/components/layout/constants";
 import type {
   AnalyzeResponse,
   ChartVisibilityOptions,
@@ -50,7 +51,10 @@ export default function WaveChartPage() {
   const title = `${symbol} Elliott / Fibonacci`;
 
   return (
-    <main className="flex h-[calc(100vh-3.5rem)] min-h-[620px] flex-col overflow-hidden bg-page">
+    <main
+      className="flex min-h-[620px] flex-col overflow-hidden bg-page"
+      style={{ height: `calc(100vh - ${TOP_NAV_HEIGHT_REM})` }}
+    >
       <header className="shrink-0 border-b border-border bg-elevated px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">

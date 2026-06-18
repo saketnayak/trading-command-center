@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { RunFilters, dateRangeToFrom, type DateRangePreset } from "@/components/runs/RunFilters";
 import { RunTable } from "@/components/runs/RunTable";
 import { StatsBar } from "@/components/runs/StatsBar";
+import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
+import { PageShell } from "@/components/layout/PageShell";
 import { getRuns, bulkAbortRuns, bulkDeleteRuns } from "@/lib/api";
 import { downloadRunsCsv } from "@/lib/export/buildCsv";
 import type { Run } from "@/lib/types";
@@ -89,9 +91,11 @@ export default function RunsPage() {
   const canCompare = selectedIds.length === 2 && selectedRuns.every((r) => r.status === "completed");
 
   return (
-    <main className="px-4 py-4 sm:p-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-          <h1 className="text-fg text-lg font-semibold">Run History</h1>
+    <PageShell>
+        <PageHeader
+          className="mb-4"
+          leading={<PageTitle className="text-fg text-lg font-semibold">Run History</PageTitle>}
+          trailing={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {lastUpdated && (
               <span className="text-muted text-xs">
@@ -128,7 +132,8 @@ export default function RunsPage() {
               New Run
             </Link>
           </div>
-        </div>
+          }
+        />
 
         <div className="flex gap-1 border-b border-border mb-4">
           {(["active", "archived"] as Tab[]).map((t) => (
@@ -222,6 +227,6 @@ export default function RunsPage() {
             onSelectionChange={handleSelectionChange}
           />
         )}
-      </main>
+      </PageShell>
   );
 }

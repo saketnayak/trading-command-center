@@ -7,7 +7,7 @@ import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type L
 import { fmtMoney, fmtPnl } from "@/lib/currency";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 import { IconButton, IconLink } from "@/components/ui/IconButton";
-import { tickerDisplayName } from "@/components/ui/TickerLabel";
+import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import { WaveBadge } from "@/components/wave/WaveBadge";
 import type { PortfolioHolding, FundamentalsData, RegimeData, WaveSummary, TrimSignalEntry, FinnhubUnavailableReason } from "@/lib/types";
@@ -669,7 +669,6 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                   : ""
                   : "";
                 const tickerMeta = tickerMetadata[h.ticker.toUpperCase()];
-                const companyName = tickerDisplayName(h.ticker, tickerMeta);
 
                 return (
                   <React.Fragment key={h.id}>
@@ -696,27 +695,16 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                               </button>
                             ) : <span className="mt-0.5 h-4 w-4 shrink-0" />}
                             <div className="flex min-w-0 flex-col gap-1">
-                              <div className="flex min-w-0 flex-col items-start text-left">
-                                {companyName && companyName.toUpperCase() !== h.ticker.toUpperCase() && (
-                                  <span className="max-w-[14rem] truncate font-mono font-semibold text-sm text-purple-400">
-                                    {companyName}
-                                  </span>
-                                )}
-                              {onTickerClick ? (
-                                  <button
-                                    onClick={() => onTickerClick(h)}
-                                    className="mt-0.5 max-w-[14rem] truncate text-left text-[11px] leading-tight text-muted hover:text-purple-300 hover:underline transition-colors"
-                                  >
-                                    {h.ticker}
-                                  </button>
-                              ) : h.last_run ? (
-                                  <Link href={`/runs/${h.last_run.run_id}`} className="mt-0.5 max-w-[14rem] truncate text-left text-[11px] leading-tight text-muted hover:text-purple-300 hover:underline">
-                                    {h.ticker}
-                                  </Link>
-                              ) : (
-                                  <span className="mt-0.5 max-w-[14rem] truncate text-[11px] leading-tight text-muted">{h.ticker}</span>
-                              )}
-                              </div>
+                              <TickerLabel
+                                ticker={h.ticker}
+                                metadata={tickerMeta}
+                                onClick={onTickerClick ? () => onTickerClick(h) : undefined}
+                                href={
+                                  !onTickerClick && h.last_run
+                                    ? `/runs/${h.last_run.run_id}`
+                                    : undefined
+                                }
+                              />
                               <div className="flex min-w-0 flex-wrap items-center gap-1">
                                 {fundData && fundData.asset_type === "stock" && (
                                   <PegBadge peg={fundData.peg_ratio} />

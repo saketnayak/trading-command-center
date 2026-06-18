@@ -39,9 +39,7 @@ export function TraderDecision({ run, report, metadata }: Props) {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-fg text-lg font-semibold">
           {run ? (
-            <TickerLabel ticker={run.ticker} metadata={metadata}>
-              <span className="font-mono">{run.ticker}</span>
-            </TickerLabel>
+            <TickerLabel ticker={run.ticker} metadata={metadata} />
           ) : "—"}
         </h2>
         {run?.analysis_date && (

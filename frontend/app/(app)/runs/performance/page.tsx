@@ -1,8 +1,11 @@
 "use client";
-import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { getPerformanceStats } from "@/lib/api";
 import { downloadPerformanceCsv } from "@/lib/export/buildCsv";
+import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
+import { PageShell } from "@/components/layout/PageShell";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
 
 function AccuracyBadge({ value }: { value: number | null }) {
   if (value === null) return <span className="text-muted text-sm">—</span>;
@@ -16,24 +19,29 @@ export default function PerformancePage() {
     queryFn: getPerformanceStats,
   });
 
+  const { data: tickerMetadata = {} } = useTickerMetadata(
+    data?.outcomes.map((o) => o.ticker) ?? [],
+    { enabled: !!data?.outcomes.length }
+  );
+
   return (
-    <main className="px-4 py-4 sm:p-6 max-w-5xl mx-auto flex flex-col gap-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link href="/runs" className="text-blue-400 hover:underline text-sm">
-            ← Back to History
-          </Link>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <h1 className="text-lg font-semibold text-fg">Trade Accuracy</h1>
-            <button
-              onClick={() => data && downloadPerformanceCsv(data)}
-              disabled={!data || data.outcomes.length === 0}
-              title="Export outcomes table to CSV"
-              className="text-muted hover:text-fg disabled:opacity-40 text-xs border border-input-border rounded px-2 py-1"
-            >
-              Export CSV
-            </button>
-          </div>
-        </div>
+    <PageShell width="default" gap="6">
+        <PageHeader
+          back={{ href: "/runs", label: "← Back to History" }}
+          trailing={
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <PageTitle>Trade Accuracy</PageTitle>
+              <button
+                onClick={() => data && downloadPerformanceCsv(data)}
+                disabled={!data || data.outcomes.length === 0}
+                title="Export outcomes table to CSV"
+                className="text-muted hover:text-fg disabled:opacity-40 text-xs border border-input-border rounded px-2 py-1"
+              >
+                Export CSV
+              </button>
+            </div>
+          }
+        />
 
         {isLoading && <div className="text-muted text-sm">Loading…</div>}
 
@@ -85,8 +93,12 @@ export default function PerformancePage() {
                     };
                     return (
                       <tr key={o.run_id} className="border-t border-border hover:bg-muted-surface/50">
-                        <td className="px-4 py-3 font-semibold text-fg">
-                          <Link href={`/runs/${o.run_id}`} className="hover:text-blue-400">{o.ticker}</Link>
+                        <td className="px-4 py-3">
+                          <TickerLabel
+                            ticker={o.ticker}
+                            metadata={tickerMetadata[o.ticker.toUpperCase()]}
+                            href={`/runs/${o.run_id}`}
+                          />
                         </td>
                         <td className="px-4 py-3 text-muted">{o.analysis_date}</td>
                         <td className="px-4 py-3">
@@ -111,6 +123,6 @@ export default function PerformancePage() {
             </div>
           </>
         )}
-      </main>
+      </PageShell>
   );
 }

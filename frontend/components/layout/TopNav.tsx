@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Logo } from "./Logo";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
 import { ThemeToggle } from "./ThemeToggle";
+import { TOP_NAV_OFFSET_PX } from "./constants";
 
 const NAV = [
   { href: "/runs/new", label: "New Run" },
@@ -114,7 +115,13 @@ export function TopNav() {
             aria-label="Close menu"
             onClick={() => setMenuOpen(false)}
           />
-          <div className="absolute top-[49px] left-0 right-0 max-h-[calc(100vh-49px)] overflow-y-auto bg-surface border-b border-border shadow-lg p-4 flex flex-col gap-4">
+          <div
+            className="absolute left-0 right-0 overflow-y-auto bg-surface border-b border-border shadow-lg p-4 flex flex-col gap-4"
+            style={{
+              top: TOP_NAV_OFFSET_PX,
+              maxHeight: `calc(100vh - ${TOP_NAV_OFFSET_PX}px)`,
+            }}
+          >
             <div className="flex flex-col gap-1">
               {NAV.map(({ href, label }) => (
                 <Link

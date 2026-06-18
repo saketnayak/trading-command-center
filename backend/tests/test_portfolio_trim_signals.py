@@ -1,7 +1,7 @@
 """Integration tests for the verdict-change extension on LastRun and the
 GET /portfolio/{id}/trim-signals endpoint."""
 import uuid
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient, ASGITransport
@@ -47,7 +47,7 @@ async def _create_portfolio_with_holding(
     async with AsyncSessionLocal() as db:
         snap = PortfolioSnapshot(
             portfolio_id=portfolio_id,
-            uploaded_at=datetime.utcnow(),
+            uploaded_at=datetime.now(timezone.utc),
             row_count=1,
         )
         db.add(snap)

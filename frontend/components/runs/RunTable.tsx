@@ -116,9 +116,7 @@ function RunRow({
         </td>
       )}
       <td className="px-4 py-3">
-        <TickerLabel ticker={run.ticker} metadata={metadata}>
-          <span className="text-fg font-mono">{run.ticker}</span>
-        </TickerLabel>
+        <TickerLabel ticker={run.ticker} metadata={metadata} href={`/runs/${run.id}`} />
         {run.label && <p className="text-muted text-xs mt-0.5">{run.label}</p>}
       </td>
       <td className="px-4 py-3">
