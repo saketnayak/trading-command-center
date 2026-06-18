@@ -7,7 +7,7 @@ import { addHolding, updateHolding, deleteHolding, getLatestRunsByTicker, type L
 import { fmtMoney, fmtPnl } from "@/lib/currency";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 import { IconButton, IconLink } from "@/components/ui/IconButton";
-import { TickerLabel } from "@/components/ui/TickerLabel";
+import { tickerDisplayName } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import { WaveBadge } from "@/components/wave/WaveBadge";
 import type { PortfolioHolding, FundamentalsData, RegimeData, WaveSummary, TrimSignalEntry, FinnhubUnavailableReason } from "@/lib/types";
