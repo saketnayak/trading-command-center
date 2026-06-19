@@ -4,13 +4,13 @@ export type PageWidth = "none" | "narrow" | "settings" | "default" | "wide" | "x
 export type PageGap = "none" | "4" | "6" | "8";
 
 const WIDTH_CLASSES: Record<PageWidth, string> = {
-  none: "",
-  narrow: "max-w-2xl mx-auto",
-  settings: "max-w-3xl mx-auto",
-  default: "max-w-5xl mx-auto",
-  wide: "max-w-6xl mx-auto",
-  xl: "max-w-7xl mx-auto",
-  full: "max-w-screen-2xl mx-auto",
+  none: "w-full min-w-0",
+  narrow: "max-w-2xl mx-auto w-full min-w-0",
+  settings: "max-w-3xl mx-auto w-full min-w-0",
+  default: "max-w-5xl mx-auto w-full min-w-0",
+  wide: "max-w-6xl mx-auto w-full min-w-0",
+  xl: "max-w-7xl mx-auto w-full min-w-0",
+  full: "max-w-screen-2xl mx-auto w-full min-w-0",
 };
 
 const GAP_CLASSES: Record<PageGap, string> = {

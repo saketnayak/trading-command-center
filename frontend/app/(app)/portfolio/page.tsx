@@ -476,7 +476,7 @@ export default function PortfolioPage() {
 
   return (
     <>
-    <PageShell width="full" gap="4">
+    <PageShell width="none" gap="4">
         <PageTitle>Portfolio</PageTitle>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
@@ -587,14 +587,14 @@ export default function PortfolioPage() {
           </div>
         )}
 
-        {/* Market panel — available regardless of portfolio selection */}
+        {/* Tab panels — fixed-width container prevents layout shift between tabs */}
+        <div className="min-w-0 w-full overflow-x-hidden">
         {tab === "trending" && <TrendingPanel />}
 
         {tab === "discover" && selectedPortfolio && (
           <DiscoverPanel portfolioId={selectedPortfolio.id} />
         )}
 
-        {/* Portfolio tab panels — require a loaded portfolio */}
         {selectedId && !loadingCurrent && current && tab !== "trending" && tab !== "discover" && (
           <>
             {tab === "holdings" && (
@@ -662,6 +662,7 @@ export default function PortfolioPage() {
             )}
           </>
         )}
+        </div>
       </PageShell>
 
       {batchOpen && selectedId && (

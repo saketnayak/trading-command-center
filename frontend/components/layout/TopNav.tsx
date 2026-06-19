@@ -6,7 +6,7 @@ import { useEffect, useState, type FocusEvent, type MouseEvent } from "react";
 import { Logo } from "./Logo";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
 import { ThemeToggle } from "./ThemeToggle";
-import { TOP_NAV_OFFSET_PX } from "./constants";
+import { TOP_NAV_OFFSET_PX, APP_CONTENT_CONTAINER_CLASS } from "./constants";
 import { usePortfolioPrefetch } from "@/lib/usePortfolioPrefetch";
 
 const NAV = [
@@ -87,7 +87,8 @@ export function TopNav() {
   return (
     <>
       <KeyboardShortcuts />
-      <nav className="bg-surface border-b border-border px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-4 sticky top-0 z-50 shrink-0">
+      <nav className="bg-surface border-b border-border sticky top-0 z-50 shrink-0">
+        <div className={`${APP_CONTENT_CONTAINER_CLASS} flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2`}>
         <Link href="/runs" className="flex items-center shrink-0" aria-label="AgentFloor home">
           <Logo height={28} />
         </Link>
@@ -136,6 +137,7 @@ export function TopNav() {
               </svg>
             )}
           </button>
+        </div>
         </div>
       </nav>
 
