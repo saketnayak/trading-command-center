@@ -7,7 +7,7 @@ import {
   LLM_DEPTHS,
   LLM_PROVIDER_LABELS,
   LLM_PROVIDERS,
-  LOCAL_LLM_PROVIDERS,
+  isLocalLlmProvider,
   type LlmDepth,
   type LlmProvider,
 } from "@/lib/llmConfig";
@@ -47,7 +47,7 @@ export function LlmConfigPicker({
   modelClassName,
   depthClassName,
 }: Props) {
-  const isLocal = LOCAL_LLM_PROVIDERS.includes(value.provider);
+  const isLocal = isLocalLlmProvider(value.provider);
   const inputClass = layout === "compact" ? COMPACT_INPUT_CLASS : INPUT_CLASS;
   const { data: providerDefaults } = useLlmProviderDefaults();
   const modelPlaceholder = providerDefaults?.default_models[value.provider] ?? "model name";

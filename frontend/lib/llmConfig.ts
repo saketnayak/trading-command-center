@@ -10,12 +10,17 @@ export const LLM_PROVIDERS = [
 
 export type LlmProvider = (typeof LLM_PROVIDERS)[number];
 
-export const LOCAL_LLM_PROVIDERS: readonly LlmProvider[] = ["ollama", "vllm"];
+export const LOCAL_LLM_PROVIDERS = ["ollama", "vllm"] as const;
+export type LocalLlmProvider = (typeof LOCAL_LLM_PROVIDERS)[number];
 
-export type CloudLlmProvider = Exclude<LlmProvider, (typeof LOCAL_LLM_PROVIDERS)[number]>;
+export type CloudLlmProvider = Exclude<LlmProvider, LocalLlmProvider>;
+
+export function isLocalLlmProvider(provider: LlmProvider): provider is LocalLlmProvider {
+  return (LOCAL_LLM_PROVIDERS as readonly string[]).includes(provider);
+}
 
 export const CLOUD_LLM_PROVIDERS: readonly CloudLlmProvider[] = LLM_PROVIDERS.filter(
-  (provider): provider is CloudLlmProvider => !LOCAL_LLM_PROVIDERS.includes(provider),
+  (provider): provider is CloudLlmProvider => !isLocalLlmProvider(provider),
 );
 
 export const LLM_DEPTHS = ["quick", "standard", "deep"] as const;
@@ -56,12 +61,12 @@ export const LLM_PROVIDER_DOCS_URLS: Record<CloudLlmProvider, string> = {
   groq: "https://console.groq.com/keys",
 };
 
-export const LLM_SERVER_URL_PLACEHOLDERS: Record<(typeof LOCAL_LLM_PROVIDERS)[number], string> = {
+export const LLM_SERVER_URL_PLACEHOLDERS: Record<LocalLlmProvider, string> = {
   ollama: "http://localhost:11434",
   vllm: "http://localhost:8080",
 };
 
-export const LLM_SETTINGS_SHORT_LABELS: Record<(typeof LOCAL_LLM_PROVIDERS)[number], string> = {
+export const LLM_SETTINGS_SHORT_LABELS: Record<LocalLlmProvider, string> = {
   ollama: "Ollama",
   vllm: "vLLM",
 };

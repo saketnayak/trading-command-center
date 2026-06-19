@@ -2,10 +2,10 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { upsertApiKey } from "@/lib/api";
-import { LLM_SERVER_URL_PLACEHOLDERS } from "@/lib/llmConfig";
+import { LLM_SERVER_URL_PLACEHOLDERS, type LocalLlmProvider } from "@/lib/llmConfig";
 
 interface ServerUrlRowProps {
-  provider: "ollama" | "vllm";
+  provider: LocalLlmProvider;
   label: string;
   isValid: boolean;
   onSaved: () => void;
