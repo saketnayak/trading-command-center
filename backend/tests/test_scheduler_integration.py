@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 import zoneinfo
 
+from apscheduler.triggers.cron import CronTrigger
 from app.models.run import Run, RunStatus
 from app.models.watchlist import Watchlist, WatchlistItem
 from app.services.scheduler import _fire_watchlist_item, _reload_jobs
@@ -28,7 +29,9 @@ def test_cron_trigger_next_fire_matches_schedule_time():
 
 @pytest.mark.unit
 def test_cron_trigger_weekday_interval_steps_by_one_day():
-    trigger = parse_cron_trigger("0 9 * * 1-5")
+    # Anchor on Wednesday so the next two weekday fires are one day apart (not Fri→Mon).
+    start = datetime(2026, 6, 17, 8, 0, tzinfo=zoneinfo.ZoneInfo("UTC"))
+    trigger = CronTrigger.from_crontab("0 9 * * 1-5", start_time=start)
     first = trigger.next()
     second = next(iter(trigger))
     assert first is not None and second is not None
