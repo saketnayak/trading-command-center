@@ -1,6 +1,7 @@
 import pytest
 from app.utils.llm_providers import (
     DEFAULT_LLM_MODELS,
+    PROVIDER_MODEL_CATALOG,
     normalize_llm_depth,
     normalize_llm_provider,
     resolve_llm_model,
@@ -27,3 +28,12 @@ def test_normalize_llm_depth():
     assert normalize_llm_depth("QUICK") == "quick"
     with pytest.raises(ValueError):
         normalize_llm_depth("turbo")
+
+
+def test_provider_model_catalog_covers_cloud_defaults():
+    for provider, default_model in DEFAULT_LLM_MODELS.items():
+        if provider in {"ollama", "vllm"}:
+            continue
+        models = PROVIDER_MODEL_CATALOG[provider]
+        assert models[0] == default_model
+        assert default_model in models

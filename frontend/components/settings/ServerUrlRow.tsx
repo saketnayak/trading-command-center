@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { upsertApiKey } from "@/lib/api";
+import { LLM_SERVER_URL_PLACEHOLDERS } from "@/lib/llmConfig";
 
 interface ServerUrlRowProps {
   provider: "ollama" | "vllm";
@@ -33,7 +34,7 @@ export function ServerUrlRow({ provider, label, isValid, onSaved }: ServerUrlRow
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder={provider === "ollama" ? "http://localhost:11434" : "http://localhost:8080"}
+        placeholder={LLM_SERVER_URL_PLACEHOLDERS[provider]}
         className="bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
       />
       <button

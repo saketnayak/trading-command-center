@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLOUD_LLM_PROVIDERS,
   DEFAULT_LLM_DEPTH,
   DEFAULT_LLM_PROVIDER,
+  LLM_PROVIDERS,
+  LOCAL_LLM_PROVIDERS,
   llmConfigFromUserDefaults,
   resolveLlmModel,
   validateDefaultLlmConfig,
@@ -36,5 +39,13 @@ describe("llmConfig", () => {
     expect(validateDefaultLlmConfig("openai", "gpt-5.5", "standard")).toBeNull();
     expect(validateDefaultLlmConfig("cohere", "x", "standard")).toMatch(/Unsupported provider/);
     expect(validateDefaultLlmConfig("openai", "x", "turbo")).toMatch(/Depth must be/);
+  });
+
+  it("derives cloud providers from the canonical provider list", () => {
+    expect(CLOUD_LLM_PROVIDERS).toEqual(
+      LLM_PROVIDERS.filter((provider) => !LOCAL_LLM_PROVIDERS.includes(provider)),
+    );
+    expect(CLOUD_LLM_PROVIDERS).not.toContain("ollama");
+    expect(CLOUD_LLM_PROVIDERS).not.toContain("vllm");
   });
 });

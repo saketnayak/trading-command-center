@@ -12,6 +12,12 @@ export type LlmProvider = (typeof LLM_PROVIDERS)[number];
 
 export const LOCAL_LLM_PROVIDERS: readonly LlmProvider[] = ["ollama", "vllm"];
 
+export type CloudLlmProvider = Exclude<LlmProvider, (typeof LOCAL_LLM_PROVIDERS)[number]>;
+
+export const CLOUD_LLM_PROVIDERS: readonly CloudLlmProvider[] = LLM_PROVIDERS.filter(
+  (provider): provider is CloudLlmProvider => !LOCAL_LLM_PROVIDERS.includes(provider),
+);
+
 export const LLM_DEPTHS = ["quick", "standard", "deep"] as const;
 export type LlmDepth = (typeof LLM_DEPTHS)[number];
 
@@ -36,6 +42,32 @@ export const LLM_PROVIDER_PLACEHOLDERS: Record<LlmProvider, string> = {
   ionos: "openai/gpt-oss-120b",
   ollama: "llama3",
   vllm: "mistralai/Mistral-7B-Instruct-v0.3",
+};
+
+export const LLM_API_KEY_PLACEHOLDERS: Record<CloudLlmProvider, string> = {
+  openai: "sk-…",
+  anthropic: "sk-ant-…",
+  google: "AIza…",
+  ionos: "ion_…",
+  groq: "gsk_…",
+};
+
+export const LLM_PROVIDER_DOCS_URLS: Record<CloudLlmProvider, string> = {
+  openai: "https://platform.openai.com/api-keys",
+  anthropic: "https://console.anthropic.com/settings/keys",
+  google: "https://aistudio.google.com/app/apikey",
+  ionos: "https://docs.ionos.com/cloud/ai/ai-model-hub",
+  groq: "https://console.groq.com/keys",
+};
+
+export const LLM_SERVER_URL_PLACEHOLDERS: Record<(typeof LOCAL_LLM_PROVIDERS)[number], string> = {
+  ollama: "http://localhost:11434",
+  vllm: "http://localhost:8080",
+};
+
+export const LLM_SETTINGS_SHORT_LABELS: Record<(typeof LOCAL_LLM_PROVIDERS)[number], string> = {
+  ollama: "Ollama",
+  vllm: "vLLM",
 };
 
 export interface LlmConfig {
