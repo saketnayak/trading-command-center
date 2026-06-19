@@ -2,17 +2,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FocusEvent, type MouseEvent } from "react";
 import { Logo } from "./Logo";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
 import { ThemeToggle } from "./ThemeToggle";
 import { TOP_NAV_OFFSET_PX } from "./constants";
+import { usePortfolioPrefetch } from "@/lib/usePortfolioPrefetch";
 
 const NAV = [
   { href: "/runs/new", label: "New Run" },
   { href: "/runs", label: "History" },
   { href: "/watchlist", label: "Watchlist" },
-  { href: "/portfolio", label: "Portfolio" },
+  { href: "/portfolio", label: "Portfolio", prefetchPortfolio: true },
   { href: "/runs/performance", label: "Performance" },
   { href: "/settings", label: "Settings" },
 ];
@@ -23,10 +24,40 @@ function navLinkClass(active: boolean) {
     : "text-muted hover:text-fg-secondary";
 }
 
+function NavLink({
+  href,
+  label,
+  active,
+  className,
+  onPrefetch,
+}: {
+  href: string;
+  label: string;
+  active: boolean;
+  className: string;
+  onPrefetch?: () => void;
+}) {
+  function handleIntent(_event: MouseEvent<HTMLAnchorElement> | FocusEvent<HTMLAnchorElement>) {
+    onPrefetch?.();
+  }
+
+  return (
+    <Link
+      href={href}
+      onMouseEnter={onPrefetch ? handleIntent : undefined}
+      onFocus={onPrefetch ? handleIntent : undefined}
+      className={className}
+    >
+      {label}
+    </Link>
+  );
+}
+
 export function TopNav() {
   const path = usePathname();
   const { data: session } = useSession();
   const [menuOpen, setMenuOpen] = useState(false);
+  const prefetchPortfolio = usePortfolioPrefetch();
 
   const isActive = (href: string) => {
     if (path === href) return true;
@@ -64,14 +95,15 @@ export function TopNav() {
         <span className="hidden lg:inline text-nav-divider text-lg">|</span>
 
         <div className="hidden lg:flex items-center gap-3 min-w-0">
-          {NAV.map(({ href, label }) => (
-            <Link
+          {NAV.map(({ href, label, prefetchPortfolio: shouldPrefetch }) => (
+            <NavLink
               key={href}
               href={href}
+              label={label}
+              active={isActive(href)}
+              onPrefetch={shouldPrefetch ? prefetchPortfolio : undefined}
               className={`text-xs px-1 pb-0.5 whitespace-nowrap ${navLinkClass(isActive(href))}`}
-            >
-              {label}
-            </Link>
+            />
           ))}
         </div>
 
@@ -123,14 +155,15 @@ export function TopNav() {
             }}
           >
             <div className="flex flex-col gap-1">
-              {NAV.map(({ href, label }) => (
-                <Link
+              {NAV.map(({ href, label, prefetchPortfolio: shouldPrefetch }) => (
+                <NavLink
                   key={href}
                   href={href}
+                  label={label}
+                  active={isActive(href)}
+                  onPrefetch={shouldPrefetch ? prefetchPortfolio : undefined}
                   className={`text-sm px-3 py-2.5 rounded-sm ${isActive(href) ? "bg-elevated text-fg font-medium" : "text-fg-secondary hover:bg-elevated"}`}
-                >
-                  {label}
-                </Link>
+                />
               ))}
             </div>
             <div className="border-t border-border pt-3 flex flex-col gap-2 text-sm">

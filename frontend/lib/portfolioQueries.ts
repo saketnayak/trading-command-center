@@ -71,3 +71,32 @@ export function buildPortfolioSyncQueryKeys(
 
   return keys;
 }
+
+export interface PortfolioPrefetchOptions {
+  markovEnabled?: boolean;
+  waveEnabled?: boolean;
+}
+
+/** Query keys warmed on nav-intent prefetch (excludes app-settings). */
+export function buildPortfolioPrefetchQueryKeys(
+  portfolioId: string,
+  options: PortfolioPrefetchOptions = {}
+): readonly (readonly string[])[] {
+  const { markovEnabled = true, waveEnabled = true } = options;
+  const keys: (readonly string[])[] = [
+    portfolioQueryKeys.list,
+    portfolioQueryKeys.current(portfolioId),
+    portfolioQueryKeys.fundamentals(portfolioId),
+    portfolioQueryKeys.behavioralAlerts(portfolioId),
+  ];
+
+  if (markovEnabled) {
+    keys.push(portfolioQueryKeys.regime(portfolioId));
+    keys.push(portfolioQueryKeys.trimSignals(portfolioId));
+  }
+  if (waveEnabled) {
+    keys.push(portfolioQueryKeys.wave(portfolioId));
+  }
+
+  return keys;
+}
