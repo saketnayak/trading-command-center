@@ -668,15 +668,12 @@ export async function getSectorGaps(portfolioId: string): Promise<SectorGap[]> {
 
 export async function discoverStocks(
   portfolioId: string,
-  llmProvider?: string,
-  llmModel?: string
+  llmProvider: string,
+  llmModel: string,
 ): Promise<DiscoverResponse> {
-  const body: Record<string, string> = {};
-  if (llmProvider) body.llm_provider = llmProvider;
-  if (llmModel) body.llm_model = llmModel;
   const r = await fetchWithAuth(`/portfolio/${portfolioId}/discover`, {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({ llm_provider: llmProvider, llm_model: llmModel }),
   });
   if (!r.ok) throw new Error("Failed to discover stocks");
   return r.json();

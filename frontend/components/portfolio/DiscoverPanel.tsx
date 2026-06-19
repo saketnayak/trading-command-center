@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
@@ -9,6 +9,8 @@ import {
   type StockRecommendation,
 } from "@/lib/api";
 import { WatchButton } from "@/components/portfolio/WatchButton";
+import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 
 type TagFilter = "All" | "Gap Fill" | "Trending" | "Mover";
 const TAG_COLORS: Record<string, string> = {
@@ -19,7 +21,13 @@ const TAG_COLORS: Record<string, string> = {
 
 export function DiscoverPanel({ portfolioId }: { portfolioId: string }) {
   const router = useRouter();
+  const { provider, model } = useDefaultLlmConfig();
   const [filter, setFilter] = useState<TagFilter>("All");
+  const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model });
+
+  useEffect(() => {
+    setLlmConfig({ provider, model });
+  }, [provider, model]);
 
   const { data: gaps = [], isLoading: gapsLoading } = useQuery({
     queryKey: ["sector-gaps", portfolioId],
@@ -31,7 +39,12 @@ export function DiscoverPanel({ portfolioId }: { portfolioId: string }) {
   const [hasLoaded, setHasLoaded] = useState(false);
 
   const discoverMutation = useMutation({
-    mutationFn: () => discoverStocks(portfolioId),
+    mutationFn: () =>
+      discoverStocks(
+        portfolioId,
+        llmConfig.provider,
+        resolvedLlmModel(llmConfig),
+      ),
     onSuccess: (data) => {
       setRecommendations(data.recommendations);
       setHasLoaded(true);
@@ -69,15 +82,24 @@ export function DiscoverPanel({ portfolioId }: { portfolioId: string }) {
 
       {/* Right: AI Recommendations */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <h3 className="text-sm font-semibold text-fg-secondary">AI Recommendations</h3>
-          <button
-            onClick={() => discoverMutation.mutate()}
-            disabled={discoverMutation.isPending}
-            className="text-xs font-semibold px-3 py-1 rounded-sm bg-violet-700 hover:bg-violet-600 disabled:opacity-50 text-fg transition-colors"
-          >
-            {discoverMutation.isPending ? "Generating…" : hasLoaded ? "↺ Refresh" : "Generate"}
-          </button>
+          <div className="flex flex-wrap items-end gap-2">
+            <LlmConfigPicker
+              layout="inline"
+              value={llmConfig}
+              onChange={setLlmConfig}
+              providerClassName="bg-page border border-input-border rounded-sm px-2 py-1 text-fg text-xs focus:outline-hidden focus:border-blue-600"
+              modelClassName="bg-page border border-input-border rounded-sm px-2 py-1 text-fg text-xs focus:outline-hidden focus:border-blue-600 w-36"
+            />
+            <button
+              onClick={() => discoverMutation.mutate()}
+              disabled={discoverMutation.isPending}
+              className="text-xs font-semibold px-3 py-1 rounded-sm bg-violet-700 hover:bg-violet-600 disabled:opacity-50 text-fg transition-colors"
+            >
+              {discoverMutation.isPending ? "Generating…" : hasLoaded ? "↺ Refresh" : "Generate"}
+            </button>
+          </div>
         </div>
 
         {hasLoaded && (
