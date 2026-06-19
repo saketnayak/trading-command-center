@@ -1,19 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createThesisCrossRef, getThesisCrossRefs, deleteThesisCrossRef } from "@/lib/api";
 import type { ThesisCrossRef, ThesisCrossRefPosition, ThesisCrossRefRecommendation } from "@/lib/types";
-
-const PROVIDERS = ["openai", "anthropic", "google", "groq", "ollama", "vllm"] as const;
-
-const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
-  openai: "gpt-4o-mini",
-  anthropic: "claude-haiku-4-5-20251001",
-  google: "gemini-2.5-flash",
-  groq: "llama-3.3-70b-versatile",
-  ollama: "llama3",
-  vllm: "mistral-7b",
-};
+import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 
 function AlignmentGauge({ score }: { score: number }) {
   const color = score <= 3 ? "text-red-400" : score <= 6 ? "text-yellow-400" : "text-green-400";
@@ -159,10 +150,14 @@ function CrossRefResult({ result }: { result: ThesisCrossRef }) {
 
 export function ThesisPanel({ portfolioId }: { portfolioId: string }) {
   const queryClient = useQueryClient();
+  const { provider, model } = useDefaultLlmConfig();
   const [thesisText, setThesisText] = useState("");
-  const [provider, setProvider] = useState("openai");
-  const [model, setModel] = useState("gpt-4o-mini");
+  const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model });
   const [activeResult, setActiveResult] = useState<ThesisCrossRef | null>(null);
+
+  useEffect(() => {
+    setLlmConfig({ provider, model });
+  }, [provider, model]);
 
   const { data: history = [] } = useQuery({
     queryKey: ["thesisCrossRefs", portfolioId],
@@ -173,8 +168,8 @@ export function ThesisPanel({ portfolioId }: { portfolioId: string }) {
     mutationFn: () =>
       createThesisCrossRef(portfolioId, {
         thesis_text: thesisText,
-        llm_provider: provider,
-        llm_model: model || PROVIDER_DEFAULT_MODELS[provider],
+        llm_provider: llmConfig.provider,
+        llm_model: resolvedLlmModel(llmConfig),
       }),
     onSuccess: (data) => {
       setActiveResult(data);
@@ -260,19 +255,12 @@ export function ThesisPanel({ portfolioId }: { portfolioId: string }) {
               {charCount > 0 ? `${charCount.toLocaleString()} / 10,000` : "50 characters minimum"}
             </span>
             <div className="flex items-center gap-2">
-              <select
-                value={provider}
-                onChange={(e) => { setProvider(e.target.value); setModel(PROVIDER_DEFAULT_MODELS[e.target.value] ?? ""); }}
-                className="bg-input border border-input-border rounded-sm px-2 py-1.5 text-xs text-fg-secondary focus:outline-hidden focus:border-blue-500"
-              >
-                {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-              <input
-                type="text"
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                placeholder="model"
-                className="w-40 bg-input border border-input-border rounded-sm px-2 py-1.5 text-xs text-fg-secondary placeholder:text-subtle focus:outline-hidden focus:border-blue-500"
+              <LlmConfigPicker
+                layout="compact"
+                value={llmConfig}
+                onChange={setLlmConfig}
+                providerClassName="bg-input border border-input-border rounded-sm px-2 py-1.5 text-xs text-fg-secondary focus:outline-hidden focus:border-blue-500"
+                modelClassName="w-40 bg-input border border-input-border rounded-sm px-2 py-1.5 text-xs text-fg-secondary placeholder:text-subtle focus:outline-hidden focus:border-blue-500"
               />
               <button
                 onClick={() => analyzeMutation.mutate()}

@@ -1,19 +1,10 @@
 "use client";
-import { useState, useRef, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { getProviderModels, sendPortfolioChat } from "@/lib/api";
+import { useState, useEffect, useRef } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { sendPortfolioChat } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
-
-const PROVIDERS = ["openai", "anthropic", "google", "groq", "ollama", "vllm"] as const;
-
-const PROVIDER_PLACEHOLDERS: Record<string, string> = {
-  openai: "gpt-4o-mini",
-  anthropic: "claude-haiku-4-5-20251001",
-  google: "gemini-2.5-flash",
-  groq: "llama-3.3-70b-versatile",
-  ollama: "llama3",
-  vllm: "mistral-7b",
-};
+import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 
 const SUGGESTED = [
   "Where am I most overexposed?",
@@ -23,25 +14,15 @@ const SUGGESTED = [
 ];
 
 export function ChatPanel({ portfolioId }: { portfolioId: string }) {
+  const { provider, model } = useDefaultLlmConfig();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
-  const [provider, setProvider] = useState("openai");
-  const [model, setModel] = useState("");
+  const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model });
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const { data: models = [] } = useQuery({
-    queryKey: ["models", provider],
-    queryFn: () => getProviderModels(provider),
-    retry: false,
-  });
-
-  useEffect(() => { setModel(""); }, [provider]);
-
   useEffect(() => {
-    if (["ollama", "vllm"].includes(provider) && models.length > 0 && !model) {
-      setModel(models[0]);
-    }
-  }, [models, provider, model]);
+    setLlmConfig({ provider, model });
+  }, [provider, model]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -49,7 +30,13 @@ export function ChatPanel({ portfolioId }: { portfolioId: string }) {
 
   const sendMutation = useMutation({
     mutationFn: (msg: string) =>
-      sendPortfolioChat(portfolioId, msg, messages, provider, model || PROVIDER_PLACEHOLDERS[provider] || ""),
+      sendPortfolioChat(
+        portfolioId,
+        msg,
+        messages,
+        llmConfig.provider,
+        resolvedLlmModel(llmConfig),
+      ),
     onSuccess: (data) => {
       setMessages((prev) => [...prev, { role: "assistant", content: data.response }]);
     },
@@ -75,45 +62,19 @@ export function ChatPanel({ portfolioId }: { portfolioId: string }) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-4 min-h-[24rem] lg:h-[calc(100vh-200px)]">
-      {/* Sidebar */}
       <div className="w-full lg:w-48 shrink-0 flex flex-col gap-4">
         <div className="bg-input/60 border border-input-border rounded-lg p-3">
           <p className="text-xs font-medium text-muted mb-1">Context</p>
           <p className="text-xs text-muted">Live holdings, verdicts, and latest insight.</p>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-xs text-muted">Provider</label>
-          <select
-            value={provider}
-            onChange={(e) => setProvider(e.target.value)}
-            className="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
-          >
-            {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs text-muted">Model</label>
-          {models.length > 0 ? (
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
-            >
-              <option value="">— select —</option>
-              {models.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          ) : (
-            <input
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder={PROVIDER_PLACEHOLDERS[provider] ?? "model name"}
-              className="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg placeholder:text-subtle focus:outline-hidden focus:border-blue-500"
-            />
-          )}
-        </div>
+        <LlmConfigPicker
+          layout="stacked"
+          value={llmConfig}
+          onChange={setLlmConfig}
+          providerClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+          modelClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+        />
 
         {messages.length > 0 && (
           <button
@@ -125,22 +86,17 @@ export function ChatPanel({ portfolioId }: { portfolioId: string }) {
         )}
       </div>
 
-      {/* Main chat area */}
       <div className="flex-1 flex flex-col bg-page/50 border border-input-border rounded-xl overflow-hidden">
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-6">
-              <div className="text-center space-y-1">
-                <p className="text-fg-secondary text-sm font-medium">Ask about your portfolio</p>
-                <p className="text-muted text-xs">Questions answered using your live holdings, verdicts, and latest AI insight.</p>
-              </div>
-              <div className="flex flex-wrap gap-2 justify-center max-w-lg">
+            <div className="flex flex-col items-center justify-center h-full gap-4 text-center px-4">
+              <p className="text-muted text-sm">Ask anything about your portfolio.</p>
+              <div className="flex flex-wrap gap-2 justify-center">
                 {SUGGESTED.map((q) => (
                   <button
                     key={q}
                     onClick={() => submit(q)}
-                    disabled={sendMutation.isPending}
-                    className="px-3 py-2 text-xs bg-input hover:bg-muted-surface border border-input-border hover:border-border-strong text-fg-secondary rounded-lg transition-colors disabled:opacity-50"
+                    className="text-xs bg-input border border-input-border rounded-full px-3 py-1.5 text-fg-secondary hover:border-blue-500 hover:text-fg transition-colors"
                   >
                     {q}
                   </button>
@@ -149,53 +105,39 @@ export function ChatPanel({ portfolioId }: { portfolioId: string }) {
             </div>
           ) : (
             messages.map((msg, i) => (
-              <div key={i} className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[80%] rounded-xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
-                    msg.role === "user"
-                      ? "bg-blue-600 text-fg rounded-br-sm"
-                      : "bg-input text-fg border border-input-border rounded-bl-sm"
-                  }`}
-                >
-                  {msg.content}
-                </div>
+              <div
+                key={i}
+                className={`max-w-[85%] rounded-lg px-3 py-2 text-sm ${
+                  msg.role === "user"
+                    ? "ml-auto bg-blue-900/30 border border-blue-800/40 text-fg"
+                    : "bg-input/60 border border-input-border text-fg-secondary"
+                }`}
+              >
+                <p className="whitespace-pre-wrap">{msg.content}</p>
               </div>
             ))
           )}
-
-          {sendMutation.isPending && (
-            <div className="flex justify-start">
-              <div className="bg-input border border-input-border rounded-xl rounded-bl-sm px-4 py-3">
-                <div className="flex gap-1 items-center">
-                  <span className="w-1.5 h-1.5 bg-subtle rounded-full animate-bounce [animation-delay:0ms]" />
-                  <span className="w-1.5 h-1.5 bg-subtle rounded-full animate-bounce [animation-delay:150ms]" />
-                  <span className="w-1.5 h-1.5 bg-subtle rounded-full animate-bounce [animation-delay:300ms]" />
-                </div>
-              </div>
-            </div>
-          )}
-
           <div ref={bottomRef} />
         </div>
 
-        <div className="border-t border-input-border p-3 flex gap-2 items-end">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={sendMutation.isPending}
-            placeholder="Ask a question… (Enter to send, Shift+Enter for newline)"
-            rows={1}
-            className="flex-1 bg-input border border-input-border rounded-lg px-3 py-2 text-sm text-fg placeholder:text-subtle focus:outline-hidden focus:border-blue-500 resize-none disabled:opacity-50 max-h-32 overflow-y-auto"
-            style={{ minHeight: "2.5rem" }}
-          />
-          <button
-            onClick={() => submit(input)}
-            disabled={sendMutation.isPending || !input.trim()}
-            className="shrink-0 px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-muted-surface disabled:text-muted text-fg text-sm font-medium rounded-lg transition-colors"
-          >
-            Send
-          </button>
+        <div className="border-t border-input-border p-3">
+          <div className="flex gap-2">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={2}
+              placeholder="Ask about your portfolio…"
+              className="flex-1 bg-input border border-input-border rounded-lg px-3 py-2 text-sm text-fg placeholder:text-subtle focus:outline-hidden focus:border-blue-500 resize-none"
+            />
+            <button
+              onClick={() => submit(input)}
+              disabled={!input.trim() || sendMutation.isPending}
+              className="self-end px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-fg text-sm rounded-lg transition-colors"
+            >
+              {sendMutation.isPending ? "…" : "Send"}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -6,6 +6,9 @@ export interface User {
   name: string;
   role: "admin" | "member";
   preferred_currency: string;
+  default_llm_provider: string;
+  default_llm_model: string | null;
+  default_llm_depth: "quick" | "standard" | "deep";
 }
 
 export interface Run {

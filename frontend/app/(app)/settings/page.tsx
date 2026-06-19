@@ -16,6 +16,14 @@ import {
   updateAppSettings,
 } from "@/lib/api";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
+import {
+  DEFAULT_LLM_DEPTH,
+  DEFAULT_LLM_PROVIDER,
+  validateDefaultLlmConfig,
+  type LlmDepth,
+  type LlmProvider,
+} from "@/lib/llmConfig";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { ApiKeyRow } from "@/components/settings/ApiKeyRow";
 import { InfoPopover } from "@/components/settings/InfoPopover";
 import { ServerUrlRow } from "@/components/settings/ServerUrlRow";
@@ -386,20 +394,45 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [preferredCurrency, setPreferredCurrency] = useState("USD");
+  const [defaultLlmConfig, setDefaultLlmConfig] = useState<LlmConfigValue>({
+    provider: DEFAULT_LLM_PROVIDER,
+    model: "",
+    depth: DEFAULT_LLM_DEPTH,
+  });
   const [profileStatus, setProfileStatus] = useState<"idle" | "success" | "error">("idle");
   const [profileError, setProfileError] = useState("");
 
-  // Sync preferred_currency from server once loaded
+  // Sync preferred_currency and default LLM config from server once loaded
   useEffect(() => {
     if (me?.preferred_currency) setPreferredCurrency(me.preferred_currency);
-  }, [me?.preferred_currency]);
+    if (me) {
+      setDefaultLlmConfig({
+        provider: (me.default_llm_provider as LlmProvider) ?? DEFAULT_LLM_PROVIDER,
+        model: me.default_llm_model ?? "",
+        depth: (me.default_llm_depth as LlmDepth) ?? DEFAULT_LLM_DEPTH,
+      });
+    }
+  }, [me?.preferred_currency, me?.default_llm_provider, me?.default_llm_model, me?.default_llm_depth, me]);
 
   const profileMutation = useMutation({
-    mutationFn: () => updateProfile({
-      ...(profileName.trim() ? { name: profileName.trim() } : {}),
-      ...(currentPassword && newPassword ? { current_password: currentPassword, new_password: newPassword } : {}),
-      preferred_currency: preferredCurrency,
-    }),
+    mutationFn: () => {
+      const validationError = validateDefaultLlmConfig(
+        defaultLlmConfig.provider,
+        defaultLlmConfig.model,
+        defaultLlmConfig.depth ?? DEFAULT_LLM_DEPTH,
+      );
+      if (validationError) {
+        throw new Error(validationError);
+      }
+      return updateProfile({
+        ...(profileName.trim() ? { name: profileName.trim() } : {}),
+        ...(currentPassword && newPassword ? { current_password: currentPassword, new_password: newPassword } : {}),
+        preferred_currency: preferredCurrency,
+        default_llm_provider: defaultLlmConfig.provider,
+        default_llm_model: defaultLlmConfig.model.trim() || null,
+        default_llm_depth: defaultLlmConfig.depth ?? DEFAULT_LLM_DEPTH,
+      });
+    },
     onSuccess: () => {
       setCurrentPassword("");
       setNewPassword("");
@@ -522,6 +555,23 @@ export default function SettingsPage() {
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
+            </div>
+            <Divider />
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-muted text-xs font-medium uppercase tracking-wide">Default LLM Configuration</p>
+                <p className="text-[10px] text-muted mt-0.5">
+                  Pre-fills provider and model on new runs, watchlist items, portfolio insights, chat, and thesis checks.
+                </p>
+              </div>
+              <LlmConfigPicker
+                value={defaultLlmConfig}
+                onChange={(value) => { setDefaultLlmConfig(value); setProfileStatus("idle"); }}
+                showDepth
+                providerClassName="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+                modelClassName="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-md focus:outline-hidden focus:border-blue-500"
+                depthClassName="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+              />
             </div>
             <div className="flex items-center gap-3 pt-1">
               <button

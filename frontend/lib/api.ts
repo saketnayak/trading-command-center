@@ -199,7 +199,15 @@ export async function getMe(): Promise<User> {
   return r.json();
 }
 
-export async function updateProfile(data: { name?: string; current_password?: string; new_password?: string; preferred_currency?: string }): Promise<void> {
+export async function updateProfile(data: {
+  name?: string;
+  current_password?: string;
+  new_password?: string;
+  preferred_currency?: string;
+  default_llm_provider?: string;
+  default_llm_model?: string | null;
+  default_llm_depth?: string;
+}): Promise<void> {
   const r = await fetchWithAuth("/auth/me", { method: "PATCH", body: JSON.stringify(data) });
   if (!r.ok) {
     const body = await r.json().catch(() => null);

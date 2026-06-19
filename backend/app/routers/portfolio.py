@@ -8,7 +8,7 @@ from datetime import datetime, timezone, date, timedelta
 from typing import Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile, File
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from sqlalchemy.orm import selectinload
@@ -39,6 +39,12 @@ from app.services.settings_service import get_app_settings
 from app.schemas.portfolio_delivery_settings import UpdateDeliverySettingsRequest
 from app.utils.asset_type import is_crypto
 from app.utils.response_language import DEFAULT_RESPONSE_LANGUAGE, normalize_response_language
+from app.utils.llm_providers import (
+    DEFAULT_LLM_DEPTH,
+    normalize_llm_depth,
+    normalize_llm_provider,
+    resolve_llm_model,
+)
 import app.services.crypto_data_service as _crypto
 import app.services.fx_service as fx
 import app.services.yfinance_service as _yf
@@ -743,12 +749,32 @@ class InsightGenerateRequest(BaseModel):
     llm_provider: str
     llm_model: str
 
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, v: str) -> str:
+        return normalize_llm_provider(v)
+
+    @model_validator(mode="after")
+    def resolve_model(self) -> "InsightGenerateRequest":
+        self.llm_model = resolve_llm_model(self.llm_provider, self.llm_model)
+        return self
+
 
 class ChatRequest(BaseModel):
     message: str
     conversation_history: list[dict] = []
     llm_provider: str
     llm_model: str
+
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, v: str) -> str:
+        return normalize_llm_provider(v)
+
+    @model_validator(mode="after")
+    def resolve_model(self) -> "ChatRequest":
+        self.llm_model = resolve_llm_model(self.llm_provider, self.llm_model)
+        return self
 
 
 class ChatResponse(BaseModel):
@@ -761,6 +787,16 @@ class ThesisCrossRefRequest(BaseModel):
     thesis_text: str
     llm_provider: str
     llm_model: str
+
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, v: str) -> str:
+        return normalize_llm_provider(v)
+
+    @model_validator(mode="after")
+    def resolve_model(self) -> "ThesisCrossRefRequest":
+        self.llm_model = resolve_llm_model(self.llm_provider, self.llm_model)
+        return self
 
 
 class ThesisCrossRefResponse(BaseModel):
@@ -1015,15 +1051,30 @@ async def delete_thesis_crossref(
 class BatchAnalyzeRequest(BaseModel):
     llm_provider: str
     llm_model: str
-    depth: str = "standard"
+    depth: str = DEFAULT_LLM_DEPTH
     analysts: list[str] = ["market", "social", "news", "fundamentals"]
     response_language: str = DEFAULT_RESPONSE_LANGUAGE
     staleness_days: int = 7
+
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, v: str) -> str:
+        return normalize_llm_provider(v)
+
+    @field_validator("depth")
+    @classmethod
+    def validate_depth(cls, v: str) -> str:
+        return normalize_llm_depth(v)
 
     @field_validator("response_language")
     @classmethod
     def validate_response_language(cls, v: str | None) -> str:
         return normalize_response_language(v)
+
+    @model_validator(mode="after")
+    def resolve_model(self) -> "BatchAnalyzeRequest":
+        self.llm_model = resolve_llm_model(self.llm_provider, self.llm_model)
+        return self
 
 
 class BatchAnalyzeResult(BaseModel):

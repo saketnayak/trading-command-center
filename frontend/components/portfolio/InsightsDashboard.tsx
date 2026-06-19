@@ -2,32 +2,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { generateInsight, getLatestInsight, listInsights, getProviderModels } from "@/lib/api";
+import { generateInsight, getLatestInsight, listInsights } from "@/lib/api";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 import type { PortfolioInsight, InsightActionItem, InsightRiskAlert } from "@/lib/types";
 import { BehavioralAlerts } from "@/components/portfolio/BehavioralAlerts";
-
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-const PROVIDERS = ["openai", "anthropic", "google", "groq", "ionos", "ollama", "vllm"] as const;
-const PROVIDER_LABELS: Record<string, string> = {
-  openai: "OpenAI",
-  anthropic: "Anthropic",
-  google: "Google",
-  groq: "Groq",
-  ionos: "IONOS",
-  ollama: "Ollama",
-  vllm: "vLLM",
-};
-const PROVIDER_PLACEHOLDERS: Record<string, string> = {
-  openai: "gpt-4o-mini",
-  anthropic: "claude-haiku-4-5-20251001",
-  google: "gemini-2.5-flash",
-  groq: "llama-3.3-70b-versatile",
-  ionos: "openai/gpt-oss-120b",
-  ollama: "llama3",
-  vllm: "mistral-7b",
-};
+import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 
 const ACTION_COLORS: Record<string, string> = {
   BUY_MORE: "bg-green-500/20 text-green-300 border-green-500/30",
@@ -246,27 +226,18 @@ function GenerateForm({
   portfolioId: string;
   onGenerated: (insight: PortfolioInsight) => void;
 }) {
-  const [provider, setProvider] = useState("openai");
-  const [model, setModel] = useState("");
+  const { provider, model } = useDefaultLlmConfig();
+  const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model });
 
-  const { data: models = [] } = useQuery({
-    queryKey: ["models", provider],
-    queryFn: () => getProviderModels(provider),
-    retry: false,
-  });
-
-  useEffect(() => { setModel(""); }, [provider]);
   useEffect(() => {
-    if (["ollama", "vllm"].includes(provider) && models.length > 0 && !model) {
-      setModel(models[0]);
-    }
-  }, [models, provider, model]);
+    setLlmConfig({ provider, model });
+  }, [provider, model]);
 
   const mutation = useMutation({
     mutationFn: () =>
       generateInsight(portfolioId, {
-        llm_provider: provider,
-        llm_model: model || PROVIDER_PLACEHOLDERS[provider],
+        llm_provider: llmConfig.provider,
+        llm_model: resolvedLlmModel(llmConfig),
       }),
     onSuccess: (insight) => onGenerated(insight),
   });
@@ -277,39 +248,13 @@ function GenerateForm({
         Generate a full AI analysis of your portfolio — health score, action items, risk alerts, and sector breakdown.
       </p>
       <div className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-muted text-xs mb-1">Provider</label>
-          <select
-            value={provider}
-            onChange={(e) => setProvider(e.target.value)}
-            className="bg-page border border-input-border rounded-sm px-3 py-1.5 text-fg text-sm focus:outline-hidden focus:border-blue-600"
-          >
-            {PROVIDERS.map((p) => (
-              <option key={p} value={p}>{PROVIDER_LABELS[p]}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-muted text-xs mb-1">Model</label>
-          {models.length > 0 ? (
-            <select
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              className="bg-page border border-input-border rounded-sm px-3 py-1.5 text-fg text-sm focus:outline-hidden focus:border-blue-600"
-            >
-              <option value="">— select model —</option>
-              {models.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          ) : (
-            <input
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder={PROVIDER_PLACEHOLDERS[provider]}
-              className="bg-page border border-input-border rounded-sm px-3 py-1.5 text-fg text-sm focus:outline-hidden focus:border-blue-600 w-48"
-            />
-          )}
-        </div>
+        <LlmConfigPicker
+          layout="inline"
+          value={llmConfig}
+          onChange={setLlmConfig}
+          providerClassName="bg-page border border-input-border rounded-sm px-3 py-1.5 text-fg text-sm focus:outline-hidden focus:border-blue-600"
+          modelClassName="bg-page border border-input-border rounded-sm px-3 py-1.5 text-fg text-sm focus:outline-hidden focus:border-blue-600 w-48"
+        />
         <button
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending}

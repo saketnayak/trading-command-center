@@ -9,8 +9,10 @@ import {
   removeWatchlistItem,
   updateWatchlistItem,
   triggerWatchlistRun,
-  getProviderModels,
 } from "@/lib/api";
+import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
+import { DEFAULT_LLM_DEPTH } from "@/lib/llmConfig";
 import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { WatchlistItem, AddWatchlistItemRequest, TickerMetadata } from "@/lib/types";
@@ -27,40 +29,20 @@ import { CronLabel } from "@/components/watchlist/CronLabel";
 import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
 
 const ANALYSTS = ANALYST_OPTIONS;
-const LOCAL_PROVIDERS = ["ollama", "vllm"];
-const PLACEHOLDERS: Record<string, string> = {
-  openai: "gpt-4o-mini",
-  anthropic: "claude-haiku-4-5",
-  google: "gemini-2.0-flash",
-  groq: "llama-3.3-70b-versatile",
-  ionos: "openai/gpt-oss-120b",
-  ollama: "llama3",
-  vllm: "mistralai/Mistral-7B-Instruct-v0.3",
-};
 
 // ─── Add Item Form ────────────────────────────────────────────────────────────
 
 function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemRequest) => void; isPending: boolean }) {
+  const { provider, model, depth } = useDefaultLlmConfig();
   const [ticker, setTicker] = useState("");
-  const [provider, setProvider] = useState("ionos");
-  const [model, setModel] = useState("");
-  const [depth, setDepth] = useState<"quick" | "standard" | "deep">("standard");
+  const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model, depth });
   const [analysts, setAnalysts] = useState<string[]>(DEFAULT_ANALYSTS);
   const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>(DEFAULT_RESPONSE_LANGUAGE);
   const [cron, setCron] = useState<string | null>(DEFAULT_WATCHLIST_CRON);
 
-  const isLocal = LOCAL_PROVIDERS.includes(provider);
-
-  const { data: models = [], isLoading: modelsLoading } = useQuery({
-    queryKey: ["models", provider],
-    queryFn: () => getProviderModels(provider),
-    retry: false,
-  });
-
-  useEffect(() => { setModel(""); }, [provider]);
   useEffect(() => {
-    if (isLocal && models.length > 0 && !model) setModel(models[0]);
-  }, [models, isLocal, model]);
+    setLlmConfig({ provider, model, depth });
+  }, [provider, model, depth]);
 
   function toggleAnalyst(name: string) {
     setAnalysts((prev) => prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]);
@@ -70,9 +52,9 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
     if (!ticker || analysts.length === 0) return;
     onAdd({
       ticker,
-      llm_provider: provider,
-      llm_model: model || PLACEHOLDERS[provider] || "",
-      depth,
+      llm_provider: llmConfig.provider,
+      llm_model: resolvedLlmModel(llmConfig),
+      depth: llmConfig.depth ?? DEFAULT_LLM_DEPTH,
       analysts,
       response_language: responseLanguage,
       schedule_cron: cron,
@@ -90,39 +72,16 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
           <input value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} placeholder="AAPL" className={inputCls} />
         </div>
 
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">Provider</label>
-          <select value={provider} onChange={(e) => setProvider(e.target.value)} className={inputCls}>
-            <option value="openai">openai</option>
-            <option value="anthropic">anthropic</option>
-            <option value="google">google</option>
-            <option value="groq">groq</option>
-            <option value="ionos">ionos</option>
-            <option value="ollama">ollama (local)</option>
-            <option value="vllm">vllm (local)</option>
-          </select>
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">Model</label>
-          {modelsLoading ? (
-            <select disabled className={`${inputCls} text-muted`}><option>Loading…</option></select>
-          ) : models.length > 0 ? (
-            <select value={model} onChange={(e) => setModel(e.target.value)} className={inputCls}>
-              {models.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          ) : (
-            <input value={model} onChange={(e) => setModel(e.target.value)} placeholder={PLACEHOLDERS[provider]} className={inputCls} />
-          )}
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">Depth</label>
-          <select value={depth} onChange={(e) => setDepth(e.target.value as "quick" | "standard" | "deep")} className={inputCls}>
-            <option value="quick">Quick</option>
-            <option value="standard">Standard</option>
-            <option value="deep">Deep</option>
-          </select>
+        <div className="flex flex-col gap-1 sm:col-span-2">
+          <LlmConfigPicker
+            layout="inline"
+            value={llmConfig}
+            onChange={setLlmConfig}
+            showDepth
+            providerClassName={inputCls}
+            modelClassName={inputCls}
+            depthClassName={inputCls}
+          />
         </div>
 
         <div className="flex flex-col gap-1">

@@ -186,29 +186,28 @@ async def _fire_daily_portfolio_insights() -> None:
     from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
     from app.models.portfolio_insight import PortfolioInsight, InsightStatus, InsightTrigger
     from app.models.api_key import ApiKey
+    from app.models.user import User
     from app.services.portfolio_insight_runner import generate_portfolio_insight
+    from app.utils.llm_providers import DEFAULT_LLM_MODELS, resolve_llm_model
 
-    async with AsyncSessionLocal() as db:
-        # Pick the first available LLM provider key
-        providers_in_order = ["openai", "anthropic", "google", "groq"]
-        llm_provider = None
-        llm_model = None
+    async def _pick_llm_for_user(db, user: User | None) -> tuple[str, str] | None:
+        providers_in_order = list(DEFAULT_LLM_MODELS.keys())
+        if user:
+            row = (
+                await db.execute(select(ApiKey).where(ApiKey.provider == user.default_llm_provider))
+            ).scalar_one_or_none()
+            if row and row.is_valid:
+                return user.default_llm_provider, resolve_llm_model(
+                    user.default_llm_provider,
+                    user.default_llm_model,
+                )
         for prov in providers_in_order:
             row = (await db.execute(select(ApiKey).where(ApiKey.provider == prov))).scalar_one_or_none()
             if row and row.is_valid:
-                llm_provider = prov
-                llm_model = {
-                    "openai": "gpt-4o-mini",
-                    "anthropic": "claude-haiku-4-5-20251001",
-                    "google": "gemini-2.5-flash",
-                    "groq": "llama-3.3-70b-versatile",
-                    "ionos": "openai/gpt-oss-120b",
-                }[prov]
-                break
+                return prov, DEFAULT_LLM_MODELS[prov]
+        return None
 
-        if not llm_provider:
-            return
-
+    async with AsyncSessionLocal() as db:
         all_portfolios = (
             await db.execute(select(Portfolio).options(_selectinload(Portfolio.snapshots)))
         ).scalars().all()
@@ -217,6 +216,12 @@ async def _fire_daily_portfolio_insights() -> None:
         for portfolio in all_portfolios:
             if not portfolio.snapshots or not any(s.row_count > 0 for s in portfolio.snapshots):
                 continue
+
+            owner = await db.get(User, portfolio.user_id)
+            llm_choice = await _pick_llm_for_user(db, owner)
+            if not llm_choice:
+                continue
+            llm_provider, llm_model = llm_choice
 
             # Determine delivery timezone: use the portfolio's setting or default to UTC
             ds = (

@@ -17,6 +17,9 @@ class User(Base):
     role: Mapped[UserRole] = mapped_column(SAEnum(UserRole), default=UserRole.member)
     google_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
     preferred_currency: Mapped[str] = mapped_column(String(8), server_default="USD")
+    default_llm_provider: Mapped[str] = mapped_column(String(32), server_default="openai")
+    default_llm_model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    default_llm_depth: Mapped[str] = mapped_column(String(16), server_default="standard")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     investor_profile: Mapped["InvestorProfile | None"] = relationship(
         "InvestorProfile", back_populates="user", uselist=False

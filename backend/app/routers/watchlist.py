@@ -11,6 +11,12 @@ from app.models.user import User
 from app.dependencies import get_current_user
 from app.utils.response_language import DEFAULT_RESPONSE_LANGUAGE, normalize_response_language
 from app.utils.cron_validation import normalize_schedule_cron, parse_cron_trigger
+from app.utils.llm_providers import (
+    DEFAULT_LLM_DEPTH,
+    normalize_llm_depth,
+    normalize_llm_provider,
+    resolve_llm_model,
+)
 
 router = APIRouter()
 
@@ -22,10 +28,20 @@ class WatchlistItemCreate(BaseModel):
     ticker: str
     llm_provider: str
     llm_model: str
-    depth: str = "standard"
+    depth: str = DEFAULT_LLM_DEPTH
     analysts: list[str] = _DEFAULT_ANALYSTS
     response_language: str = DEFAULT_RESPONSE_LANGUAGE
     schedule_cron: str | None = None
+
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, v: str) -> str:
+        return normalize_llm_provider(v)
+
+    @field_validator("depth")
+    @classmethod
+    def validate_depth(cls, v: str) -> str:
+        return normalize_llm_depth(v)
 
     @field_validator("response_language")
     @classmethod
@@ -39,6 +55,7 @@ class WatchlistItemCreate(BaseModel):
 
     @model_validator(mode="after")
     def validate_schedule(self) -> "WatchlistItemCreate":
+        self.llm_model = resolve_llm_model(self.llm_provider, self.llm_model)
         if self.schedule_cron:
             parse_cron_trigger(self.schedule_cron)
         return self
@@ -52,6 +69,20 @@ class WatchlistItemUpdate(BaseModel):
     depth: str | None = None
     analysts: list[str] | None = None
     response_language: str | None = None
+
+    @field_validator("llm_provider")
+    @classmethod
+    def validate_llm_provider(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return normalize_llm_provider(v)
+
+    @field_validator("depth")
+    @classmethod
+    def validate_depth(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        return normalize_llm_depth(v)
 
     @field_validator("response_language")
     @classmethod

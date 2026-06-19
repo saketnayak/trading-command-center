@@ -7,10 +7,9 @@ from app.models.api_key import ApiKey
 from app.models.user import User
 from app.services.encryption import decrypt_key
 from app.dependencies import get_current_user
+from app.utils.llm_providers import LOCAL_LLM_PROVIDERS, normalize_llm_provider
 
 router = APIRouter()
-
-_SUPPORTED_LOCAL = {"ollama", "vllm"}
 
 _STATIC_MODELS: dict[str, list[str]] = {
     "openai": [
@@ -56,10 +55,15 @@ async def list_models(
     db: AsyncSession = Depends(get_db),
     _user: User = Depends(get_current_user),
 ):
+    try:
+        provider = normalize_llm_provider(provider)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+
     if provider in _STATIC_MODELS:
         return _STATIC_MODELS[provider]
 
-    if provider not in _SUPPORTED_LOCAL:
+    if provider not in LOCAL_LLM_PROVIDERS:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Unknown provider '{provider}'")
 
     row = (await db.execute(select(ApiKey).where(ApiKey.provider == provider))).scalar_one_or_none()

@@ -1,25 +1,16 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { createRun, getProviderModels } from "@/lib/api";
+import { useMutation } from "@tanstack/react-query";
+import { createRun } from "@/lib/api";
 import { isCrypto } from "@/lib/asset";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
-
 import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
+import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
+import { DEFAULT_LLM_DEPTH, DEFAULT_LLM_PROVIDER, type LlmDepth, type LlmProvider } from "@/lib/llmConfig";
 
 const ANALYSTS = ANALYST_OPTIONS;
-const LOCAL_PROVIDERS = ["ollama", "vllm"];
-
-const PLACEHOLDERS: Record<string, string> = {
-  openai: "gpt-5.5",
-  anthropic: "claude-sonnet-4-6",
-  google: "gemini-3-flash-preview",
-  groq: "llama-3.3-70b-versatile",
-  ionos: "openai/gpt-oss-120b",
-  ollama: "llama3",
-  vllm: "mistralai/Mistral-7B-Instruct-v0.3",
-};
 
 const POPULAR_TICKERS = [
   // Stocks
@@ -52,45 +43,30 @@ interface Props {
 }
 
 export function RunForm({ onSuccess, initialValues }: Props) {
+  const { provider: defaultProvider, model: defaultModel, depth: defaultDepth } = useDefaultLlmConfig();
   const [ticker, setTicker] = useState(initialValues?.ticker ?? "");
   const [label, setLabel] = useState(initialValues?.label ?? "");
   const [analysisDate, setAnalysisDate] = useState(new Date().toISOString().slice(0, 10));
   const [analysts, setAnalysts] = useState<string[]>(
     initialValues?.analysts ?? DEFAULT_ANALYSTS
   );
-  const [provider, setProvider] = useState(initialValues?.provider ?? "openai");
-  const [model, setModel] = useState(initialValues?.model ?? "");
-  const [depth, setDepth] = useState<"quick" | "standard" | "deep">(
-    (initialValues?.depth as "quick" | "standard" | "deep") ?? "standard"
-  );
+  const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({
+    provider: (initialValues?.provider as LlmProvider) ?? DEFAULT_LLM_PROVIDER,
+    model: initialValues?.model ?? "",
+    depth: (initialValues?.depth as LlmDepth) ?? DEFAULT_LLM_DEPTH,
+  });
   const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>(
     initialValues?.response_language ?? DEFAULT_RESPONSE_LANGUAGE
   );
 
-  const isLocal = LOCAL_PROVIDERS.includes(provider);
-
-  const { data: models = [], isLoading: modelsLoading } = useQuery({
-    queryKey: ["models", provider],
-    queryFn: () => getProviderModels(provider),
-    enabled: true,
-    retry: false,
-  });
-
   useEffect(() => {
-    // Only reset model when provider changes if no initial model was provided
-    if (!initialValues?.model) setModel("");
-  }, [provider]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (isLocal && models.length > 0 && !model) {
-      setModel(models[0]);
-    }
-  }, [models, isLocal, model]);
-
-  // If an initial model was provided and the model list has loaded, keep it selected
-  useEffect(() => {
-    if (initialValues?.model && !model) setModel(initialValues.model);
-  }, [initialValues?.model]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (initialValues?.provider || initialValues?.model || initialValues?.depth) return;
+    setLlmConfig({
+      provider: defaultProvider,
+      model: defaultModel,
+      depth: defaultDepth,
+    });
+  }, [defaultProvider, defaultModel, defaultDepth, initialValues]);
 
   const mutation = useMutation({
     mutationFn: createRun,
@@ -100,13 +76,12 @@ export function RunForm({ onSuccess, initialValues }: Props) {
   const cryptoTicker = isCrypto(ticker);
 
   function toggleAnalyst(name: string) {
-    if (name === "fundamentals" && cryptoTicker) return; // disabled for crypto
+    if (name === "fundamentals" && cryptoTicker) return;
     setAnalysts((prev) =>
       prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]
     );
   }
 
-  // Auto-remove fundamentals when user types a crypto ticker
   useEffect(() => {
     if (cryptoTicker) {
       setAnalysts((prev) => prev.filter((a) => a !== "fundamentals"));
@@ -120,9 +95,9 @@ export function RunForm({ onSuccess, initialValues }: Props) {
       ticker,
       analysis_date: analysisDate,
       analysts,
-      llm_provider: provider,
-      llm_model: model || PLACEHOLDERS[provider],
-      depth,
+      llm_provider: llmConfig.provider,
+      llm_model: resolvedLlmModel(llmConfig),
+      depth: llmConfig.depth ?? DEFAULT_LLM_DEPTH,
       response_language: responseLanguage,
       ...(label ? { label } : {}),
     });
@@ -194,64 +169,12 @@ export function RunForm({ onSuccess, initialValues }: Props) {
         )}
       </div>
 
-      <div className="mb-4">
-        <label className="block text-muted text-xs mb-1">LLM Provider</label>
-        <select
-          value={provider}
-          onChange={(e) => setProvider(e.target.value)}
-          className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-fg text-sm focus:outline-hidden focus:border-blue-600"
-        >
-          <option value="openai">openai</option>
-          <option value="anthropic">anthropic</option>
-          <option value="google">google</option>
-          <option value="groq">groq</option>
-          <option value="ionos">ionos</option>
-          <option value="ollama">ollama (local)</option>
-          <option value="vllm">vllm (local)</option>
-        </select>
-      </div>
-
-      <div className="mb-4">
-        <label className="block text-muted text-xs mb-1">LLM Model</label>
-        {modelsLoading ? (
-          <select disabled className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-muted text-sm">
-            <option>Loading models…</option>
-          </select>
-        ) : models.length > 0 ? (
-          <select
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-fg text-sm focus:outline-hidden focus:border-blue-600"
-          >
-            {models.map((m) => (
-              <option key={m} value={m}>{m}</option>
-            ))}
-          </select>
-        ) : (
-          <>
-            <input
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder={PLACEHOLDERS[provider]}
-              className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-fg text-sm focus:outline-hidden focus:border-blue-600"
-            />
-            {isLocal && <p className="text-amber-400 text-xs mt-1">Server unreachable — enter model name manually</p>}
-          </>
-        )}
-      </div>
-
       <div className="mb-6">
-        <label className="block text-muted text-xs mb-1">Research Depth</label>
-        <select
-          value={depth}
-          onChange={(e) => setDepth(e.target.value as "quick" | "standard" | "deep")}
-          className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-fg text-sm focus:outline-hidden focus:border-blue-600"
-        >
-          <option value="quick">Quick — 1 debate round, faster</option>
-          <option value="standard">Standard — 2 debate rounds</option>
-          <option value="deep">Deep — 3 debate rounds, most thorough</option>
-        </select>
+        <LlmConfigPicker
+          value={llmConfig}
+          onChange={setLlmConfig}
+          showDepth
+        />
       </div>
 
       <div className="mb-6">
