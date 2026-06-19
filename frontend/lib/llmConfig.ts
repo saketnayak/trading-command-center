@@ -34,15 +34,11 @@ export const LLM_PROVIDER_LABELS: Record<LlmProvider, string> = {
   vllm: "vLLM (local)",
 };
 
-export const LLM_PROVIDER_PLACEHOLDERS: Record<LlmProvider, string> = {
-  openai: "gpt-5.5",
-  anthropic: "claude-sonnet-4-6",
-  google: "gemini-3-flash-preview",
-  groq: "llama-3.3-70b-versatile",
-  ionos: "openai/gpt-oss-120b",
-  ollama: "llama3",
-  vllm: "mistralai/Mistral-7B-Instruct-v0.3",
-};
+export interface LlmSystemDefaults {
+  default_provider: string;
+  default_depth: string;
+  default_models: Record<string, string>;
+}
 
 export const LLM_API_KEY_PLACEHOLDERS: Record<CloudLlmProvider, string> = {
   openai: "sk-…",
@@ -90,21 +86,31 @@ export function isLlmDepth(value: string): value is LlmDepth {
   return (LLM_DEPTHS as readonly string[]).includes(value);
 }
 
-export function resolveLlmModel(provider: LlmProvider, model: string): string {
+export function resolveLlmModel(
+  provider: LlmProvider,
+  model: string,
+  defaultModels: Partial<Record<LlmProvider, string>>,
+): string {
   const trimmed = model.trim();
-  return trimmed || LLM_PROVIDER_PLACEHOLDERS[provider];
+  if (trimmed) return trimmed;
+  return defaultModels[provider] ?? "";
 }
 
 export function llmConfigFromUserDefaults(
   defaults?: Partial<UserDefaultLlmConfig> | null,
+  system?: Pick<LlmSystemDefaults, "default_provider" | "default_depth"> | null,
 ): LlmConfig {
   const provider = defaults?.default_llm_provider && isLlmProvider(defaults.default_llm_provider)
     ? defaults.default_llm_provider
-    : DEFAULT_LLM_PROVIDER;
+    : system?.default_provider && isLlmProvider(system.default_provider)
+      ? system.default_provider
+      : DEFAULT_LLM_PROVIDER;
   const model = defaults?.default_llm_model?.trim() ?? "";
   const depth = defaults?.default_llm_depth && isLlmDepth(defaults.default_llm_depth)
     ? defaults.default_llm_depth
-    : DEFAULT_LLM_DEPTH;
+    : system?.default_depth && isLlmDepth(system.default_depth)
+      ? system.default_depth
+      : DEFAULT_LLM_DEPTH;
   return { provider, model, depth };
 }
 

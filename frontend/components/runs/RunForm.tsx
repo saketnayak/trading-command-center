@@ -6,7 +6,7 @@ import { isCrypto } from "@/lib/asset";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
 import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
-import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 import { DEFAULT_LLM_DEPTH, DEFAULT_LLM_PROVIDER, type LlmDepth, type LlmProvider } from "@/lib/llmConfig";
 
@@ -43,7 +43,7 @@ interface Props {
 }
 
 export function RunForm({ onSuccess, initialValues }: Props) {
-  const { provider: defaultProvider, model: defaultModel, depth: defaultDepth } = useDefaultLlmConfig();
+  const { provider: defaultProvider, model: defaultModel, depth: defaultDepth, resolveModel } = useDefaultLlmConfig();
   const [ticker, setTicker] = useState(initialValues?.ticker ?? "");
   const [label, setLabel] = useState(initialValues?.label ?? "");
   const [analysisDate, setAnalysisDate] = useState(new Date().toISOString().slice(0, 10));
@@ -96,7 +96,7 @@ export function RunForm({ onSuccess, initialValues }: Props) {
       analysis_date: analysisDate,
       analysts,
       llm_provider: llmConfig.provider,
-      llm_model: resolvedLlmModel(llmConfig),
+      llm_model: resolveModel(llmConfig),
       depth: llmConfig.depth ?? DEFAULT_LLM_DEPTH,
       response_language: responseLanguage,
       ...(label ? { label } : {}),

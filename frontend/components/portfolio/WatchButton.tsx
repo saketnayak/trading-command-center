@@ -7,7 +7,7 @@ import { isCrypto } from "@/lib/asset";
 import { IconButton } from "@/components/ui/IconButton";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
-import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 import { DEFAULT_LLM_DEPTH } from "@/lib/llmConfig";
 
@@ -22,7 +22,7 @@ export type { WatchDraft };
 
 export function WatchButton({ ticker, compact = false }: { ticker: string; compact?: boolean }) {
   const queryClient = useQueryClient();
-  const { provider, model, depth } = useDefaultLlmConfig();
+  const { provider, model, depth, resolveModel } = useDefaultLlmConfig();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<WatchDraft>({
     llm_provider: provider,
@@ -56,7 +56,7 @@ export function WatchButton({ ticker, compact = false }: { ticker: string; compa
       addWatchlistItem({
         ticker,
         llm_provider: llmConfig.provider,
-        llm_model: resolvedLlmModel(llmConfig),
+        llm_model: resolveModel(llmConfig),
         depth: llmConfig.depth ?? DEFAULT_LLM_DEPTH,
         response_language: draft.response_language,
         analysts: isCrypto(ticker)

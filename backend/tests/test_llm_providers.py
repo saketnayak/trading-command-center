@@ -84,6 +84,19 @@ async def test_vllm_models_returns_list(httpx_mock):
 
 
 @pytest.mark.asyncio
+async def test_provider_defaults_returns_system_models():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _token(client, "lp-defaults@test.com")
+        r = await client.get("/llm-providers/defaults", headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["default_provider"] == "openai"
+        assert body["default_depth"] == "standard"
+        assert body["default_models"]["openai"] == "gpt-5.5"
+        assert body["default_models"]["groq"] == "llama-3.3-70b-versatile"
+
+
+@pytest.mark.asyncio
 async def test_models_requires_auth():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         r = await client.get("/llm-providers/ollama/models")

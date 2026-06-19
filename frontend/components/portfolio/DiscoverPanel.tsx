@@ -9,7 +9,7 @@ import {
   type StockRecommendation,
 } from "@/lib/api";
 import { WatchButton } from "@/components/portfolio/WatchButton";
-import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 
 type TagFilter = "All" | "Gap Fill" | "Trending" | "Mover";
@@ -21,7 +21,7 @@ const TAG_COLORS: Record<string, string> = {
 
 export function DiscoverPanel({ portfolioId }: { portfolioId: string }) {
   const router = useRouter();
-  const { provider, model } = useDefaultLlmConfig();
+  const { provider, model, resolveModel } = useDefaultLlmConfig();
   const [filter, setFilter] = useState<TagFilter>("All");
   const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model });
 
@@ -43,7 +43,7 @@ export function DiscoverPanel({ portfolioId }: { portfolioId: string }) {
       discoverStocks(
         portfolioId,
         llmConfig.provider,
-        resolvedLlmModel(llmConfig),
+        resolveModel(llmConfig),
       ),
     onSuccess: (data) => {
       setRecommendations(data.recommendations);

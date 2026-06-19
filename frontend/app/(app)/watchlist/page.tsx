@@ -10,7 +10,7 @@ import {
   updateWatchlistItem,
   triggerWatchlistRun,
 } from "@/lib/api";
-import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 import { DEFAULT_LLM_DEPTH } from "@/lib/llmConfig";
 import { TickerLabel } from "@/components/ui/TickerLabel";
@@ -33,7 +33,7 @@ const ANALYSTS = ANALYST_OPTIONS;
 // ─── Add Item Form ────────────────────────────────────────────────────────────
 
 function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemRequest) => void; isPending: boolean }) {
-  const { provider, model, depth } = useDefaultLlmConfig();
+  const { provider, model, depth, resolveModel } = useDefaultLlmConfig();
   const [ticker, setTicker] = useState("");
   const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model, depth });
   const [analysts, setAnalysts] = useState<string[]>(DEFAULT_ANALYSTS);
@@ -53,7 +53,7 @@ function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemReques
     onAdd({
       ticker,
       llm_provider: llmConfig.provider,
-      llm_model: resolvedLlmModel(llmConfig),
+      llm_model: resolveModel(llmConfig),
       depth: llmConfig.depth ?? DEFAULT_LLM_DEPTH,
       analysts,
       response_language: responseLanguage,

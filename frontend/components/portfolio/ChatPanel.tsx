@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { sendPortfolioChat } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
-import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 
 const SUGGESTED = [
@@ -14,7 +14,7 @@ const SUGGESTED = [
 ];
 
 export function ChatPanel({ portfolioId }: { portfolioId: string }) {
-  const { provider, model } = useDefaultLlmConfig();
+  const { provider, model, resolveModel } = useDefaultLlmConfig();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model });
@@ -35,7 +35,7 @@ export function ChatPanel({ portfolioId }: { portfolioId: string }) {
         msg,
         messages,
         llmConfig.provider,
-        resolvedLlmModel(llmConfig),
+        resolveModel(llmConfig),
       ),
     onSuccess: (data) => {
       setMessages((prev) => [...prev, { role: "assistant", content: data.response }]);

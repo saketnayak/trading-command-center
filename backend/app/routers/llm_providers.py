@@ -1,5 +1,6 @@
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
@@ -7,9 +8,33 @@ from app.models.api_key import ApiKey
 from app.models.user import User
 from app.services.encryption import decrypt_key
 from app.dependencies import get_current_user
-from app.utils.llm_providers import LOCAL_LLM_PROVIDERS, PROVIDER_MODEL_CATALOG, normalize_llm_provider
+from app.utils.llm_providers import (
+    DEFAULT_LLM_DEPTH,
+    DEFAULT_LLM_MODELS,
+    DEFAULT_LLM_PROVIDER,
+    LOCAL_LLM_PROVIDERS,
+    PROVIDER_MODEL_CATALOG,
+    normalize_llm_provider,
+)
 
 router = APIRouter()
+
+
+class LlmProviderDefaultsResponse(BaseModel):
+    default_provider: str
+    default_depth: str
+    default_models: dict[str, str]
+
+
+@router.get("/defaults", response_model=LlmProviderDefaultsResponse)
+async def get_provider_defaults(
+    _user: User = Depends(get_current_user),
+) -> LlmProviderDefaultsResponse:
+    return LlmProviderDefaultsResponse(
+        default_provider=DEFAULT_LLM_PROVIDER,
+        default_depth=DEFAULT_LLM_DEPTH,
+        default_models=dict(DEFAULT_LLM_MODELS),
+    )
 
 
 @router.get("/{provider}/models", response_model=list[str])

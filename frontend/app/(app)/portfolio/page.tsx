@@ -16,7 +16,7 @@ import {
   getBehavioralAlerts,
   getAppSettings,
 } from "@/lib/api";
-import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 import { DEFAULT_LLM_DEPTH } from "@/lib/llmConfig";
 import type { Portfolio, PortfolioHolding, BehavioralAlertsResponse, RegimeData, WaveSummary, TrimSignalEntry, TrimSignalsResponse } from "@/lib/types";
@@ -48,7 +48,7 @@ function BatchAnalyzeModal({
   portfolioId: string;
   onClose: () => void;
 }) {
-  const { provider, model, depth } = useDefaultLlmConfig();
+  const { provider, model, depth, resolveModel } = useDefaultLlmConfig();
   const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model, depth });
   const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>(DEFAULT_RESPONSE_LANGUAGE);
   const [stalenessDays, setStalenessDays] = useState(7);
@@ -62,7 +62,7 @@ function BatchAnalyzeModal({
     mutationFn: () =>
       batchAnalyzePortfolio(portfolioId, {
         llm_provider: llmConfig.provider,
-        llm_model: resolvedLlmModel(llmConfig),
+        llm_model: resolveModel(llmConfig),
         depth: llmConfig.depth ?? DEFAULT_LLM_DEPTH,
         response_language: responseLanguage,
         staleness_days: stalenessDays,

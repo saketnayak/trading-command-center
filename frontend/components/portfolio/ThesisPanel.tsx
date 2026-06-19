@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createThesisCrossRef, getThesisCrossRefs, deleteThesisCrossRef } from "@/lib/api";
 import type { ThesisCrossRef, ThesisCrossRefPosition, ThesisCrossRefRecommendation } from "@/lib/types";
-import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 
 function AlignmentGauge({ score }: { score: number }) {
@@ -150,7 +150,7 @@ function CrossRefResult({ result }: { result: ThesisCrossRef }) {
 
 export function ThesisPanel({ portfolioId }: { portfolioId: string }) {
   const queryClient = useQueryClient();
-  const { provider, model } = useDefaultLlmConfig();
+  const { provider, model, resolveModel } = useDefaultLlmConfig();
   const [thesisText, setThesisText] = useState("");
   const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model });
   const [activeResult, setActiveResult] = useState<ThesisCrossRef | null>(null);
@@ -169,7 +169,7 @@ export function ThesisPanel({ portfolioId }: { portfolioId: string }) {
       createThesisCrossRef(portfolioId, {
         thesis_text: thesisText,
         llm_provider: llmConfig.provider,
-        llm_model: resolvedLlmModel(llmConfig),
+        llm_model: resolveModel(llmConfig),
       }),
     onSuccess: (data) => {
       setActiveResult(data);

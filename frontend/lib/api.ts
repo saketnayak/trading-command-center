@@ -158,6 +158,18 @@ export async function getProviderModels(provider: string): Promise<string[]> {
   return r.json();
 }
 
+export interface LlmProviderDefaults {
+  default_provider: string;
+  default_depth: string;
+  default_models: Record<string, string>;
+}
+
+export async function getLlmProviderDefaults(): Promise<LlmProviderDefaults> {
+  const r = await fetchWithAuth("/llm-providers/defaults");
+  if (!r.ok) throw new Error("Failed to fetch LLM provider defaults");
+  return r.json();
+}
+
 export async function getRunStats(): Promise<RunStats> {
   const r = await fetchWithAuth("/runs/stats");
   if (!r.ok) throw new Error("Failed to fetch stats");

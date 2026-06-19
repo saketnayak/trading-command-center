@@ -10,10 +10,20 @@ import {
   validateDefaultLlmConfig,
 } from "./llmConfig";
 
+const TEST_DEFAULT_MODELS = {
+  openai: "gpt-5.5",
+  anthropic: "claude-sonnet-4-6",
+  google: "gemini-3-flash-preview",
+  groq: "llama-3.3-70b-versatile",
+  ionos: "openai/gpt-oss-120b",
+  ollama: "llama3",
+  vllm: "mistralai/Mistral-7B-Instruct-v0.3",
+} as const;
+
 describe("llmConfig", () => {
-  it("resolves blank model to provider placeholder", () => {
-    expect(resolveLlmModel("openai", "")).toBe("gpt-5.5");
-    expect(resolveLlmModel("ionos", "  ")).toBe("openai/gpt-oss-120b");
+  it("resolves blank model to provider default from API map", () => {
+    expect(resolveLlmModel("openai", "", TEST_DEFAULT_MODELS)).toBe("gpt-5.5");
+    expect(resolveLlmModel("ionos", "  ", TEST_DEFAULT_MODELS)).toBe("openai/gpt-oss-120b");
   });
 
   it("builds config from user defaults with fallbacks", () => {
@@ -32,6 +42,19 @@ describe("llmConfig", () => {
       provider: "groq",
       model: "llama-3.3-70b-versatile",
       depth: "quick",
+    });
+  });
+
+  it("uses system defaults when user defaults are absent", () => {
+    expect(
+      llmConfigFromUserDefaults(null, {
+        default_provider: "anthropic",
+        default_depth: "deep",
+      }),
+    ).toEqual({
+      provider: "anthropic",
+      model: "",
+      depth: "deep",
     });
   });
 

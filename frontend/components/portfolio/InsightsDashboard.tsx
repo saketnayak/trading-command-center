@@ -6,7 +6,7 @@ import { generateInsight, getLatestInsight, listInsights } from "@/lib/api";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 import type { PortfolioInsight, InsightActionItem, InsightRiskAlert } from "@/lib/types";
 import { BehavioralAlerts } from "@/components/portfolio/BehavioralAlerts";
-import { LlmConfigPicker, resolvedLlmModel, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 
 const ACTION_COLORS: Record<string, string> = {
@@ -226,7 +226,7 @@ function GenerateForm({
   portfolioId: string;
   onGenerated: (insight: PortfolioInsight) => void;
 }) {
-  const { provider, model } = useDefaultLlmConfig();
+  const { provider, model, resolveModel } = useDefaultLlmConfig();
   const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model });
 
   useEffect(() => {
@@ -237,7 +237,7 @@ function GenerateForm({
     mutationFn: () =>
       generateInsight(portfolioId, {
         llm_provider: llmConfig.provider,
-        llm_model: resolvedLlmModel(llmConfig),
+        llm_model: resolveModel(llmConfig),
       }),
     onSuccess: (insight) => onGenerated(insight),
   });

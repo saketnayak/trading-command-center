@@ -6,13 +6,12 @@ import { getProviderModels } from "@/lib/api";
 import {
   LLM_DEPTHS,
   LLM_PROVIDER_LABELS,
-  LLM_PROVIDER_PLACEHOLDERS,
   LLM_PROVIDERS,
   LOCAL_LLM_PROVIDERS,
-  resolveLlmModel,
   type LlmDepth,
   type LlmProvider,
 } from "@/lib/llmConfig";
+import { useLlmProviderDefaults } from "@/lib/useDefaultLlmConfig";
 
 export interface LlmConfigValue {
   provider: LlmProvider;
@@ -50,6 +49,8 @@ export function LlmConfigPicker({
 }: Props) {
   const isLocal = LOCAL_LLM_PROVIDERS.includes(value.provider);
   const inputClass = layout === "compact" ? COMPACT_INPUT_CLASS : INPUT_CLASS;
+  const { data: providerDefaults } = useLlmProviderDefaults();
+  const modelPlaceholder = providerDefaults?.default_models[value.provider] ?? "model name";
 
   const { data: models = [], isLoading: modelsLoading } = useQuery({
     queryKey: ["models", value.provider],
@@ -109,7 +110,7 @@ export function LlmConfigPicker({
         type="text"
         value={value.model}
         onChange={(e) => onChange({ ...value, model: e.target.value })}
-        placeholder={LLM_PROVIDER_PLACEHOLDERS[value.provider]}
+        placeholder={modelPlaceholder}
         disabled={!enabled}
         className={modelClassName ?? `${inputClass} w-full`}
       />
@@ -179,8 +180,4 @@ export function LlmConfigPicker({
       {depthField}
     </div>
   );
-}
-
-export function resolvedLlmModel(value: LlmConfigValue): string {
-  return resolveLlmModel(value.provider, value.model);
 }
