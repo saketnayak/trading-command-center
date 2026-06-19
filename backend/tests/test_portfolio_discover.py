@@ -52,8 +52,8 @@ async def test_pick_llm_for_user_prefers_user_default():
 
     async with AsyncSessionLocal() as db:
         user = (await db.execute(select(User).where(User.email == "discover-default@test.com"))).scalar_one()
-        db.add(ApiKey(provider="openai", encrypted_key=encrypt_key("sk-openai"), is_valid=True))
-        db.add(ApiKey(provider="anthropic", encrypted_key=encrypt_key("sk-anthropic"), is_valid=True))
+        db.add(ApiKey(provider="openai", encrypted_key=encrypt_key("sk-openai"), is_valid=True, created_by=user.id))
+        db.add(ApiKey(provider="anthropic", encrypted_key=encrypt_key("sk-anthropic"), is_valid=True, created_by=user.id))
         await db.commit()
 
         picked = await pick_llm_for_user(db, user)

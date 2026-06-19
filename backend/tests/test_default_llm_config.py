@@ -44,6 +44,23 @@ async def test_update_default_llm_config():
 
 
 @pytest.mark.asyncio
+async def test_update_default_llm_model_can_be_cleared():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _token(client, "llm-default-clear@test.com")
+        headers = {"Authorization": f"Bearer {token}"}
+        await client.patch(
+            "/auth/me",
+            headers=headers,
+            json={"default_llm_model": "claude-sonnet-4-6"},
+        )
+        assert (await client.get("/auth/me", headers=headers)).json()["default_llm_model"] == "claude-sonnet-4-6"
+
+        r = await client.patch("/auth/me", headers=headers, json={"default_llm_model": None})
+        assert r.status_code == 200
+        assert (await client.get("/auth/me", headers=headers)).json()["default_llm_model"] is None
+
+
+@pytest.mark.asyncio
 async def test_update_default_llm_rejects_unknown_provider():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         token = await _token(client, "llm-default3@test.com")

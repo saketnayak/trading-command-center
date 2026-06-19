@@ -102,7 +102,7 @@ async def update_me(req: UpdateMeRequest, user: User = Depends(get_current_user)
         user.preferred_currency = code
     if req.default_llm_provider is not None:
         user.default_llm_provider = req.default_llm_provider
-    if req.default_llm_model is not None:
+    if "default_llm_model" in req.model_fields_set:
         user.default_llm_model = req.default_llm_model
     if req.default_llm_depth is not None:
         user.default_llm_depth = req.default_llm_depth
