@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { archiveRun, deleteRun } from "@/lib/api";
 import { IconButton, IconLink } from "@/components/ui/IconButton";
+import { TickerLabel } from "@/components/ui/TickerLabel";
 import { RunContextIcons } from "@/components/runs/RunContextIcons";
 import { fmtPriceString, resolveQuoteCurrency } from "@/lib/currency";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
