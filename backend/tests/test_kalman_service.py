@@ -128,9 +128,31 @@ async def test_cache_hit_skips_recompute():
         time.time() + 3600,
     )
 
-    result = await get_kalman("TEST")
+    with patch(
+        "app.services.kalman_service.resolve_quote_currency",
+        return_value="USD",
+    ) as mock_currency:
+        result = await get_kalman("TEST")
+
+    assert result == {**fake_result, "currency": "USD"}
+    mock_currency.assert_awaited_once_with("TEST")
+
+
+@pytest.mark.asyncio
+async def test_cache_hit_preserves_existing_currency():
+    from app.services import kalman_service
+
+    fake_result = {"ticker": "TEST", "signal": 0.5, "trend_direction": "up", "currency": "EUR"}
+    kalman_service._kalman_cache["TEST:2015-01-01::1d:True:0.01:0.01:0.1"] = (
+        fake_result,
+        time.time() + 3600,
+    )
+
+    with patch("app.services.kalman_service.resolve_quote_currency") as mock_currency:
+        result = await get_kalman("TEST")
 
     assert result == fake_result
+    mock_currency.assert_not_called()
 
 
 @pytest.mark.asyncio

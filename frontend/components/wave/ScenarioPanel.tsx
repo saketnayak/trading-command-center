@@ -2,13 +2,15 @@
 
 import { useState } from "react";
 
+import { fmtMoney } from "@/lib/currency";
 import type { ElliottScenario } from "@/lib/wave/types";
 
 interface ScenarioPanelProps {
   scenarios: ElliottScenario[];
+  currency?: string;
 }
 
-export function ScenarioPanel({ scenarios }: ScenarioPanelProps) {
+export function ScenarioPanel({ scenarios, currency = "USD" }: ScenarioPanelProps) {
   if (scenarios.length === 0) {
     return (
       <p className="rounded-md border border-amber-700/40 bg-amber-950/30 px-3 py-2 text-sm text-amber-200">
@@ -27,7 +29,7 @@ export function ScenarioPanel({ scenarios }: ScenarioPanelProps) {
               <th className="px-2 py-1">Trend</th>
               <th className="px-2 py-1">Degree</th>
               <th className="px-2 py-1">Score</th>
-              <th className="px-2 py-1">Invalidation</th>
+              <th className="px-2 py-1">Invalidation ({currency})</th>
               <th className="px-2 py-1">Notes</th>
             </tr>
           </thead>
@@ -38,8 +40,8 @@ export function ScenarioPanel({ scenarios }: ScenarioPanelProps) {
                 <td className="px-2 py-1">{s.trend}</td>
                 <td className="px-2 py-1">{s.degree}</td>
                 <td className="px-2 py-1">{s.score.toFixed(2)}</td>
-                <td className="px-2 py-1">
-                  {s.invalidation_level?.toFixed(4) ?? "—"}
+                <td className="px-2 py-1 font-mono text-xs">
+                  {s.invalidation_level != null ? fmtMoney(s.invalidation_level, currency) : "—"}
                 </td>
                 <td className="px-2 py-1 max-w-xs truncate" title={s.notes.join(" | ")}>
                   {s.notes.join(" | ")}
@@ -51,7 +53,7 @@ export function ScenarioPanel({ scenarios }: ScenarioPanelProps) {
       </div>
 
       {scenarios.map((scenario, idx) => (
-        <ScenarioExpander key={idx} index={idx + 1} scenario={scenario} />
+        <ScenarioExpander key={idx} index={idx + 1} scenario={scenario} currency={currency} />
       ))}
     </div>
   );
@@ -60,9 +62,11 @@ export function ScenarioPanel({ scenarios }: ScenarioPanelProps) {
 function ScenarioExpander({
   index,
   scenario,
+  currency,
 }: {
   index: number;
   scenario: ElliottScenario;
+  currency: string;
 }) {
   const [open, setOpen] = useState(false);
   const title = `Scenario ${index}: ${scenario.pattern} / ${scenario.trend} / score=${scenario.score}`;
@@ -87,8 +91,8 @@ function ScenarioExpander({
                   <th className="px-1 py-0.5">Label</th>
                   <th className="px-1 py-0.5">Start</th>
                   <th className="px-1 py-0.5">End</th>
-                  <th className="px-1 py-0.5">Start $</th>
-                  <th className="px-1 py-0.5">End $</th>
+                  <th className="px-1 py-0.5">Start ({currency})</th>
+                  <th className="px-1 py-0.5">End ({currency})</th>
                 </tr>
               </thead>
               <tbody>
@@ -97,8 +101,8 @@ function ScenarioExpander({
                     <td className="px-1 py-0.5">{leg.label}</td>
                     <td className="px-1 py-0.5">{leg.start_time}</td>
                     <td className="px-1 py-0.5">{leg.end_time}</td>
-                    <td className="px-1 py-0.5">{leg.start_price.toFixed(4)}</td>
-                    <td className="px-1 py-0.5">{leg.end_price.toFixed(4)}</td>
+                    <td className="px-1 py-0.5 font-mono">{fmtMoney(leg.start_price, currency)}</td>
+                    <td className="px-1 py-0.5 font-mono">{fmtMoney(leg.end_price, currency)}</td>
                   </tr>
                 ))}
               </tbody>

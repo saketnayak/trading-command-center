@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from app.services.yfinance_service import fetch_history
+from app.services.quote_currency_service import resolve_quote_currency
 
 logger = logging.getLogger(__name__)
 
@@ -330,6 +331,11 @@ async def get_kalman(
     if cache_key in _kalman_cache:
         result, expiry = _kalman_cache[cache_key]
         if now < expiry:
+            if result is not None and "currency" not in result:
+                result = {
+                    **result,
+                    "currency": await resolve_quote_currency(symbol),
+                }
             return result
 
     try:
@@ -356,6 +362,12 @@ async def get_kalman(
 
     ttl = _CACHE_TTL if result is not None else 300
     _kalman_cache[cache_key] = (result, now + ttl)
+
+    if result is not None:
+        result = {
+            **result,
+            "currency": await resolve_quote_currency(symbol),
+        }
     return result
 
 

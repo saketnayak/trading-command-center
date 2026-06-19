@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { analyzeWave, getAppSettings } from "@/lib/api";
 import { AnalysisChart } from "@/components/wave/AnalysisChart";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
+import { fmtMoney } from "@/lib/currency";
 import type {
   AnalyzeResponse,
   ChartVisibilityOptions,
@@ -47,6 +48,7 @@ export default function WaveChartPage() {
   const companyName = metadata?.company_name ?? metadata?.display_name ?? data?.instrument.symbol ?? symbol;
   const scenario = data?.top_scenarios[0] ?? null;
   const tradeRegion = data?.trade_regions[0] ?? data?.overview?.trade_region ?? null;
+  const currency = data?.currency ?? data?.instrument?.currency ?? metadata?.currency ?? "USD";
   const title = `${symbol} Elliott / Fibonacci`;
 
   return (
@@ -94,6 +96,7 @@ export default function WaveChartPage() {
             tradeRegion={tradeRegion}
             projectionTarget={data.projection?.primary_target ?? null}
             projectionConfidence={data.projection?.confidence ?? null}
+            currency={currency}
           />
           <div className="min-h-0 flex-1">
             <AnalysisChart
@@ -154,19 +157,21 @@ function SummaryStrip({
   tradeRegion,
   projectionTarget,
   projectionConfidence,
+  currency,
 }: {
   scenario: ElliottScenario | null;
   tradeRegion: TradeRegion | null;
   projectionTarget: number | null;
   projectionConfidence: number | null;
+  currency: string;
 }) {
   return (
     <div className="grid shrink-0 gap-2 sm:grid-cols-5">
       <Metric label="Pattern" value={scenario ? `${scenario.pattern} / ${scenario.trend}` : "-"} />
       <Metric label="Confidence" value={formatConfidence(tradeRegion, scenario)} />
-      <Metric label="Projected target" value={projectionTarget == null ? "-" : fmtPrice(projectionTarget)} />
+      <Metric label={`Projected target (${currency})`} value={projectionTarget == null ? "-" : fmtMoney(projectionTarget, currency)} />
       <Metric label="Projection conf." value={projectionConfidence == null ? "-" : `${projectionConfidence.toFixed(0)} / 100`} />
-      <Metric label="Entry zone" value={formatZone(tradeRegion)} />
+      <Metric label={`Entry zone (${currency})`} value={formatZone(tradeRegion, currency)} />
     </div>
   );
 }
@@ -185,14 +190,7 @@ function formatConfidence(region: TradeRegion | null, scenario: ElliottScenario 
   return value == null ? "-" : `${value.toFixed(0)} / 100`;
 }
 
-function formatZone(region: TradeRegion | null): string {
+function formatZone(region: TradeRegion | null, currency: string): string {
   if (!region) return "-";
-  return `${fmtPrice(region.zone_low)} - ${fmtPrice(region.zone_high)}`;
-}
-
-function fmtPrice(value: number): string {
-  if (Math.abs(value) >= 1000) {
-    return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-  }
-  return `$${value.toFixed(2)}`;
+  return `${fmtMoney(region.zone_low, currency)} - ${fmtMoney(region.zone_high, currency)}`;
 }

@@ -2,10 +2,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { getTickerKalman } from "@/lib/api";
 import type { KalmanData } from "@/lib/types";
+import { fmtMoney, resolveQuoteCurrency } from "@/lib/currency";
 
 interface Props {
   ticker: string;
   verdict: "buy" | "sell" | "hold" | null | undefined;
+  priceCurrency?: string | null;
+  metadataCurrency?: string | null;
 }
 
 function directionColor(direction: KalmanData["trend_direction"]): string {
@@ -14,7 +17,7 @@ function directionColor(direction: KalmanData["trend_direction"]): string {
   return "text-yellow-400";
 }
 
-function MiniKalmanChart({ chart }: { chart: KalmanData["chart"] }) {
+function MiniKalmanChart({ chart, currency }: { chart: KalmanData["chart"]; currency: string }) {
   const width = 420;
   const height = 90;
   const values = [...chart.price, ...chart.kalman_price];
@@ -35,14 +38,21 @@ function MiniKalmanChart({ chart }: { chart: KalmanData["chart"] }) {
   if (chart.price.length < 2 || chart.kalman_price.length < 2) return null;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Kalman smoothed price chart" className="w-full h-24">
-      <polyline points={scale(chart.price)} fill="none" stroke="rgb(100 116 139)" strokeWidth="1.5" opacity="0.65" />
-      <polyline points={scale(chart.kalman_price)} fill="none" stroke="rgb(59 130 246)" strokeWidth="2.5" />
-    </svg>
+    <div className="space-y-1">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Kalman smoothed price chart" className="w-full h-24">
+        <polyline points={scale(chart.price)} fill="none" stroke="rgb(100 116 139)" strokeWidth="1.5" opacity="0.65" />
+        <polyline points={scale(chart.kalman_price)} fill="none" stroke="rgb(59 130 246)" strokeWidth="2.5" />
+      </svg>
+      <div className="flex items-center justify-between text-[10px] text-muted font-mono">
+        <span>{fmtMoney(min, currency)}</span>
+        <span className="text-subtle">{currency}</span>
+        <span>{fmtMoney(max, currency)}</span>
+      </div>
+    </div>
   );
 }
 
-export function KalmanConfirmation({ ticker, verdict }: Props) {
+export function KalmanConfirmation({ ticker, verdict, priceCurrency, metadataCurrency }: Props) {
   const { data: kalman, isLoading } = useQuery<KalmanData | null>({
     queryKey: ["ticker-kalman", ticker],
     queryFn: () => getTickerKalman(ticker),
@@ -60,6 +70,7 @@ export function KalmanConfirmation({ ticker, verdict }: Props) {
 
   if (!kalman) return null;
 
+  const currency = resolveQuoteCurrency(kalman.currency, priceCurrency ?? metadataCurrency);
   const isConflict =
     verdict != null &&
     verdict !== "hold" &&
@@ -73,7 +84,7 @@ export function KalmanConfirmation({ ticker, verdict }: Props) {
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-fg">Kalman Trend Check</h3>
         <span className="text-[10px] text-muted uppercase tracking-wide">
-          yfinance · {kalman.interval} · {kalman.mode}
+          yfinance · {kalman.interval} · {kalman.mode} · {currency}
         </span>
       </div>
 
@@ -105,12 +116,12 @@ export function KalmanConfirmation({ ticker, verdict }: Props) {
       <div className="border-t border-input-border/50 pt-3 space-y-3">
         <div className="flex flex-wrap gap-4 text-xs">
           <div>
-            <span className="text-muted text-[10px] uppercase tracking-wide block">Latest Price</span>
-            <span className="font-mono text-fg-secondary">{kalman.latest_price.toFixed(2)}</span>
+            <span className="text-muted text-[10px] uppercase tracking-wide block">Latest Price ({currency})</span>
+            <span className="font-mono text-fg-secondary">{fmtMoney(kalman.latest_price, currency)}</span>
           </div>
           <div>
-            <span className="text-muted text-[10px] uppercase tracking-wide block">Kalman Price</span>
-            <span className="font-mono text-fg-secondary">{kalman.kalman_price.toFixed(2)}</span>
+            <span className="text-muted text-[10px] uppercase tracking-wide block">Kalman Price ({currency})</span>
+            <span className="font-mono text-fg-secondary">{fmtMoney(kalman.kalman_price, currency)}</span>
           </div>
           <div>
             <span className="text-muted text-[10px] uppercase tracking-wide block">Latent Slope</span>
@@ -125,7 +136,7 @@ export function KalmanConfirmation({ ticker, verdict }: Props) {
         </div>
 
         <div className="bg-page border border-input-border/60 rounded-md p-2">
-          <MiniKalmanChart chart={kalman.chart} />
+          <MiniKalmanChart chart={kalman.chart} currency={currency} />
           <div className="flex items-center justify-between text-[10px] text-muted">
             <span>Price</span>
             <span className="text-blue-400">Kalman estimate</span>

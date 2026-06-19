@@ -493,6 +493,7 @@ export interface KalmanData {
     kalman_trend: number[];
   };
   computed_at: string;
+  currency: string;
 }
 
 export interface NewsArticle {
