@@ -58,5 +58,6 @@ class RunResponse(BaseModel):
     suggested_entry: str | None = None
     suggested_stop: str | None = None
     suggested_target: str | None = None
+    price_currency: str | None = None
 
     model_config = ConfigDict(from_attributes=True)

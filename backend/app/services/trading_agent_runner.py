@@ -246,6 +246,11 @@ async def execute_run(run_id: str, config: dict) -> None:
         suggested_stop = _normalize_price(getattr(recommendation, "stop_loss", None))
         suggested_target = _normalize_price(getattr(recommendation, "target_price", None))
         async with AsyncSessionLocal() as db:
+            from app.services.finnhub_client import get_finnhub_key
+            from app.services.quote_currency_service import resolve_quote_currency
+
+            finnhub_key = await get_finnhub_key(db)
+            price_currency = await resolve_quote_currency(ticker, db, finnhub_key)
             db.add(Report(
                 run_id=run_id,
                 trader_decision=trader_decision,
@@ -253,6 +258,7 @@ async def execute_run(run_id: str, config: dict) -> None:
                 suggested_entry=suggested_entry,
                 suggested_stop=suggested_stop,
                 suggested_target=suggested_target,
+                price_currency=price_currency,
                 risk_assessment=_extract_risk_assessment(final_state),
                 raw_report=raw,
             ))

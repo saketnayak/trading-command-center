@@ -1,5 +1,6 @@
 "use client";
 import type { RunOutcome } from "@/lib/types";
+import { fmtMoney } from "@/lib/currency";
 
 function pct(base: number | null, target: number | null): string {
   if (!base || !target) return "—";
@@ -24,11 +25,12 @@ const CHECKPOINTS: Array<{ label: string; key: keyof RunOutcome }> = [
 
 export function OutcomeCard({ outcome }: { outcome: RunOutcome }) {
   const base = outcome.price_at_analysis;
+  const currency = outcome.price_currency ?? "USD";
 
   return (
     <div className="bg-elevated border border-input-border rounded-xl p-5">
       <h2 className="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-4">
-        Trade Outcome
+        Trade Outcome ({currency})
       </h2>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {CHECKPOINTS.map(({ label, key }) => {
@@ -37,7 +39,7 @@ export function OutcomeCard({ outcome }: { outcome: RunOutcome }) {
             <div key={label} className="flex flex-col items-center bg-page rounded-lg p-3 gap-1">
               <span className="text-xs text-muted">{label}</span>
               <span className="text-sm font-semibold text-fg">
-                {price ? `$${price.toFixed(2)}` : "—"}
+                {price != null ? fmtMoney(price, currency) : "—"}
               </span>
               {key !== "price_at_analysis" && (
                 <span className={`text-xs font-medium ${pctColor(base, price, outcome.verdict)}`}>
@@ -51,7 +53,7 @@ export function OutcomeCard({ outcome }: { outcome: RunOutcome }) {
       <p className="text-xs text-muted mt-3">
         Verdict was{" "}
         <span className="font-semibold text-muted">{outcome.verdict.toUpperCase()}</span>.
-        Prices fetched from Finnhub. Future dates show &ldquo;—&rdquo; until available.
+        Prices are in {currency}. Future dates show &ldquo;—&rdquo; until available.
       </p>
     </div>
   );

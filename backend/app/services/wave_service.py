@@ -9,7 +9,10 @@ from typing import Any, Literal, Optional
 
 import pandas as pd
 
+import app.services.yfinance_service as _yf
 from app.services.yfinance_service import fetch_history_period, prepare_ohlcv_frame
+from app.utils.asset_type import is_crypto
+from app.utils.quote_currency import quote_currency_from_ticker
 from elliott_wave.models.chart_payload import AnalyzeResponse
 from elliott_wave.models.selection import AnalysisProfile
 from elliott_wave.services.analysis_orchestrator import AnalysisOrchestrator
@@ -87,7 +90,21 @@ def _to_summary(payload: dict[str, Any], ticker: str) -> dict[str, Any]:
         "projection_target": (payload.get("projection") or {}).get("primary_target"),
         "warnings": overview.get("warnings") or [],
         "computed_at": datetime.now(timezone.utc).isoformat(),
+        "currency": (payload.get("instrument") or {}).get("currency"),
     }
+
+
+async def _attach_quote_currency(ticker: str, payload: dict[str, Any]) -> dict[str, Any]:
+    symbol = ticker.upper()
+    existing = payload.get("currency")
+    if existing:
+        return payload
+    if is_crypto(symbol):
+        payload["currency"] = quote_currency_from_ticker(symbol) or "USD"
+        return payload
+    quote = await _yf.fetch_price_quote(symbol)
+    payload["currency"] = quote.currency_code if quote else "USD"
+    return payload
 
 
 def _attach_projection(payload: dict[str, Any]) -> None:
@@ -275,7 +292,7 @@ async def analyze_wave(
 
     if use_cache:
         _analyze_cache[key] = (payload, time.time() + _CACHE_TTL)
-    return payload
+    return await _attach_quote_currency(symbol, payload)
 
 
 async def get_wave_summary(
@@ -293,7 +310,8 @@ async def get_wave_summary(
     )
     if payload is None:
         return None
-    return _to_summary(payload, ticker.upper())
+    summary = _to_summary(payload, ticker.upper())
+    return await _attach_quote_currency(ticker.upper(), summary)
 
 
 async def get_wave_summaries_for_portfolio(

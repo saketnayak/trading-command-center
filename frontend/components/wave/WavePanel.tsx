@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { analyzeWave } from "@/lib/api";
 import type { AnalyzeResponse, ElliottScenario, TradeRegion } from "@/lib/wave/types";
+import { fmtMoney } from "@/lib/currency";
 
 interface WavePanelProps {
   ticker: string;
@@ -43,6 +44,7 @@ export function WavePanel({ ticker }: WavePanelProps) {
 
   const scenario = data.top_scenarios[0] ?? null;
   const tradeRegion = data.trade_regions[0] ?? data.overview?.trade_region ?? null;
+  const currency = data.currency ?? data.instrument?.currency ?? "USD";
   const direction = tradeRegion?.direction ?? data.overview?.top_direction ?? scenario?.trend ?? null;
   const directionTone =
     direction === "long" || direction === "bullish"
@@ -65,18 +67,18 @@ export function WavePanel({ ticker }: WavePanelProps) {
       <div className="grid grid-cols-2 gap-2">
         <Metric label="Pattern" value={formatScenario(scenario)} />
         <Metric label="Confidence" value={formatConfidence(tradeRegion, scenario)} />
-        <Metric label="Entry zone" value={formatZone(tradeRegion)} />
-        <Metric label="Risk level" value={formatRiskLevel(tradeRegion, scenario)} />
+        <Metric label="Entry zone" value={formatZone(tradeRegion, currency)} />
+        <Metric label="Risk level" value={formatRiskLevel(tradeRegion, scenario, currency)} />
       </div>
 
       {tradeRegion && (
         <div className="rounded-md border border-border bg-surface px-3 py-2">
           <div className="flex items-center justify-between gap-3">
             <span className="text-[10px] uppercase tracking-wide text-muted">
-              Targets
+              Targets ({currency})
             </span>
             <span className="font-mono text-xs text-fg-secondary">
-              {formatTargets(tradeRegion)}
+              {formatTargets(tradeRegion, currency)}
             </span>
           </div>
         </div>
@@ -134,24 +136,21 @@ function formatConfidence(region: TradeRegion | null, scenario: ElliottScenario 
   return value == null ? "-" : `${value.toFixed(0)} / 100`;
 }
 
-function formatZone(region: TradeRegion | null): string {
+function formatZone(region: TradeRegion | null, currency: string): string {
   if (!region) return "-";
-  return `${fmtPrice(region.zone_low)} - ${fmtPrice(region.zone_high)}`;
+  return `${fmtPrice(region.zone_low, currency)} - ${fmtPrice(region.zone_high, currency)}`;
 }
 
-function formatRiskLevel(region: TradeRegion | null, scenario: ElliottScenario | null): string {
+function formatRiskLevel(region: TradeRegion | null, scenario: ElliottScenario | null, currency: string): string {
   const level = region?.stop_level ?? scenario?.invalidation_level;
-  return level == null ? "-" : fmtPrice(level);
+  return level == null ? "-" : fmtPrice(level, currency);
 }
 
-function formatTargets(region: TradeRegion): string {
+function formatTargets(region: TradeRegion, currency: string): string {
   if (region.target_levels.length === 0) return "-";
-  return region.target_levels.slice(0, 3).map(fmtPrice).join(" / ");
+  return region.target_levels.slice(0, 3).map((v) => fmtPrice(v, currency)).join(" / ");
 }
 
-function fmtPrice(value: number): string {
-  if (Math.abs(value) >= 1000) {
-    return `$${value.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-  }
-  return `$${value.toFixed(2)}`;
+function fmtPrice(value: number, currency: string): string {
+  return fmtMoney(value, currency);
 }

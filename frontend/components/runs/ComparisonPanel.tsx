@@ -2,6 +2,7 @@
 import { RunContextIcons } from "@/components/runs/RunContextIcons";
 import type { RunWithReport } from "@/lib/types";
 import { getAnalystReportContent } from "@/lib/analystReports";
+import { fmtPriceString, resolveQuoteCurrency } from "@/lib/currency";
 
 const VERDICT_COLOR: Record<string, string> = {
   buy: "text-green-400",
@@ -22,6 +23,7 @@ function AnalystSection({ label, content }: { label: string; content: string | u
 function RunColumn({ side, data }: { side: "A" | "B"; data: RunWithReport }) {
   const { run, report } = data;
   const raw = report?.raw_report as Record<string, unknown> | undefined;
+  const currency = resolveQuoteCurrency(report?.price_currency ?? run.price_currency);
 
   return (
     <div className="flex-1 min-w-0 bg-elevated border border-input-border rounded-xl p-5 flex flex-col gap-4">
@@ -48,7 +50,7 @@ function RunColumn({ side, data }: { side: "A" | "B"; data: RunWithReport }) {
           ].map(({ label, value }) => (
             <div key={label} className="bg-page rounded-lg p-2">
               <p className="text-xs text-muted">{label}</p>
-              <p className="text-sm font-semibold text-fg">{value ? `$${value}` : "—"}</p>
+              <p className="text-sm font-semibold text-fg">{fmtPriceString(value, currency)}</p>
             </div>
           ))}
         </div>

@@ -19,3 +19,12 @@ def test_quote_currency_from_stock_ticker_is_none():
 def test_price_quote_normalizes_currency():
     quote = PriceQuote(amount=100.0, currency="usd")
     assert quote.currency_code == "USD"
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
+async def test_resolve_quote_currency_crypto_suffix():
+    from app.services.quote_currency_service import resolve_quote_currency
+
+    assert await resolve_quote_currency("BTC-USD") == "USD"
+    assert await resolve_quote_currency("ETH-EUR") == "EUR"

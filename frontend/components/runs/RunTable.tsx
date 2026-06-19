@@ -14,7 +14,7 @@ import {
 import { archiveRun, deleteRun } from "@/lib/api";
 import { IconButton, IconLink } from "@/components/ui/IconButton";
 import { RunContextIcons } from "@/components/runs/RunContextIcons";
-import { TickerLabel } from "@/components/ui/TickerLabel";
+import { fmtPriceString, resolveQuoteCurrency } from "@/lib/currency";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { Run, TickerMetadata } from "@/lib/types";
 
@@ -59,11 +59,12 @@ const verdictBadge: Record<NonNullable<Run["verdict"]>, string> = {
   hold: "bg-yellow-900 text-yellow-300",
 };
 
-function PriceSummary({ run }: { run: Run }) {
+function PriceSummary({ run, metadata }: { run: Run; metadata?: TickerMetadata }) {
   const { suggested_entry: entry, suggested_stop: stop, suggested_target: target } = run;
   if (!entry && !stop && !target) return <span className="text-subtle">—</span>;
 
-  const fmt = (v: string | null) => (v ? `$${v}` : "—");
+  const currency = resolveQuoteCurrency(run.price_currency, metadata?.currency);
+  const fmt = (v: string | null) => fmtPriceString(v, currency);
   return (
     <span
       className="font-mono text-xs text-fg-secondary"
@@ -137,7 +138,7 @@ function RunRow({
         )}
       </td>
       <td className="px-4 py-3">
-        <PriceSummary run={run} />
+        <PriceSummary run={run} metadata={metadata} />
       </td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">
         <RunContextIcons analysts={run.analysts} responseLanguage={run.response_language} />

@@ -277,6 +277,7 @@ export default function RunResultsPage() {
             suggestedEntry={report?.suggested_entry}
             suggestedStop={report?.suggested_stop}
             suggestedTarget={report?.suggested_target}
+            priceCurrency={report?.price_currency ?? run.price_currency}
           />
         )}
         {run && (

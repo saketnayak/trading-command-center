@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { getTickerWaveSummary } from "@/lib/api";
 import type { WaveSummary } from "@/lib/types";
+import { fmtMoney, fmtPriceString, resolveQuoteCurrency } from "@/lib/currency";
 
 interface Props {
   ticker: string;
@@ -10,6 +11,7 @@ interface Props {
   suggestedEntry?: string | null;
   suggestedStop?: string | null;
   suggestedTarget?: string | null;
+  priceCurrency?: string | null;
 }
 
 function parsePrice(value: string | null | undefined): number | null {
@@ -33,6 +35,7 @@ export function WaveConfirmation({
   suggestedEntry,
   suggestedStop,
   suggestedTarget,
+  priceCurrency,
 }: Props) {
   const { data: wave, isLoading } = useQuery<WaveSummary | null>({
     queryKey: ["ticker-wave", ticker],
@@ -51,6 +54,8 @@ export function WaveConfirmation({
 
   if (!wave) return null;
 
+  const waveCurrency = wave.currency ?? "USD";
+  const aiCurrency = resolveQuoteCurrency(priceCurrency, waveCurrency);
   const aligns = verdict ? directionAligns(verdict, wave.top_direction) : null;
   const borderColor =
     aligns === false
@@ -71,7 +76,7 @@ export function WaveConfirmation({
     <div className={`bg-elevated border ${borderColor} rounded-lg p-4 space-y-3`}>
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-fg">Elliott / Fib Check</h3>
-        <span className="text-[10px] text-muted uppercase tracking-wide">yfinance · 2y daily</span>
+        <span className="text-[10px] text-muted uppercase tracking-wide">yfinance · 2y daily · {waveCurrency}</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -105,7 +110,7 @@ export function WaveConfirmation({
           <div>
             <span className="text-muted text-[10px] uppercase tracking-wide block">Trade zone</span>
             <span className="font-mono text-fg-secondary">
-              ${wave.zone_low.toFixed(2)} – ${wave.zone_high.toFixed(2)}
+              {fmtMoney(wave.zone_low, waveCurrency)} – {fmtMoney(wave.zone_high, waveCurrency)}
               {entry != null && (
                 <span className={inZone ? " text-green-400 ml-2" : " text-muted ml-2"}>
                   {inZone ? "· entry in zone" : "· entry outside zone"}
@@ -117,7 +122,7 @@ export function WaveConfirmation({
         {wave.invalidation_level != null && (
           <div>
             <span className="text-muted text-[10px] uppercase tracking-wide block">Invalidation</span>
-            <span className="font-mono text-fg-secondary">${wave.invalidation_level.toFixed(2)}</span>
+            <span className="font-mono text-fg-secondary">{fmtMoney(wave.invalidation_level, waveCurrency)}</span>
           </div>
         )}
         {(suggestedStop || suggestedTarget) && (
@@ -125,13 +130,13 @@ export function WaveConfirmation({
             {suggestedStop && (
               <div>
                 <span className="text-muted text-[10px] uppercase tracking-wide block">AI stop</span>
-                <span className="font-mono text-fg-secondary">{suggestedStop}</span>
+                <span className="font-mono text-fg-secondary">{fmtPriceString(suggestedStop, aiCurrency)}</span>
               </div>
             )}
             {suggestedTarget && (
               <div>
                 <span className="text-muted text-[10px] uppercase tracking-wide block">AI target</span>
-                <span className="font-mono text-fg-secondary">{suggestedTarget}</span>
+                <span className="font-mono text-fg-secondary">{fmtPriceString(suggestedTarget, aiCurrency)}</span>
               </div>
             )}
           </div>

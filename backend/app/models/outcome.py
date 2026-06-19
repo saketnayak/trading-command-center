@@ -18,6 +18,7 @@ class RunOutcome(Base):
     price_14d: Mapped[float | None] = mapped_column(Float, nullable=True)
     price_30d: Mapped[float | None] = mapped_column(Float, nullable=True)
     price_90d: Mapped[float | None] = mapped_column(Float, nullable=True)
+    price_currency: Mapped[str] = mapped_column(String(8), server_default="USD")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

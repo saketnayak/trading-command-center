@@ -32,6 +32,7 @@ export interface Run {
   suggested_entry: string | null;
   suggested_stop: string | null;
   suggested_target: string | null;
+  price_currency: string | null;
 }
 
 export interface AgentEventPayload {
@@ -52,6 +53,7 @@ export interface Report {
   suggested_entry: string | null;
   suggested_stop: string | null;
   suggested_target: string | null;
+  price_currency: string | null;
   risk_assessment: string;
   raw_report: Record<string, unknown>;
 }
@@ -129,6 +131,7 @@ export interface RunOutcome {
   price_14d: number | null;
   price_30d: number | null;
   price_90d: number | null;
+  price_currency: string;
   created_at: string;
   updated_at: string;
 }
@@ -434,6 +437,7 @@ export interface WaveSummary {
   confidence: number | null;
   zone_low: number | null;
   zone_high: number | null;
+  currency: string | null;
   warnings: string[];
   computed_at: string;
 }

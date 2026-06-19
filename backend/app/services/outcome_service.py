@@ -13,6 +13,7 @@ from app.services.finnhub_client import (
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
 import app.services.yfinance_service as _yf
+from app.services.quote_currency_service import resolve_quote_currency
 
 
 async def _get_finnhub_key(db: AsyncSession) -> Optional[str]:
@@ -62,15 +63,24 @@ async def get_or_create_outcome(run_id: str, db: AsyncSession) -> RunOutcome:
 
     outcome_result = await db.execute(select(RunOutcome).where(RunOutcome.run_id == run_uuid))
     outcome = outcome_result.scalar_one_or_none()
+    api_key = await _get_finnhub_key(db)
+
     if not outcome:
+        price_currency = report.price_currency if report and report.price_currency else await resolve_quote_currency(
+            run.ticker, db, api_key
+        )
         outcome = RunOutcome(
             run_id=run_uuid,
             ticker=run.ticker,
             verdict=report.verdict if report else "unknown",
             analysis_date=str(run.analysis_date),
+            price_currency=price_currency,
         )
         db.add(outcome)
         await db.flush()
+    elif not outcome.price_currency or outcome.price_currency == "USD":
+        if report and report.price_currency:
+            outcome.price_currency = report.price_currency
 
     today = date.today()
     analysis_date = run.analysis_date
@@ -91,7 +101,6 @@ async def get_or_create_outcome(run_id: str, db: AsyncSession) -> RunOutcome:
         needs_fetch.append(90)
 
     if needs_fetch:
-        api_key = await _get_finnhub_key(db)
         # Crypto uses CoinGecko first; stocks use Finnhub then Yahoo Finance.
         for days in needs_fetch:
             target = analysis_date + timedelta(days=days)

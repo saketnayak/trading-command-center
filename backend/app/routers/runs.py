@@ -26,6 +26,7 @@ class ReportResponse(BaseModel):
     suggested_entry: str | None
     suggested_stop: str | None
     suggested_target: str | None
+    price_currency: str
     risk_assessment: str
     raw_report: dict
     created_at: datetime
@@ -51,6 +52,7 @@ class RunOutcomeResponse(BaseModel):
     price_14d: float | None
     price_30d: float | None
     price_90d: float | None
+    price_currency: str
     created_at: datetime
     updated_at: datetime
 
@@ -67,6 +69,7 @@ def _run_to_response(run: Run) -> RunResponse:
             "suggested_entry": run.report.suggested_entry,
             "suggested_stop": run.report.suggested_stop,
             "suggested_target": run.report.suggested_target,
+            "price_currency": run.report.price_currency,
         })
     return base
 

@@ -16,6 +16,7 @@ class Report(Base):
     suggested_entry: Mapped[str | None] = mapped_column(String, nullable=True)
     suggested_stop: Mapped[str | None] = mapped_column(String, nullable=True)
     suggested_target: Mapped[str | None] = mapped_column(String, nullable=True)
+    price_currency: Mapped[str] = mapped_column(String(8), server_default="USD")
     risk_assessment: Mapped[str] = mapped_column(String, default="")
     raw_report: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

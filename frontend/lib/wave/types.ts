@@ -211,4 +211,5 @@ export interface AnalyzeResponse {
   overview?: AnalysisOverview | null;
   chart: ChartPayload;
   projection?: WaveProjection | null;
+  currency?: string | null;
 }
