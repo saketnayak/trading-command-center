@@ -38,6 +38,11 @@ jobs:
           working-directory: backend
       - name: Install backend dependencies
         run: uv sync --group dev --extra markov-hmm --frozen
+      - name: Validate migration chain
+        # Tests build tables from the models via create_all and never run the
+        # migration chain, so a broken down_revision passes the test step. Run
+        # the real migrations against the fresh CI Postgres to catch that here.
+        run: uv run alembic upgrade head
       - name: Run backend tests
         run: uv run python -m pytest
 
