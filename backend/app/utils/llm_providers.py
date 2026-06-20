@@ -14,10 +14,11 @@ DEFAULT_LLM_MODELS: dict[str, str] = {
     "ionos": "openai/gpt-oss-120b",
     "ollama": "llama3",
     "vllm": "mistralai/Mistral-7B-Instruct-v0.3",
+    "litellm": "gpt-4o-mini",
 }
 
 SUPPORTED_LLM_PROVIDERS: frozenset[str] = frozenset(DEFAULT_LLM_MODELS.keys())
-LOCAL_LLM_PROVIDERS: frozenset[str] = frozenset({"ollama", "vllm"})
+LOCAL_LLM_PROVIDERS: frozenset[str] = frozenset({"ollama", "vllm", "litellm"})
 SUPPORTED_LLM_DEPTHS: frozenset[str] = frozenset({"quick", "standard", "deep"})
 
 # Cloud provider model suggestions for /llm-providers/{provider}/models.

@@ -84,6 +84,21 @@ async def test_vllm_models_returns_list(httpx_mock):
 
 
 @pytest.mark.asyncio
+async def test_litellm_models_returns_list(httpx_mock):
+    httpx_mock.add_response(
+        url="http://localhost:4000/v1/models",
+        status_code=200,
+        json={"data": [{"id": "gpt-4o-mini"}, {"id": "openai/gpt-4o"}]},
+    )
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _token(client, "litellm-models@test.com")
+        await _seed_api_key("litellm", "http://localhost:4000")
+        r = await client.get("/llm-providers/litellm/models", headers={"Authorization": f"Bearer {token}"})
+        assert r.status_code == 200
+        assert "gpt-4o-mini" in r.json()
+
+
+@pytest.mark.asyncio
 async def test_provider_defaults_returns_system_models():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         token = await _token(client, "lp-defaults@test.com")

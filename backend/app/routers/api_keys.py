@@ -9,6 +9,7 @@ from app.models.api_key import ApiKey
 from app.models.user import User
 from app.schemas.api_key import ApiKeyUpsertRequest, ApiKeyResponse
 from app.services.encryption import encrypt_key, decrypt_key
+from app.services.llm_provider_registry import is_local_provider, validate_local_provider_url
 from app.services.finnhub_client import (
     FinnhubCapability,
     FinnhubReason,
@@ -186,12 +187,8 @@ async def _validate_key(provider: str, key: str) -> dict[str, Any]:
                     "last_error_code": code,
                     "last_error_message": message,
                 }
-            if provider == "ollama":
-                r = await client.get(f"{key.rstrip('/')}/api/tags", timeout=5)
-                return {"is_valid": r.status_code == 200}
-            if provider == "vllm":
-                r = await client.get(f"{key.rstrip('/')}/health", timeout=5)
-                return {"is_valid": r.status_code == 200}
+            if is_local_provider(provider):
+                return {"is_valid": await validate_local_provider_url(provider, key, client)}
         return {"is_valid": True}
     except Exception:
         return {"is_valid": False}

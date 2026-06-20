@@ -6,10 +6,11 @@ Upstream currently treats any prior ToolMessage as evidence, which can let one
 analyst appear grounded by another analyst's tools. This patch tightens the
 check to the current analyst's tool set.
 
-Patch 2 — Groq/IONOS reasoning_effort: Groq and IONOS expose an
-OpenAI-compatible API but reject the `reasoning_effort` parameter that
-langchain-openai forwards. When OPENAI_BASE_URL is set to a non-native OpenAI
-endpoint we strip that kwarg from _apply_reasoning so the request succeeds.
+Patch 2 — OpenAI-compatible reasoning_effort: Groq, IONOS, vLLM, and LiteLLM
+can expose an OpenAI-compatible API but reject the `reasoning_effort` parameter
+that langchain-openai forwards. When OPENAI_BASE_URL is set to a non-native
+OpenAI endpoint we strip that kwarg from _apply_reasoning so the request
+succeeds.
 """
 
 import os
@@ -113,16 +114,15 @@ def apply_analyst_specific_grounding_patch() -> None:
     _PATCHED = True
 
 
-# Base URLs known to reject reasoning_effort (OpenAI-compatible but not native OpenAI).
-_NON_REASONING_URL_FRAGMENTS = ("groq.com", "ionos.com")
+_NATIVE_OPENAI_URL_FRAGMENTS = ("api.openai.com",)
 
 
 def apply_reasoning_effort_patch() -> None:
     """Patch _apply_reasoning to skip reasoning_effort for non-native OpenAI endpoints.
 
-    Groq and IONOS expose an OpenAI-compatible API but reject the
-    reasoning_effort parameter. We detect them via OPENAI_BASE_URL at runtime
-    so the guard is evaluated per-request when the env var is already set.
+    Non-native OpenAI-compatible endpoints may reject reasoning_effort. We
+    detect them via OPENAI_BASE_URL at runtime so the guard is evaluated
+    per-request when the env var is already set.
     """
     global _REASONING_PATCHED
     if _REASONING_PATCHED:
@@ -135,7 +135,7 @@ def apply_reasoning_effort_patch() -> None:
     def _patched_apply_reasoning(provider, effort, kwargs):
         if provider == "openai":
             base_url = os.environ.get("OPENAI_BASE_URL", "")
-            if any(fragment in base_url for fragment in _NON_REASONING_URL_FRAGMENTS):
+            if base_url and not any(fragment in base_url for fragment in _NATIVE_OPENAI_URL_FRAGMENTS):
                 return
         original_apply_reasoning(provider, effort, kwargs)
 

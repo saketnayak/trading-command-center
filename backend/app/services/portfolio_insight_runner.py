@@ -18,6 +18,12 @@ from app.models.portfolio_insight import PortfolioInsight, InsightStatus, Insigh
 from app.models.run import Run, RunStatus
 from app.models.api_key import ApiKey
 from app.services.encryption import decrypt_key
+from app.services.llm_provider_registry import (
+    LOCAL_PROVIDER_LABELS,
+    chat_completions_url,
+    is_local_provider,
+    is_openai_compatible_local_provider,
+)
 from app.utils.asset_type import is_crypto
 import app.services.crypto_data_service as _crypto
 
@@ -33,6 +39,13 @@ async def _get_api_key(provider: str, db: AsyncSession) -> Optional[str]:
     if not row or (provider != "finnhub" and not row.is_valid):
         return None
     return decrypt_key(row.encrypted_key)
+
+
+def _require_local_server_url(provider: str, value: Optional[str]) -> str:
+    if value:
+        return value
+    label = LOCAL_PROVIDER_LABELS.get(provider, provider)
+    raise ValueError(f"{label} server URL is not configured. Add it in Settings → LLM Providers → Local Servers.")
 
 
 async def _fetch_sector(ticker: str, finnhub_key: Optional[str]) -> str:
@@ -153,16 +166,12 @@ async def _call_llm(provider: str, model: str, api_key: Optional[str], prompt: s
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"]
 
-    if provider == "vllm":
-        # vLLM exposes an OpenAI-compatible endpoint at a local base URL.
-        from app.config import settings as _s
-        base_url = getattr(_s, "vllm_base_url", "http://localhost:8080")
+    if is_openai_compatible_local_provider(provider):
+        base_url = _require_local_server_url(provider, api_key)
         headers: dict[str, str] = {"Content-Type": "application/json"}
-        if api_key:
-            headers["Authorization"] = f"Bearer {api_key}"
         async with httpx.AsyncClient(timeout=180) as client:
             r = await client.post(
-                f"{base_url}/v1/chat/completions",
+                chat_completions_url(provider, base_url),
                 json=_json_payload, headers=headers,
             )
             r.raise_for_status()
@@ -188,16 +197,18 @@ async def _call_llm(provider: str, model: str, api_key: Optional[str], prompt: s
             return r.json()["content"][0]["text"]
 
     if provider == "ollama":
-        from app.config import settings as _s
-        base_url = getattr(_s, "ollama_host", "http://localhost:11434")
-        url = f"{base_url}/v1/chat/completions"
+        base_url = _require_local_server_url(provider, api_key)
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
             "format": "json",
         }
         async with httpx.AsyncClient(timeout=180) as client:
-            r = await client.post(url, json=payload, headers={"Content-Type": "application/json"})
+            r = await client.post(
+                chat_completions_url(provider, base_url),
+                json=payload,
+                headers={"Content-Type": "application/json"},
+            )
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"]
 
@@ -228,7 +239,7 @@ async def _call_llm_chat(
     messages: list[dict],
 ) -> str:
     """Multi-turn chat LLM call with a separate system prompt and message list."""
-    if provider in ("openai", "groq", "vllm", "ollama"):
+    if provider in ("openai", "groq", "ionos") or is_local_provider(provider):
         structured = [{"role": "system", "content": system}] + messages
         payload: dict = {"model": model, "messages": structured, "temperature": 0.7, "max_tokens": 1024}
         if provider == "openai":
@@ -243,18 +254,20 @@ async def _call_llm_chat(
             url = "https://api.groq.com/openai/v1/chat/completions"
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
             timeout = 90
-        elif provider == "vllm":
-            from app.config import settings as _s
-            base_url = getattr(_s, "vllm_base_url", "http://localhost:8080")
-            url = f"{base_url}/v1/chat/completions"
+        elif provider == "ionos":
+            if not api_key:
+                raise ValueError("IONOS API key is not configured. Add it in Settings → API Keys.")
+            url = "https://openai.inference.de-txl.ionos.com/v1/chat/completions"
+            headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+            timeout = 90
+        elif is_openai_compatible_local_provider(provider):
+            base_url = _require_local_server_url(provider, api_key)
+            url = chat_completions_url(provider, base_url)
             headers = {"Content-Type": "application/json"}
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
             timeout = 180
         else:  # ollama
-            from app.config import settings as _s
-            base_url = getattr(_s, "ollama_host", "http://localhost:11434")
-            url = f"{base_url}/v1/chat/completions"
+            base_url = _require_local_server_url(provider, api_key)
+            url = chat_completions_url(provider, base_url)
             headers = {"Content-Type": "application/json"}
             timeout = 180
         async with httpx.AsyncClient(timeout=timeout) as client:

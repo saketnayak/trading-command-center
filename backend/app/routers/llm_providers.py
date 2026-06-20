@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.api_key import ApiKey
 from app.models.user import User
 from app.services.encryption import decrypt_key
+from app.services.llm_provider_registry import list_local_models
 from app.dependencies import get_current_user
 from app.utils.llm_providers import (
     DEFAULT_LLM_DEPTH,
@@ -62,13 +63,6 @@ async def list_models(
 
     try:
         async with httpx.AsyncClient(timeout=5) as client:
-            if provider == "ollama":
-                r = await client.get(f"{base_url}/api/tags")
-                r.raise_for_status()
-                return [m["name"] for m in r.json().get("models", [])]
-            else:  # vllm
-                r = await client.get(f"{base_url}/v1/models")
-                r.raise_for_status()
-                return [m["id"] for m in r.json().get("data", [])]
+            return await list_local_models(provider, base_url, client)
     except Exception as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Could not reach {provider} server: {exc}")

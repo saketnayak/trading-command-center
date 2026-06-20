@@ -55,11 +55,56 @@ async def test_upsert_vllm_url_marks_valid_when_server_responds(httpx_mock):
 @pytest.mark.asyncio
 async def test_upsert_vllm_url_marks_invalid_when_server_down(httpx_mock):
     httpx_mock.add_exception(Exception("connection refused"), url="http://localhost:8081/health")
+    httpx_mock.add_exception(Exception("connection refused"), url="http://localhost:8081/v1/models")
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         token = await _admin_token(client)
         r = await client.post(
             "/api-keys",
             json={"provider": "vllm", "key": "http://localhost:8081"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        assert r.json()["is_valid"] is False
+
+
+@pytest.mark.asyncio
+async def test_upsert_litellm_url_marks_valid_when_server_responds(httpx_mock):
+    httpx_mock.add_response(url="http://localhost:4000/health", status_code=200)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _admin_token(client)
+        r = await client.post(
+            "/api-keys",
+            json={"provider": "litellm", "key": "http://localhost:4000"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        assert r.json()["is_valid"] is True
+
+
+@pytest.mark.asyncio
+async def test_upsert_litellm_url_can_validate_via_models_fallback(httpx_mock):
+    httpx_mock.add_response(url="http://localhost:4000/health", status_code=404)
+    httpx_mock.add_response(url="http://localhost:4000/v1/models", status_code=200, json={"data": []})
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _admin_token(client)
+        r = await client.post(
+            "/api-keys",
+            json={"provider": "litellm", "key": "http://localhost:4000"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 200
+        assert r.json()["is_valid"] is True
+
+
+@pytest.mark.asyncio
+async def test_upsert_litellm_url_marks_invalid_when_server_down(httpx_mock):
+    httpx_mock.add_exception(Exception("connection refused"), url="http://localhost:4001/health")
+    httpx_mock.add_exception(Exception("connection refused"), url="http://localhost:4001/v1/models")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _admin_token(client)
+        r = await client.post(
+            "/api-keys",
+            json={"provider": "litellm", "key": "http://localhost:4001"},
             headers={"Authorization": f"Bearer {token}"},
         )
         assert r.status_code == 200
