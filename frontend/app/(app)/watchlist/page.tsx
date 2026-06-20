@@ -25,6 +25,8 @@ import {
   WatchlistScheduleBuilder,
 } from "@/components/watchlist/WatchlistScheduleBuilder";
 import { CronLabel } from "@/components/watchlist/CronLabel";
+import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
+import { PageShell } from "@/components/layout/PageShell";
 
 import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
 
@@ -146,9 +148,7 @@ function ItemRow({ item, onRemove, onToggle, onRunNow, onSaveSchedule, metadata 
     <>
     <tr className="border-t border-border hover:bg-muted-surface/40">
       <td className="px-4 py-3">
-        <TickerLabel ticker={item.ticker} metadata={metadata}>
-          <span className="font-semibold text-fg">{item.ticker}</span>
-        </TickerLabel>
+        <TickerLabel ticker={item.ticker} metadata={metadata} />
       </td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.llm_provider} / {item.llm_model}</td>
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.depth}</td>
@@ -299,11 +299,11 @@ export default function WatchlistPage() {
   });
 
   return (
-    <main className="px-4 py-4 sm:p-6 max-w-6xl mx-auto flex flex-col gap-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link href="/runs" className="text-blue-400 hover:underline text-sm">← Back to History</Link>
-          <h1 className="text-lg font-semibold text-fg">Watchlist</h1>
-        </div>
+    <PageShell width="wide" gap="6">
+        <PageHeader
+          back={{ href: "/runs", label: "← Back to History" }}
+          trailing={<PageTitle>Watchlist</PageTitle>}
+        />
 
         <div className="bg-elevated border border-input-border rounded-xl p-5">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
@@ -370,6 +370,6 @@ export default function WatchlistPage() {
             )}
           </div>
         )}
-      </main>
+      </PageShell>
   );
 }

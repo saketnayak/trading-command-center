@@ -5,7 +5,11 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ComparisonPanel } from "@/components/runs/ComparisonPanel";
 import { compareRuns, getRuns } from "@/lib/api";
-import type { Run } from "@/lib/types";
+import type { Run, TickerMetadata } from "@/lib/types";
+import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
+import { PageShell } from "@/components/layout/PageShell";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
 
 const verdictBadge: Record<NonNullable<Run["verdict"]>, string> = {
   buy: "bg-green-900 text-green-300",
@@ -13,10 +17,20 @@ const verdictBadge: Record<NonNullable<Run["verdict"]>, string> = {
   hold: "bg-yellow-900 text-yellow-300",
 };
 
-function RunPickerRow({ run, onPick }: { run: Run; onPick: () => void }) {
+function RunPickerRow({
+  run,
+  metadata,
+  onPick,
+}: {
+  run: Run;
+  metadata?: TickerMetadata;
+  onPick: () => void;
+}) {
   return (
     <tr className="border-t border-border hover:bg-input/40">
-      <td className="px-4 py-3 font-mono text-fg">{run.ticker}</td>
+      <td className="px-4 py-3">
+        <TickerLabel ticker={run.ticker} metadata={metadata} />
+      </td>
       <td className="px-4 py-3 text-muted text-xs">{run.analysis_date}</td>
       <td className="px-4 py-3">
         {run.verdict ? (
@@ -52,6 +66,7 @@ function RunPicker({ anchorId }: { anchorId: string }) {
   });
 
   const eligible = runs.filter((r) => r.status === "completed" && r.id !== anchorId);
+  const { data: tickerMetadata = {} } = useTickerMetadata(eligible.map((run) => run.ticker));
 
   if (isLoading) return <p className="text-muted text-sm">Loading runs…</p>;
   if (eligible.length === 0) {
@@ -78,6 +93,7 @@ function RunPicker({ anchorId }: { anchorId: string }) {
               <RunPickerRow
                 key={run.id}
                 run={run}
+                metadata={tickerMetadata[run.ticker.toUpperCase()]}
                 onPick={() => router.push(`/runs/compare?a=${anchorId}&b=${run.id}`)}
               />
             ))}
@@ -123,16 +139,14 @@ function CompareContent() {
 
 export default function ComparePage() {
   return (
-    <main className="px-4 py-4 sm:p-6 max-w-7xl mx-auto flex flex-col gap-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link href="/runs" className="text-blue-400 hover:underline text-sm">
-            ← Back to History
-          </Link>
-          <h1 className="text-lg font-semibold text-fg">Run Comparison</h1>
-        </div>
+    <PageShell width="xl" gap="6">
+        <PageHeader
+          back={{ href: "/runs", label: "← Back to History" }}
+          trailing={<PageTitle>Run Comparison</PageTitle>}
+        />
         <Suspense fallback={<div className="text-muted text-sm">Loading…</div>}>
           <CompareContent />
         </Suspense>
-      </main>
+      </PageShell>
   );
 }

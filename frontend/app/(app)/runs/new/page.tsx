@@ -3,6 +3,8 @@ import { Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { RunForm } from "@/components/runs/RunForm";
 import type { RunFormInitialValues } from "@/components/runs/RunForm";
+import { PageShell } from "@/components/layout/PageShell";
+import { PageTitle } from "@/components/layout/PageHeader";
 
 function NewRunContent() {
   const router = useRouter();
@@ -32,11 +34,11 @@ function NewRunContent() {
 
 export default function NewRunPage() {
   return (
-    <main className="px-4 py-4 sm:p-6">
-      <h1 className="text-fg text-lg font-semibold mb-6">New Run</h1>
+    <PageShell>
+      <PageTitle className="text-fg text-lg font-semibold mb-6">New Run</PageTitle>
       <Suspense fallback={<div className="text-muted text-sm">Loading…</div>}>
         <NewRunContent />
       </Suspense>
-    </main>
+    </PageShell>
   );
 }

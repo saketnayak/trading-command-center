@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { TrimSignalEntry } from "@/lib/types";
 
 interface Props {
@@ -54,6 +56,9 @@ export function SellCandidatesPanel({ entries, computedAt }: Props) {
   const considerCount = flagged.filter((e) => e.level === "consider_trim").length;
   const watchCount = flagged.filter((e) => e.level === "watch").length;
   const [expanded, setExpanded] = useState(strongCount > 0);
+  const { data: tickerMetadata = {} } = useTickerMetadata(flagged.map((e) => e.ticker), {
+    enabled: flagged.length > 0,
+  });
 
   if (flagged.length === 0) return null;
 
@@ -92,7 +97,12 @@ export function SellCandidatesPanel({ entries, computedAt }: Props) {
                 const lvl = levelStyle(e.level);
                 return (
                   <tr key={e.holding_id} className="border-t border-border">
-                    <td className="py-2 font-medium text-fg">{e.ticker}</td>
+                    <td className="py-2">
+                      <TickerLabel
+                        ticker={e.ticker}
+                        metadata={tickerMetadata[e.ticker.toUpperCase()]}
+                      />
+                    </td>
                     <td
                       className={`py-2 text-right ${
                         e.unrealized_pnl_pct !== null && e.unrealized_pnl_pct >= 0

@@ -1,12 +1,12 @@
-import type { ReactNode } from "react";
+import Link from "next/link";
 import type { TickerMetadata } from "@/lib/types";
 
 interface TickerLabelProps {
   ticker: string;
   metadata?: TickerMetadata;
-  children?: ReactNode;
+  href?: string;
+  onClick?: () => void;
   className?: string;
-  subtitleClassName?: string;
 }
 
 export function tickerDisplayName(ticker: string, metadata?: TickerMetadata): string | null {
@@ -15,23 +15,46 @@ export function tickerDisplayName(ticker: string, metadata?: TickerMetadata): st
   return name;
 }
 
+const NAME_CLASS =
+  "max-w-[14rem] truncate font-mono font-semibold text-sm text-purple-400";
+const TICKER_CLASS =
+  "max-w-[14rem] truncate text-[11px] leading-tight text-muted";
+const INTERACTIVE_CLASS =
+  "flex min-w-0 flex-col items-start text-left transition-colors hover:[&_span]:text-purple-300 hover:[&_span]:underline";
+
 export function TickerLabel({
   ticker,
   metadata,
-  children,
+  href,
+  onClick,
   className = "",
-  subtitleClassName = "",
 }: TickerLabelProps) {
   const companyName = tickerDisplayName(ticker, metadata);
 
-  return (
-    <span className={`inline-flex min-w-0 flex-col ${className}`}>
-      {children ?? <span className="font-mono font-semibold">{ticker}</span>}
-      {companyName && (
-        <span className={`mt-0.5 max-w-[14rem] truncate text-[11px] leading-tight text-muted ${subtitleClassName}`}>
-          {companyName}
-        </span>
-      )}
-    </span>
+  const content = (
+    <>
+      {companyName && <span className={NAME_CLASS}>{companyName}</span>}
+      <span className={`${TICKER_CLASS} ${companyName ? "mt-0.5" : ""}`}>{ticker}</span>
+    </>
   );
+
+  const wrapperClass = `inline-flex min-w-0 flex-col items-start text-left ${className}`.trim();
+
+  if (href) {
+    return (
+      <Link href={href} className={`${wrapperClass} ${INTERACTIVE_CLASS}`}>
+        {content}
+      </Link>
+    );
+  }
+
+  if (onClick) {
+    return (
+      <button type="button" onClick={onClick} className={`${wrapperClass} ${INTERACTIVE_CLASS}`}>
+        {content}
+      </button>
+    );
+  }
+
+  return <span className={wrapperClass}>{content}</span>;
 }
