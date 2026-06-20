@@ -16,6 +16,20 @@ import {
   updateAppSettings,
 } from "@/lib/api";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
+import {
+  CLOUD_LLM_PROVIDERS,
+  DEFAULT_LLM_DEPTH,
+  DEFAULT_LLM_PROVIDER,
+  LLM_API_KEY_PLACEHOLDERS,
+  LLM_PROVIDER_DOCS_URLS,
+  LLM_PROVIDER_LABELS,
+  LLM_SETTINGS_SHORT_LABELS,
+  LOCAL_LLM_PROVIDERS,
+  validateDefaultLlmConfig,
+  type LlmDepth,
+  type LlmProvider,
+} from "@/lib/llmConfig";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { ApiKeyRow } from "@/components/settings/ApiKeyRow";
 import { InfoPopover } from "@/components/settings/InfoPopover";
 import { ServerUrlRow } from "@/components/settings/ServerUrlRow";
@@ -27,19 +41,6 @@ import {
   type KalmanProcessingMode,
   type AppSettings,
 } from "@/lib/appSettings";
-
-const CLOUD_PROVIDERS: { provider: string; label: string; placeholder: string; docsUrl: string }[] = [
-  { provider: "openai",    label: "OpenAI",    placeholder: "sk-…",     docsUrl: "https://platform.openai.com/api-keys" },
-  { provider: "anthropic", label: "Anthropic", placeholder: "sk-ant-…", docsUrl: "https://console.anthropic.com/settings/keys" },
-  { provider: "google",    label: "Google",    placeholder: "AIza…",    docsUrl: "https://aistudio.google.com/app/apikey" },
-  { provider: "ionos",      label: "IONOS",      placeholder: "ion_…",    docsUrl: "https://docs.ionos.com/cloud/ai/ai-model-hub" },
-  { provider: "groq",      label: "Groq",      placeholder: "gsk_…",    docsUrl: "https://console.groq.com/keys" },
-];
-
-const LOCAL_PROVIDERS: { provider: "ollama" | "vllm"; label: string }[] = [
-  { provider: "ollama", label: "Ollama" },
-  { provider: "vllm",   label: "vLLM" },
-];
 
 function SectionCard({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -386,20 +387,45 @@ export default function SettingsPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [preferredCurrency, setPreferredCurrency] = useState("USD");
+  const [defaultLlmConfig, setDefaultLlmConfig] = useState<LlmConfigValue>({
+    provider: DEFAULT_LLM_PROVIDER,
+    model: "",
+    depth: DEFAULT_LLM_DEPTH,
+  });
   const [profileStatus, setProfileStatus] = useState<"idle" | "success" | "error">("idle");
   const [profileError, setProfileError] = useState("");
 
-  // Sync preferred_currency from server once loaded
+  // Sync preferred_currency and default LLM config from server once loaded
   useEffect(() => {
     if (me?.preferred_currency) setPreferredCurrency(me.preferred_currency);
-  }, [me?.preferred_currency]);
+    if (me) {
+      setDefaultLlmConfig({
+        provider: (me.default_llm_provider as LlmProvider) ?? DEFAULT_LLM_PROVIDER,
+        model: me.default_llm_model ?? "",
+        depth: (me.default_llm_depth as LlmDepth) ?? DEFAULT_LLM_DEPTH,
+      });
+    }
+  }, [me?.preferred_currency, me?.default_llm_provider, me?.default_llm_model, me?.default_llm_depth, me]);
 
   const profileMutation = useMutation({
-    mutationFn: () => updateProfile({
-      ...(profileName.trim() ? { name: profileName.trim() } : {}),
-      ...(currentPassword && newPassword ? { current_password: currentPassword, new_password: newPassword } : {}),
-      preferred_currency: preferredCurrency,
-    }),
+    mutationFn: () => {
+      const validationError = validateDefaultLlmConfig(
+        defaultLlmConfig.provider,
+        defaultLlmConfig.model,
+        defaultLlmConfig.depth ?? DEFAULT_LLM_DEPTH,
+      );
+      if (validationError) {
+        throw new Error(validationError);
+      }
+      return updateProfile({
+        ...(profileName.trim() ? { name: profileName.trim() } : {}),
+        ...(currentPassword && newPassword ? { current_password: currentPassword, new_password: newPassword } : {}),
+        preferred_currency: preferredCurrency,
+        default_llm_provider: defaultLlmConfig.provider,
+        default_llm_model: defaultLlmConfig.model.trim() || null,
+        default_llm_depth: defaultLlmConfig.depth ?? DEFAULT_LLM_DEPTH,
+      });
+    },
     onSuccess: () => {
       setCurrentPassword("");
       setNewPassword("");
@@ -523,6 +549,23 @@ export default function SettingsPage() {
                 ))}
               </select>
             </div>
+            <Divider />
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-muted text-xs font-medium uppercase tracking-wide">Default LLM Configuration</p>
+                <p className="text-[10px] text-muted mt-0.5">
+                  Pre-fills provider and model on new runs, watchlist items, portfolio AI features, and discover recommendations.
+                </p>
+              </div>
+              <LlmConfigPicker
+                value={defaultLlmConfig}
+                onChange={(value) => { setDefaultLlmConfig(value); setProfileStatus("idle"); }}
+                showDepth
+                providerClassName="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+                modelClassName="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-md focus:outline-hidden focus:border-blue-500"
+                depthClassName="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+              />
+            </div>
             <div className="flex items-center gap-3 pt-1">
               <button
                 onClick={() => profileMutation.mutate()}
@@ -584,26 +627,26 @@ export default function SettingsPage() {
         {isAdmin && (
           <SectionCard title="LLM Providers" description="API keys and server URLs used when running analyses.">
             <SubGroupLabel label="Cloud APIs" />
-            {CLOUD_PROVIDERS.map(({ provider, label, placeholder, docsUrl }, i) => (
+            {CLOUD_LLM_PROVIDERS.map((provider, i) => (
               <div key={provider}>
                 {i > 0 && <Divider />}
                 <ApiKeyRow
                   provider={provider}
-                  label={label}
-                  placeholder={placeholder}
-                  docsUrl={docsUrl}
+                  label={LLM_PROVIDER_LABELS[provider]}
+                  placeholder={LLM_API_KEY_PLACEHOLDERS[provider]}
+                  docsUrl={LLM_PROVIDER_DOCS_URLS[provider]}
                   isSet={apiKeys.find((k) => k.provider === provider)?.is_valid ?? false}
                   onSaved={refetchKeys}
                 />
               </div>
             ))}
             <SubGroupLabel label="Local Servers" />
-            {LOCAL_PROVIDERS.map(({ provider, label }, i) => (
+            {LOCAL_LLM_PROVIDERS.map((provider, i) => (
               <div key={provider}>
                 {i > 0 && <Divider />}
                 <ServerUrlRow
                   provider={provider}
-                  label={label}
+                  label={LLM_SETTINGS_SHORT_LABELS[provider]}
                   isValid={localKey(provider)?.is_valid ?? false}
                   onSaved={refetchKeys}
                 />

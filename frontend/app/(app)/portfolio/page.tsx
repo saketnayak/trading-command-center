@@ -13,10 +13,12 @@ import {
   getPortfolioWave,
   getPortfolioTrimSignals,
   batchAnalyzePortfolio,
-  getProviderModels,
   getBehavioralAlerts,
   getAppSettings,
 } from "@/lib/api";
+import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
+import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
+import { DEFAULT_LLM_DEPTH } from "@/lib/llmConfig";
 import type { Portfolio, PortfolioHolding, BehavioralAlertsResponse, RegimeData, WaveSummary, TrimSignalEntry, TrimSignalsResponse } from "@/lib/types";
 import { isCrypto } from "@/lib/asset";
 import { PortfolioSwitcher } from "@/components/portfolio/PortfolioSwitcher";
@@ -39,17 +41,6 @@ import type { ResponseLanguage } from "@/lib/responseLanguage";
 
 type Tab = "holdings" | "insights" | "earnings" | "news" | "trending" | "discover" | "chat" | "thesis";
 
-const PROVIDERS = ["openai", "anthropic", "google", "groq", "ionos", "ollama", "vllm"];
-const DEPTHS = ["quick", "standard", "deep"] as const;
-
-interface BatchAnalyzeForm {
-  llm_provider: string;
-  llm_model: string;
-  depth: string;
-  response_language: ResponseLanguage;
-  staleness_days: number;
-}
-
 function BatchAnalyzeModal({
   portfolioId,
   onClose,
@@ -57,34 +48,24 @@ function BatchAnalyzeModal({
   portfolioId: string;
   onClose: () => void;
 }) {
-  const [form, setForm] = useState<BatchAnalyzeForm>({
-    llm_provider: "openai",
-    llm_model: "",
-    depth: "quick",
-    response_language: DEFAULT_RESPONSE_LANGUAGE,
-    staleness_days: 7,
-  });
+  const { provider, model, depth, resolveModel } = useDefaultLlmConfig();
+  const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model, depth });
+  const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>(DEFAULT_RESPONSE_LANGUAGE);
+  const [stalenessDays, setStalenessDays] = useState(7);
   const [result, setResult] = useState<{ queued: { ticker: string; run_id: string }[]; skipped: string[] } | null>(null);
 
-  const { data: models = [] } = useQuery({
-    queryKey: ["provider-models", form.llm_provider],
-    queryFn: () => getProviderModels(form.llm_provider),
-  });
-
   useEffect(() => {
-    if (models.length > 0 && !form.llm_model) {
-      setForm((f) => ({ ...f, llm_model: models[0] }));
-    }
-  }, [models, form.llm_model]);
+    setLlmConfig({ provider, model, depth });
+  }, [provider, model, depth]);
 
   const analyzeMutation = useMutation({
     mutationFn: () =>
       batchAnalyzePortfolio(portfolioId, {
-        llm_provider: form.llm_provider,
-        llm_model: form.llm_model || (models[0] ?? ""),
-        depth: form.depth,
-        response_language: form.response_language,
-        staleness_days: form.staleness_days,
+        llm_provider: llmConfig.provider,
+        llm_model: resolveModel(llmConfig),
+        depth: llmConfig.depth ?? DEFAULT_LLM_DEPTH,
+        response_language: responseLanguage,
+        staleness_days: stalenessDays,
       }),
     onSuccess: (data) => setResult({ queued: data.queued, skipped: data.skipped }),
   });
@@ -103,43 +84,19 @@ function BatchAnalyzeModal({
               Queues a new analysis run for every holding whose last analysis is older than the threshold (or has never been analyzed).
             </p>
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-muted">Provider</label>
-                  <select
-                    value={form.llm_provider}
-                    onChange={(e) => setForm((f) => ({ ...f, llm_provider: e.target.value, llm_model: "" }))}
-                    className="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
-                  >
-                    {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted">Depth</label>
-                  <select
-                    value={form.depth}
-                    onChange={(e) => setForm((f) => ({ ...f, depth: e.target.value }))}
-                    className="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
-                  >
-                    {DEPTHS.map((d) => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div className="space-y-1">
-                <label className="text-xs text-muted">Model</label>
-                <select
-                  value={form.llm_model}
-                  onChange={(e) => setForm((f) => ({ ...f, llm_model: e.target.value }))}
-                  className="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
-                >
-                  {models.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
-              </div>
+              <LlmConfigPicker
+                value={llmConfig}
+                onChange={setLlmConfig}
+                showDepth
+                providerClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+                modelClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+                depthClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+              />
               <div className="space-y-1">
                 <label className="text-xs text-muted">Response Language</label>
                 <select
-                  value={form.response_language}
-                  onChange={(e) => setForm((f) => ({ ...f, response_language: e.target.value as ResponseLanguage }))}
+                  value={responseLanguage}
+                  onChange={(e) => setResponseLanguage(e.target.value as ResponseLanguage)}
                   className="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
                 >
                   {RESPONSE_LANGUAGE_OPTIONS.map((option) => (
@@ -155,8 +112,8 @@ function BatchAnalyzeModal({
                   type="number"
                   min={1}
                   max={90}
-                  value={form.staleness_days}
-                  onChange={(e) => setForm((f) => ({ ...f, staleness_days: parseInt(e.target.value) || 7 }))}
+                  value={stalenessDays}
+                  onChange={(e) => setStalenessDays(parseInt(e.target.value) || 7)}
                   className="w-24 bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
                 />
               </div>

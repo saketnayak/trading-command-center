@@ -158,6 +158,18 @@ export async function getProviderModels(provider: string): Promise<string[]> {
   return r.json();
 }
 
+export interface LlmProviderDefaults {
+  default_provider: string;
+  default_depth: string;
+  default_models: Record<string, string>;
+}
+
+export async function getLlmProviderDefaults(): Promise<LlmProviderDefaults> {
+  const r = await fetchWithAuth("/llm-providers/defaults");
+  if (!r.ok) throw new Error("Failed to fetch LLM provider defaults");
+  return r.json();
+}
+
 export async function getRunStats(): Promise<RunStats> {
   const r = await fetchWithAuth("/runs/stats");
   if (!r.ok) throw new Error("Failed to fetch stats");
@@ -199,7 +211,15 @@ export async function getMe(): Promise<User> {
   return r.json();
 }
 
-export async function updateProfile(data: { name?: string; current_password?: string; new_password?: string; preferred_currency?: string }): Promise<void> {
+export async function updateProfile(data: {
+  name?: string;
+  current_password?: string;
+  new_password?: string;
+  preferred_currency?: string;
+  default_llm_provider?: string;
+  default_llm_model?: string | null;
+  default_llm_depth?: string;
+}): Promise<void> {
   const r = await fetchWithAuth("/auth/me", { method: "PATCH", body: JSON.stringify(data) });
   if (!r.ok) {
     const body = await r.json().catch(() => null);
@@ -660,15 +680,12 @@ export async function getSectorGaps(portfolioId: string): Promise<SectorGap[]> {
 
 export async function discoverStocks(
   portfolioId: string,
-  llmProvider?: string,
-  llmModel?: string
+  llmProvider: string,
+  llmModel: string,
 ): Promise<DiscoverResponse> {
-  const body: Record<string, string> = {};
-  if (llmProvider) body.llm_provider = llmProvider;
-  if (llmModel) body.llm_model = llmModel;
   const r = await fetchWithAuth(`/portfolio/${portfolioId}/discover`, {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({ llm_provider: llmProvider, llm_model: llmModel }),
   });
   if (!r.ok) throw new Error("Failed to discover stocks");
   return r.json();

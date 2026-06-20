@@ -185,30 +185,11 @@ async def _fire_daily_portfolio_insights() -> None:
     from app.models.portfolio import Portfolio
     from app.models.portfolio_delivery_settings import PortfolioDeliverySettings
     from app.models.portfolio_insight import PortfolioInsight, InsightStatus, InsightTrigger
-    from app.models.api_key import ApiKey
+    from app.models.user import User
     from app.services.portfolio_insight_runner import generate_portfolio_insight
+    from app.services.llm_selection import pick_llm_for_user
 
     async with AsyncSessionLocal() as db:
-        # Pick the first available LLM provider key
-        providers_in_order = ["openai", "anthropic", "google", "groq"]
-        llm_provider = None
-        llm_model = None
-        for prov in providers_in_order:
-            row = (await db.execute(select(ApiKey).where(ApiKey.provider == prov))).scalar_one_or_none()
-            if row and row.is_valid:
-                llm_provider = prov
-                llm_model = {
-                    "openai": "gpt-4o-mini",
-                    "anthropic": "claude-haiku-4-5-20251001",
-                    "google": "gemini-2.5-flash",
-                    "groq": "llama-3.3-70b-versatile",
-                    "ionos": "openai/gpt-oss-120b",
-                }[prov]
-                break
-
-        if not llm_provider:
-            return
-
         all_portfolios = (
             await db.execute(select(Portfolio).options(_selectinload(Portfolio.snapshots)))
         ).scalars().all()
@@ -217,6 +198,12 @@ async def _fire_daily_portfolio_insights() -> None:
         for portfolio in all_portfolios:
             if not portfolio.snapshots or not any(s.row_count > 0 for s in portfolio.snapshots):
                 continue
+
+            owner = await db.get(User, portfolio.user_id)
+            llm_choice = await pick_llm_for_user(db, owner)
+            if not llm_choice:
+                continue
+            llm_provider, llm_model = llm_choice
 
             # Determine delivery timezone: use the portfolio's setting or default to UTC
             ds = (
