@@ -3,6 +3,7 @@ import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { getTickerSnapshot } from "@/lib/api";
+import { getClosesForDays } from "@/lib/chartWindow";
 import { fmtMoney } from "@/lib/currency";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import { WavePanel } from "@/components/wave/WavePanel";
@@ -20,7 +21,7 @@ interface TickerDrawerProps {
 
 function Sparkline({ chart, days }: { chart: TickerChart; days: number }) {
   const uid = useId();
-  const closes = chart.c.slice(-days);
+  const closes = getClosesForDays(chart, days);
   if (closes.length < 2) {
     return <p className="text-muted text-xs text-center py-6">Chart data unavailable</p>;
   }
