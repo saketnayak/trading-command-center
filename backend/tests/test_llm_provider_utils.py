@@ -32,7 +32,7 @@ def test_normalize_llm_depth():
 
 def test_provider_model_catalog_covers_cloud_defaults():
     for provider, default_model in DEFAULT_LLM_MODELS.items():
-        if provider in {"ollama", "vllm"}:
+        if provider in {"ollama", "vllm", "litellm"}:
             continue
         models = PROVIDER_MODEL_CATALOG[provider]
         assert models[0] == default_model

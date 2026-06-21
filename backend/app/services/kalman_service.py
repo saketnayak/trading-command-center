@@ -336,6 +336,7 @@ async def get_kalman(
                     **result,
                     "currency": await resolve_quote_currency(symbol),
                 }
+                _kalman_cache[cache_key] = (result, expiry)
             return result
 
     try:

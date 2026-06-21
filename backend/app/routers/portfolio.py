@@ -291,8 +291,8 @@ async def _fetch_prices_bulk(
         crypto_quotes = await _crypto.fetch_prices_batch(uncached_crypto, finnhub_key=api_key)
         for ticker, quote in crypto_quotes.items():
             result[ticker] = quote
-            if quote is not None:
-                _price_cache[ticker] = (quote, now + _CACHE_TTL)
+            ttl = _CACHE_TTL if quote is not None else 120
+            _price_cache[ticker] = (quote, now + ttl)
 
     if uncached_stock:
         stock_quotes = await asyncio.gather(
@@ -514,6 +514,7 @@ async def get_current_holdings(
 
     enriched: list[HoldingResponse] = []
     total_market_value: float = 0.0
+    total_market_value_for_pnl: float = 0.0
     total_cost: float = 0.0
     has_totals = False
 
@@ -547,6 +548,7 @@ async def get_current_holdings(
             total_market_value += market_value
             has_totals = True
             if h.avg_cost is not None:
+                total_market_value_for_pnl += market_value
                 total_cost += h.avg_cost * h.shares
 
         enriched.append(HoldingResponse(
@@ -565,9 +567,11 @@ async def get_current_holdings(
             last_run=last_runs.get(h.ticker),
         ))
 
-    totals_pnl = (total_market_value - total_cost) if has_totals and total_cost else None
+    totals_pnl = (
+        (total_market_value_for_pnl - total_cost) if has_totals and total_cost else None
+    )
     totals_pct = (
-        ((total_market_value / total_cost - 1) * 100)
+        ((total_market_value_for_pnl / total_cost - 1) * 100)
         if has_totals and total_cost
         else None
     )

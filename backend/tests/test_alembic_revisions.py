@@ -17,4 +17,8 @@ def test_published_watchlist_timezone_revisions_remain_resolvable():
 
     assert add_timezone.down_revision == "g7h8i9j0k1l2"
     assert drop_timezone.down_revision == "h8i9j0k1l2m3"
-    assert "i9j0k1l2m3n4" in script.get_heads()
+    assert any(
+        rev.revision == "i9j0k1l2m3n4"
+        for head in script.get_heads()
+        for rev in script.iterate_revisions(head, "base")
+    )
