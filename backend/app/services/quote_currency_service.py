@@ -24,12 +24,18 @@ async def resolve_quote_currency(
         return quote_currency_from_ticker(normalized) or "USD"
 
     if db is not None:
-        meta = await get_ticker_metadata(normalized, db, finnhub_key)
-        if meta and meta.currency:
-            return meta.currency.upper()
+        try:
+            meta = await get_ticker_metadata(normalized, db, finnhub_key)
+            if meta and meta.currency:
+                return meta.currency.upper()
+        except Exception:
+            pass
 
-    quote = await _yf.fetch_price_quote(normalized)
-    if quote:
-        return quote.currency_code
+    try:
+        quote = await _yf.fetch_price_quote(normalized)
+        if quote:
+            return quote.currency_code
+    except Exception:
+        pass
 
     return "USD"
