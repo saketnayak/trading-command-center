@@ -237,7 +237,11 @@ async def fetch_prices_batch(
             pass
 
     # ── Finnhub fallback for anything still missing (USD/USDT pairs) ─────────
-    missing = [t for t in uncached if t not in result]
+    missing = [
+        t
+        for t in uncached
+        if t not in result and _quote_currency_for_ticker(t) in ("USD", "USDT")
+    ]
     if missing and finnhub_key:
         fallback_tasks = [
             _finnhub_price(extract_symbol(t), finnhub_key, now) for t in missing
