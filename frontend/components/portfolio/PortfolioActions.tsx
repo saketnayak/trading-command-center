@@ -1,10 +1,11 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { Bell, RefreshCw, RotateCw } from "lucide-react";
 import { IconButton } from "@/components/ui/IconButton";
 
 interface PortfolioActionsProps {
-  freshnessLabel?: string | null;
+  freshnessLabel?: ReactNode;
   hasMissingPrices?: boolean;
   isRefreshing?: boolean;
   isSyncing?: boolean;
@@ -60,14 +61,7 @@ export function PortfolioActions({
     <div className="flex flex-wrap items-center gap-2 sm:gap-1.5">
       {(freshnessLabel || onRefreshClick || onSyncAllClick) && (
         <>
-          {freshnessLabel && (
-            <span
-              className="text-muted text-xs whitespace-nowrap"
-              title="Time since portfolio prices and enrichment data were last refreshed"
-            >
-              {freshnessLabel}
-            </span>
-          )}
+          {freshnessLabel}
           <div className="flex items-center gap-1">
             {onRefreshClick && (
               <IconButton

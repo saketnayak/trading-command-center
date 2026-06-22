@@ -361,14 +361,11 @@ async def get_kalman(
         r_value,
     )
 
+    if result is not None:
+        result["currency"] = await resolve_quote_currency(symbol)
+
     ttl = _CACHE_TTL if result is not None else 300
     _kalman_cache[cache_key] = (result, now + ttl)
-
-    if result is not None:
-        result = {
-            **result,
-            "currency": await resolve_quote_currency(symbol),
-        }
     return result
 
 

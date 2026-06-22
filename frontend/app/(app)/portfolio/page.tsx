@@ -40,7 +40,7 @@ import {
   PORTFOLIO_EARNINGS_DAYS_AHEAD,
 } from "@/lib/portfolioQueries";
 import { usePortfolioSync } from "@/lib/usePortfolioSync";
-import { usePortfolioFreshness } from "@/lib/usePortfolioFreshness";
+import { PortfolioFreshnessLabel } from "@/lib/usePortfolioFreshness";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import { PortfolioSwitcher } from "@/components/portfolio/PortfolioSwitcher";
 import { PortfolioActions } from "@/components/portfolio/PortfolioActions";
@@ -351,13 +351,6 @@ export default function PortfolioPage() {
     fetchingMarketMovers ||
     fetchingMarketSectors;
 
-  const freshnessLabel = usePortfolioFreshness({
-    portfolioId: selectedId,
-    markovEnabled,
-    waveEnabled,
-    isFetching: isFetchingPortfolioData,
-  });
-
   function handleSelectPortfolio(id: string) {
     setPreferredId(id);
     setLastPortfolioId(id);
@@ -448,7 +441,14 @@ export default function PortfolioPage() {
             <>
               <div className="hidden sm:block h-6 w-px shrink-0 bg-border" aria-hidden="true" />
               <PortfolioActions
-                freshnessLabel={freshnessLabel}
+                freshnessLabel={
+                  <PortfolioFreshnessLabel
+                    portfolioId={selectedId}
+                    markovEnabled={markovEnabled}
+                    waveEnabled={waveEnabled}
+                    isFetching={isFetchingPortfolioData}
+                  />
+                }
                 hasMissingPrices={hasMissingPrices}
                 isRefreshing={fetchingCurrent}
                 isSyncing={isSyncing}

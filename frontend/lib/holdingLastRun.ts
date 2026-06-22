@@ -11,7 +11,7 @@ const VALID_VERDICTS = new Set(["buy", "sell", "hold"]);
 export function analysisFromLastRun(
   lastRun: PortfolioHoldingLastRun | null | undefined
 ): HoldingAnalysisSummary | null {
-  if (!lastRun) return null;
+  if (!lastRun || typeof lastRun.verdict !== "string") return null;
   const verdict = lastRun.verdict.toLowerCase();
   if (!VALID_VERDICTS.has(verdict)) return null;
   return {

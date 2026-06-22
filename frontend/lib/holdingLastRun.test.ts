@@ -25,6 +25,20 @@ test("analysisFromLastRun normalizes verdict and maps analysis_date", () => {
   );
 });
 
+test("analysisFromLastRun returns null when verdict is missing", () => {
+  assert.equal(
+    analysisFromLastRun({
+      run_id: "run-1",
+      verdict: null as unknown as string,
+      analysis_date: "2026-06-01T12:00:00Z",
+      suggested_entry: null,
+      suggested_stop: null,
+      suggested_target: null,
+    }),
+    null
+  );
+});
+
 test("analysisFromLastRun rejects unknown verdict", () => {
   assert.equal(
     analysisFromLastRun({
