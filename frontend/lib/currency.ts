@@ -6,11 +6,12 @@ export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 
 export function fmtMoney(n: number | null | undefined, currency: string): string {
   if (n == null) return "—";
+  const fractionDigits = currency === "JPY" ? 0 : 2;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: currency === "JPY" ? 0 : 2,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(n);
 }
 
