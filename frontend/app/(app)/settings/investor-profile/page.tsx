@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getInvestorProfile, upsertInvestorProfile } from "@/lib/api";
+import { PageShell } from "@/components/layout/PageShell";
 
 const SECTORS = [
   { slug: "technology", label: "Technology" },
@@ -179,7 +180,7 @@ export default function InvestorProfilePage() {
   });
 
   return (
-    <main className="px-4 py-4 sm:p-6 max-w-2xl mx-auto">
+    <PageShell width="narrow">
         <div className="flex items-center gap-3 mb-8">
           <a href="/settings" className="text-muted hover:text-fg-secondary text-sm">← Settings</a>
           <h1 className="text-lg font-semibold text-fg">Investor DNA</h1>
@@ -364,6 +365,6 @@ export default function InvestorProfilePage() {
             )}
           </div>
         </form>
-      </main>
+      </PageShell>
   );
 }

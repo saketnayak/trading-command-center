@@ -41,6 +41,7 @@ import {
   type KalmanProcessingMode,
   type AppSettings,
 } from "@/lib/appSettings";
+import { PageShell } from "@/components/layout/PageShell";
 
 function SectionCard({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -498,7 +499,7 @@ export default function SettingsPage() {
 
   return (
     <>
-    <main className="px-4 py-4 sm:p-6 max-w-3xl mx-auto flex flex-col gap-8">
+    <PageShell width="settings" gap="8">
 
         {/* Profile */}
         <SectionCard title="My Profile" description="Your display name and login credentials.">
@@ -863,7 +864,7 @@ SMTP_FROM=noreply@yourdomain.com`}
           </SectionCard>
         )}
 
-      </main>
+      </PageShell>
 
       {/* Restore confirmation modal */}
       {restoreModalOpen && restoreFile && (() => {

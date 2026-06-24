@@ -1,6 +1,11 @@
 "use client";
 import { useQuery } from "@tanstack/react-query";
 import { getPortfolioNews } from "@/lib/api";
+import {
+  portfolioQueryKeys,
+  PORTFOLIO_STALE_TIMES,
+  PORTFOLIO_NEWS_DAYS,
+} from "@/lib/portfolioQueries";
 import { finnhubUnavailableMessage } from "@/lib/finnhubMessages";
 
 interface Props {
@@ -39,9 +44,9 @@ export function NewsPanel({ portfolioId, priceUnavailableReason }: Props) {
   const noKey = priceUnavailableReason === "no_finnhub_key";
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["portfolio-news", portfolioId],
-    queryFn: () => getPortfolioNews(portfolioId, 7),
-    staleTime: 1000 * 60 * 15,
+    queryKey: portfolioQueryKeys.news(portfolioId),
+    queryFn: () => getPortfolioNews(portfolioId, PORTFOLIO_NEWS_DAYS),
+    staleTime: PORTFOLIO_STALE_TIMES.news,
     enabled: !noKey,
   });
 

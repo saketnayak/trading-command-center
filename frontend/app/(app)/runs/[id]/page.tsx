@@ -15,6 +15,7 @@ import { WaveConfirmation } from "@/components/wave/WaveConfirmation";
 import { LanguageFlag } from "@/components/runs/RunContextIcons";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { Run, RunOutcome } from "@/lib/types";
+import { PageShell } from "@/components/layout/PageShell";
 
 function rerunUrl(run: Run): string {
   const p = new URLSearchParams({
@@ -193,38 +194,38 @@ export default function RunResultsPage() {
 
   if (runLoading) {
     return (
-      <main className="px-4 py-4 sm:p-6 max-w-5xl mx-auto flex flex-col gap-6">
+      <PageShell width="default" gap="6">
         <Link href="/runs" className="text-blue-400 hover:underline text-sm">
           ← Back to History
         </Link>
         <div className="bg-surface border border-input-border rounded-lg px-4 py-6 text-sm text-muted">
           Loading run…
         </div>
-      </main>
+      </PageShell>
     );
   }
 
   if (runIsError || !run) {
     return (
-      <main className="px-4 py-4 sm:p-6 max-w-5xl mx-auto flex flex-col gap-6">
+      <PageShell width="default" gap="6">
         <Link href="/runs" className="text-blue-400 hover:underline text-sm">
           ← Back to History
         </Link>
         <div className="bg-surface border border-red-500/40 rounded-lg px-4 py-6 text-sm text-red-300">
           {runError instanceof Error ? runError.message : "Failed to load this run."}
         </div>
-      </main>
+      </PageShell>
     );
   }
 
   return (
-    <main className="px-4 py-4 sm:p-6 max-w-5xl mx-auto flex flex-col gap-6">
+    <PageShell width="default" gap="6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
             <Link href="/runs" className="text-blue-400 hover:underline text-sm">
               ← Back to History
             </Link>
-            {run && <LabelEditor id={id} label={run.label} />}
+            <LabelEditor id={id} label={run.label} />
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {run && (
@@ -296,6 +297,6 @@ export default function RunResultsPage() {
         {run && <NotesEditor id={id} notes={run.notes} />}
         <AnalystReports report={report} analysts={run?.analysts ?? []} />
         <BullBearDebate report={report} />
-      </main>
+    </PageShell>
   );
 }

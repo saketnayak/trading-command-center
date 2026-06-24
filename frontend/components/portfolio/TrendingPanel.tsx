@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { getMarketTrending, getMarketMovers, getMarketSectors } from "@/lib/api";
+import { marketQueryKeys, MARKET_STALE_TIMES } from "@/lib/portfolioQueries";
 import type { MarketTicker, SectorData, PortfolioHolding } from "@/lib/types";
 import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 import { WatchButton } from "@/components/portfolio/WatchButton";
@@ -280,23 +281,23 @@ export function TrendingPanel() {
   const [drawerTicker, setDrawerTicker] = useState<string | null>(null);
 
   const { data: trending = [], isLoading: loadingTrending } = useQuery({
-    queryKey: ["market-trending"],
+    queryKey: marketQueryKeys.trending,
     queryFn: getMarketTrending,
-    staleTime: 1000 * 60 * 30,
+    staleTime: MARKET_STALE_TIMES.trending,
     retry: 1,
   });
 
   const { data: movers, isLoading: loadingMovers } = useQuery({
-    queryKey: ["market-movers"],
+    queryKey: marketQueryKeys.movers,
     queryFn: getMarketMovers,
-    staleTime: 1000 * 60 * 30,
+    staleTime: MARKET_STALE_TIMES.movers,
     retry: 1,
   });
 
   const { data: sectors = [], isLoading: loadingSectors } = useQuery({
-    queryKey: ["market-sectors"],
+    queryKey: marketQueryKeys.sectors,
     queryFn: getMarketSectors,
-    staleTime: 1000 * 60 * 30,
+    staleTime: MARKET_STALE_TIMES.sectors,
     retry: 1,
   });
 

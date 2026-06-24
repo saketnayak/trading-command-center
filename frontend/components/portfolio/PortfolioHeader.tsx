@@ -9,12 +9,6 @@ interface PortfolioHeaderProps {
   portfolioCurrencies: string[];
   snapshotDate: string | null;
   broker: string | null;
-  hasMissingPrices?: boolean;
-  isRefreshing?: boolean;
-  onUploadClick: () => void;
-  onExportClick: () => void;
-  onDeliveryClick: () => void;
-  onRefreshClick?: () => void;
 }
 
 function fmtPct(n: number | null | undefined): string {
@@ -30,12 +24,6 @@ export function PortfolioHeader({
   portfolioCurrencies,
   snapshotDate,
   broker,
-  hasMissingPrices,
-  isRefreshing,
-  onUploadClick,
-  onExportClick,
-  onDeliveryClick,
-  onRefreshClick,
 }: PortfolioHeaderProps) {
   const hasTotals = totals !== null && totalsCurrency !== null;
   const pnl = totals?.unrealized_pnl ?? null;
@@ -57,9 +45,8 @@ export function PortfolioHeader({
     : null;
 
   return (
-    <div className="flex flex-col lg:flex-row lg:items-center gap-4 bg-input/50 border border-border rounded-sm px-4 py-3">
-      {/* Left: portfolio name + meta */}
-      <div className="flex items-center gap-3 min-w-0">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-input/50 border border-border rounded-sm px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
         <span className="text-purple-400 font-medium text-sm truncate">{portfolio.name}</span>
         {portfolio.holding_count > 0 && (
           <span className="text-muted text-xs shrink-0">
@@ -79,12 +66,8 @@ export function PortfolioHeader({
         )}
       </div>
 
-      {/* Spacer */}
-      <div className="hidden lg:block flex-1" />
-
-      {/* Right: totals */}
       {hasTotals ? (
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 shrink-0 w-full lg:w-auto">
+        <div className="flex flex-wrap items-center gap-4 sm:gap-6 shrink-0">
           <div className="text-right">
             <div className="text-fg text-sm font-semibold tabular-nums">
               {fmtMoney(totals!.market_value, totalsCurrency!)}
@@ -107,50 +90,6 @@ export function PortfolioHeader({
       ) : (
         <span className="text-subtle text-xs shrink-0">No data yet</span>
       )}
-
-      {/* Divider */}
-      <div className="hidden sm:block h-6 w-px bg-muted-surface shrink-0" />
-
-      {/* Action buttons */}
-      <div className="flex items-center gap-1 shrink-0">
-        {onRefreshClick && (
-          <button
-            onClick={onRefreshClick}
-            disabled={isRefreshing}
-            title={hasMissingPrices ? "Retry fetching missing prices" : "Refresh prices"}
-            aria-label={hasMissingPrices ? "Retry fetching missing prices" : "Refresh prices"}
-            className="flex items-center gap-1 text-muted hover:text-fg text-xs px-2 py-1 rounded hover:bg-muted-surface transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <span className={isRefreshing ? "animate-spin inline-block" : ""}
-              style={{ display: "inline-block" }}
-            >↻</span>
-            {hasMissingPrices && !isRefreshing && (
-              <span className="text-amber-400">Retry</span>
-            )}
-          </button>
-        )}
-        <button
-          onClick={onUploadClick}
-          className="flex items-center gap-1 text-muted hover:text-fg text-xs px-2 py-1 rounded-sm hover:bg-muted-surface transition-colors"
-        >
-          <span>↑</span>
-          <span>Upload</span>
-        </button>
-        <button
-          onClick={onExportClick}
-          className="flex items-center gap-1 text-muted hover:text-fg text-xs px-2 py-1 rounded-sm hover:bg-muted-surface transition-colors"
-        >
-          <span>⬇</span>
-          <span>Export</span>
-        </button>
-        <button
-          onClick={onDeliveryClick}
-          className="flex items-center gap-1 text-muted hover:text-fg text-xs px-2 py-1 rounded-sm hover:bg-muted-surface transition-colors"
-          title="Brief delivery settings"
-        >
-          <span>🔔</span>
-        </button>
-      </div>
     </div>
   );
 }
