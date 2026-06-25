@@ -27,13 +27,62 @@ interface PriceLevelProps {
   label: string;
   value: string | null | undefined;
   currency: string;
+  compact?: boolean;
 }
 
-function PriceLevel({ label, value, currency }: PriceLevelProps) {
+function PriceLevel({ label, value, currency, compact = false }: PriceLevelProps) {
+  const formatted = fmtPriceString(value, currency);
   return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-muted text-xs uppercase tracking-wider">{label}</span>
-      <span className="text-fg font-mono text-sm">{fmtPriceString(value, currency)}</span>
+    <div className={`min-w-0 flex-1 px-2 ${compact ? "py-1.5 text-center" : "px-3 py-2"}`}>
+      <span
+        className={`block uppercase tracking-wider text-muted ${
+          compact ? "text-[10px]" : "text-xs"
+        }`}
+      >
+        {label}
+      </span>
+      <span
+        className={`block truncate font-mono text-fg ${compact ? "text-xs" : "text-sm"}`}
+        title={formatted}
+      >
+        {formatted}
+      </span>
+    </div>
+  );
+}
+
+interface TradePlanLevelsProps {
+  entry: string | null | undefined;
+  stop: string | null | undefined;
+  target: string | null | undefined;
+  currency: string;
+  compact?: boolean;
+}
+
+function TradePlanLevels({ entry, stop, target, currency, compact = false }: TradePlanLevelsProps) {
+  const levels = [
+    { label: "Entry", value: entry },
+    { label: "Stop", value: stop },
+    { label: "Target", value: target },
+  ];
+
+  return (
+    <div
+      className={`grid grid-cols-3 divide-x divide-input-border overflow-hidden rounded-sm border border-input-border bg-input/20 ${
+        compact ? "" : "sm:max-w-md"
+      }`}
+      role="table"
+      aria-label="Trade plan levels"
+    >
+      {levels.map(({ label, value }) => (
+        <PriceLevel
+          key={label}
+          label={label}
+          value={value}
+          currency={currency}
+          compact={compact}
+        />
+      ))}
     </div>
   );
 }
@@ -81,13 +130,13 @@ export function TraderDecision({ run, report, metadata, compact = false }: Props
           </div>
 
           {hasPrices && (
-            <div className={`flex flex-col gap-3 border-t border-input-border pt-3 ${compact ? "" : "sm:flex-row sm:gap-6"}`}>
-              <PriceLevel label="Entry" value={report.suggested_entry} currency={currency} />
-              {!compact && <div className="hidden sm:block w-px bg-muted-surface" />}
-              <PriceLevel label="Stop" value={report.suggested_stop} currency={currency} />
-              {!compact && <div className="hidden sm:block w-px bg-muted-surface" />}
-              <PriceLevel label="Target" value={report.suggested_target} currency={currency} />
-            </div>
+            <TradePlanLevels
+              entry={report.suggested_entry}
+              stop={report.suggested_stop}
+              target={report.suggested_target}
+              currency={currency}
+              compact={compact}
+            />
           )}
 
           {report.trader_decision && !compact && (
