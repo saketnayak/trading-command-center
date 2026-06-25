@@ -7,7 +7,7 @@ import { TickerLabel } from "@/components/ui/TickerLabel";
 import { IconButton } from "@/components/ui/IconButton";
 import { AnalystIcons, LanguageFlag } from "@/components/runs/RunContextIcons";
 import { CronLabel } from "@/components/watchlist/CronLabel";
-import { WatchlistScheduleBuilder } from "@/components/watchlist/WatchlistScheduleBuilder";
+import { WatchlistScheduleEditor } from "@/components/watchlist/WatchlistScheduleEditor";
 import type { TickerMetadata, WatchlistItem } from "@/lib/types";
 
 type WatchlistItemCardProps = {
@@ -77,36 +77,17 @@ export function WatchlistItemCard({
       )}
 
       {editingSchedule && (
-        <div className="space-y-3 border-t border-border pt-3">
-          <p className="text-xs text-muted uppercase tracking-wide font-semibold">
-            Edit schedule for {item.ticker}
-          </p>
-          <WatchlistScheduleBuilder
-            key={`${item.id}-${scheduleEditorKey}`}
-            instanceKey={`${item.id}-${item.schedule_cron ?? "manual"}-${scheduleEditorKey}`}
-            cron={draftCron}
-            onCronChange={setDraftCron}
-          />
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                onSaveSchedule(draftCron);
-                setEditingSchedule(false);
-              }}
-              className="bg-blue-600 hover:bg-blue-500 text-fg text-xs font-medium px-3 py-1.5 rounded-lg"
-            >
-              Save schedule
-            </button>
-            <button
-              type="button"
-              onClick={() => setEditingSchedule(false)}
-              className="text-xs text-muted hover:text-fg-secondary px-3 py-1.5 border border-input-border rounded-lg"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+        <WatchlistScheduleEditor
+          ticker={item.ticker}
+          cron={draftCron}
+          onCronChange={setDraftCron}
+          instanceKey={`${item.id}-${item.schedule_cron ?? "manual"}-${scheduleEditorKey}`}
+          onSave={() => {
+            onSaveSchedule(draftCron);
+            setEditingSchedule(false);
+          }}
+          onCancel={() => setEditingSchedule(false)}
+        />
       )}
 
       <div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
