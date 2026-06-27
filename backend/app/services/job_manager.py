@@ -1,9 +1,8 @@
 import asyncio
 
-_running_tasks: dict[str, asyncio.Task] = {}
+from app.services.llm_provider_registry import LOCAL_PROVIDER_IDS
 
-# Providers that run locally and can only handle one request at a time.
-_LOCAL_PROVIDERS = frozenset({"ollama", "vllm"})
+_running_tasks: dict[str, asyncio.Task] = {}
 
 
 async def start_run(run_id: str, config: dict) -> None:
@@ -32,13 +31,13 @@ async def _serial_coordinator(items: list[tuple[str, dict]]) -> None:
 async def start_runs_batch(items: list[tuple[str, dict]]) -> None:
     """Start a batch of runs.
 
-    Local providers (Ollama, vLLM) run serially so they don't exhaust
+    Local providers (Ollama, vLLM, LiteLLM) run serially so they don't exhaust
     limited local resources.  Cloud providers run in parallel as before.
     """
     if not items:
         return
     provider = items[0][1].get("llm_provider", "")
-    if provider in _LOCAL_PROVIDERS:
+    if provider in LOCAL_PROVIDER_IDS:
         coordinator = asyncio.create_task(_serial_coordinator(items))
         for run_id, _ in items:
             _running_tasks[run_id] = coordinator

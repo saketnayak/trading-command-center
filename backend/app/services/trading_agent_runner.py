@@ -4,6 +4,8 @@ from queue import Queue as SyncQueue
 from datetime import datetime, timezone
 from langchain_core.callbacks import BaseCallbackHandler
 
+from app.services.llm_provider_registry import is_openai_compatible_local_provider, openai_compatible_base_url
+
 # Serializes env-var patching so concurrent local-inference runs don't race on os.environ.
 _env_fallback_lock = asyncio.Lock()
 
@@ -31,6 +33,7 @@ _PROVIDER_MAP: dict[str, str] = {
     "google": "google_genai",
     "ollama": "ollama",
     "vllm": "openai",   # vLLM is OpenAI-compatible
+    "litellm": "openai",  # LiteLLM proxy is OpenAI-compatible
     "groq": "openai",   # Groq is OpenAI-compatible
     "ionos": "openai",  # IONOS is OpenAI-compatible
 }
@@ -199,12 +202,9 @@ async def execute_run(run_id: str, config: dict) -> None:
             env_patch[_CLOUD_KEY_ENV[provider]] = stored_key
         elif provider == "ollama" and stored_key:
             env_patch["OLLAMA_HOST"] = stored_key.rstrip("/")
-        elif provider == "vllm" and stored_key:
-            vllm_url = stored_key.rstrip("/")
-            if not vllm_url.endswith("/v1"):
-                vllm_url += "/v1"
-            env_patch["OPENAI_BASE_URL"] = vllm_url
-            env_patch["OPENAI_API_KEY"] = "vllm"
+        elif is_openai_compatible_local_provider(provider) and stored_key:
+            env_patch["OPENAI_BASE_URL"] = openai_compatible_base_url(stored_key)
+            env_patch["OPENAI_API_KEY"] = provider
 
         needs_lock = bool(env_patch)
         prev_env: dict[str, str | None] = {k: os.environ.get(k) for k in env_patch}

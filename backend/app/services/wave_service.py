@@ -290,9 +290,10 @@ async def analyze_wave(
         logger.warning("wave analysis failed for %s: %s", symbol, exc)
         return None
 
+    payload = await _attach_quote_currency(symbol, payload)
     if use_cache:
         _analyze_cache[key] = (payload, time.time() + _CACHE_TTL)
-    return await _attach_quote_currency(symbol, payload)
+    return payload
 
 
 async def get_wave_summary(

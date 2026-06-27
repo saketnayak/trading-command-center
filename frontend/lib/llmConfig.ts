@@ -6,11 +6,12 @@ export const LLM_PROVIDERS = [
   "ionos",
   "ollama",
   "vllm",
+  "litellm",
 ] as const;
 
 export type LlmProvider = (typeof LLM_PROVIDERS)[number];
 
-export const LOCAL_LLM_PROVIDERS = ["ollama", "vllm"] as const;
+export const LOCAL_LLM_PROVIDERS = ["ollama", "vllm", "litellm"] as const;
 export type LocalLlmProvider = (typeof LOCAL_LLM_PROVIDERS)[number];
 
 export type CloudLlmProvider = Exclude<LlmProvider, LocalLlmProvider>;
@@ -37,6 +38,7 @@ export const LLM_PROVIDER_LABELS: Record<LlmProvider, string> = {
   ionos: "IONOS",
   ollama: "Ollama (local)",
   vllm: "vLLM (local)",
+  litellm: "LiteLLM (local)",
 };
 
 export interface LlmSystemDefaults {
@@ -64,11 +66,13 @@ export const LLM_PROVIDER_DOCS_URLS: Record<CloudLlmProvider, string> = {
 export const LLM_SERVER_URL_PLACEHOLDERS: Record<LocalLlmProvider, string> = {
   ollama: "http://localhost:11434",
   vllm: "http://localhost:8080",
+  litellm: "http://localhost:4000",
 };
 
 export const LLM_SETTINGS_SHORT_LABELS: Record<LocalLlmProvider, string> = {
   ollama: "Ollama",
   vllm: "vLLM",
+  litellm: "LiteLLM",
 };
 
 export interface LlmConfig {
