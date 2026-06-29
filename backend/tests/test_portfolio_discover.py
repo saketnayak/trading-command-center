@@ -101,3 +101,32 @@ async def test_discover_uses_request_llm_provider():
         assert r.status_code == 200
         assert captured
         assert captured[0] == ("groq", "llama-3.3-70b-versatile")
+
+
+@pytest.mark.asyncio
+async def test_discover_fetches_api_key_for_requested_provider():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        token = await _register_and_token(c, "discover-vllm-key@test.com")
+        portfolio_id = await _create_portfolio_with_holding(c, token)
+
+        requested_providers: list[str] = []
+
+        async def _get_key(provider, db):
+            requested_providers.append(provider)
+            return "http://localhost:8080"
+
+        import app.routers.market as market_module
+
+        with (
+            patch("app.services.portfolio_insight_runner._get_api_key", new=AsyncMock(side_effect=_get_key)),
+            patch("app.services.portfolio_insight_runner._call_llm", new=AsyncMock(return_value=MOCK_RECOMMENDATIONS)),
+            patch.object(market_module, "_trending_cache", (["XYZ"], time.time() + 3600)),
+        ):
+            r = await c.post(
+                f"/portfolio/{portfolio_id}/discover",
+                json={"llm_provider": "vllm", "llm_model": "meta-llama/Llama-3.1-8B-Instruct"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+
+        assert r.status_code == 200
+        assert requested_providers == ["vllm"]

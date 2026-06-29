@@ -18,6 +18,9 @@ import {
   getAppSettings,
   getPortfolioNews,
   getPortfolioEarnings,
+  getMarketTrending,
+  getMarketMovers,
+  getMarketSectors,
 } from "@/lib/api";
 import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
@@ -31,7 +34,9 @@ import {
 } from "@/lib/portfolioSelection";
 import {
   portfolioQueryKeys,
+  marketQueryKeys,
   PORTFOLIO_STALE_TIMES,
+  MARKET_STALE_TIMES,
   PORTFOLIO_NEWS_DAYS,
   PORTFOLIO_EARNINGS_DAYS_AHEAD,
 } from "@/lib/portfolioQueries";
@@ -363,6 +368,27 @@ function PortfolioPageContent() {
     staleTime: PORTFOLIO_STALE_TIMES.earnings,
   });
 
+  const { isFetching: fetchingMarketTrending } = useQuery({
+    queryKey: marketQueryKeys.trending,
+    queryFn: getMarketTrending,
+    staleTime: MARKET_STALE_TIMES.trending,
+    retry: 1,
+  });
+
+  const { isFetching: fetchingMarketMovers } = useQuery({
+    queryKey: marketQueryKeys.movers,
+    queryFn: getMarketMovers,
+    staleTime: MARKET_STALE_TIMES.movers,
+    retry: 1,
+  });
+
+  const { isFetching: fetchingMarketSectors } = useQuery({
+    queryKey: marketQueryKeys.sectors,
+    queryFn: getMarketSectors,
+    staleTime: MARKET_STALE_TIMES.sectors,
+    retry: 1,
+  });
+
   const { data: tickerMetadata = {}, isFetching: fetchingTickerMetadata } = useTickerMetadata(tickers, {
     enabled: tickers.length > 0,
     forceRefresh: metadataForceToken > 0,
@@ -390,7 +416,10 @@ function PortfolioPageContent() {
     fetchingBehavioralAlerts ||
     fetchingTickerMetadata ||
     fetchingNews ||
-    fetchingEarnings;
+    fetchingEarnings ||
+    fetchingMarketTrending ||
+    fetchingMarketMovers ||
+    fetchingMarketSectors;
 
   function handleSelectPortfolio(id: string) {
     setPreferredId(id);

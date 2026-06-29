@@ -533,8 +533,7 @@ async def generate_portfolio_insight(insight_id: str) -> None:
             # Fetch LLM key for the chosen provider
             llm_provider = insight.llm_provider
             llm_model = insight.llm_model
-            provider_for_key = llm_provider if llm_provider not in ("vllm",) else "openai"
-            llm_key = await _get_api_key(provider_for_key, db)
+            llm_key = await _get_api_key(llm_provider, db)
 
             # Fetch prices — crypto batched into one CoinGecko call, stocks via Finnhub.
             from app.models.user import User

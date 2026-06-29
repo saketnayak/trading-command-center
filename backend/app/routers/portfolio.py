@@ -1638,8 +1638,7 @@ async def discover_stocks(
             raise HTTPException(status_code=422, detail="No LLM provider key configured. Add one in Settings.")
         llm_provider, llm_model = picked
 
-    provider_for_key = llm_provider if llm_provider != "vllm" else "openai"
-    api_key = await _get_api_key(provider_for_key, db)
+    api_key = await _get_api_key(llm_provider, db)
     if llm_provider not in LOCAL_LLM_PROVIDERS and not api_key:
         raise HTTPException(status_code=422, detail="LLM provider key not found.")
 
