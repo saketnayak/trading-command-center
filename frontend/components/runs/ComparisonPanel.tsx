@@ -1,5 +1,6 @@
 "use client";
 import { RunContextIcons } from "@/components/runs/RunContextIcons";
+import { agreementBannerClass } from "@/lib/uiClasses";
 import type { RunWithReport } from "@/lib/types";
 import { getAnalystReportContent } from "@/lib/analystReports";
 import { fmtPriceString, resolveQuoteCurrency } from "@/lib/currency";
@@ -91,7 +92,7 @@ export function ComparisonPanel({ a, b }: { a: RunWithReport; b: RunWithReport }
   return (
     <div className="flex flex-col gap-4">
       {verdictA && verdictB && (
-        <div className={`text-center text-sm px-4 py-2 rounded-lg border ${agree ? "border-green-700 bg-green-900/20 text-green-400" : "border-amber-700 bg-amber-900/20 text-amber-400"}`}>
+        <div className={`text-center text-sm px-4 py-2 rounded-lg border ${agreementBannerClass(!!agree)}`}>
           {agree
             ? `Both runs agree: ${verdictA.toUpperCase()}`
             : `Verdicts differ — Run A says ${verdictA.toUpperCase()}, Run B says ${verdictB.toUpperCase()}`}

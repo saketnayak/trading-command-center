@@ -5,6 +5,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { getInvestorProfile, upsertInvestorProfile } from "@/lib/api";
 import { PageShell } from "@/components/layout/PageShell";
 import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
+import {
+  BTN_AI_CLASS,
+  FIELD_INPUT_CLASS,
+  aiSelectionPillClass,
+} from "@/lib/uiClasses";
 
 const SECTORS = [
   { slug: "technology", label: "Technology" },
@@ -66,7 +71,7 @@ function Select({ value, onChange, children }: { value: string; onChange: (v: st
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+      className={FIELD_INPUT_CLASS}
     >
       {children}
     </select>
@@ -80,7 +85,7 @@ function Textarea({ value, onChange, placeholder }: { value: string; onChange: (
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       rows={3}
-      className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-sm text-fg focus:outline-hidden focus:border-blue-500 resize-none"
+      className={`${FIELD_INPUT_CLASS} resize-none`}
     />
   );
 }
@@ -213,7 +218,7 @@ export default function InvestorProfilePage() {
                 value={form.liquidity_reserve}
                 onChange={(e) => set("liquidity_reserve")(e.target.value)}
                 placeholder="3 months expenses"
-                className="w-full bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+                className={FIELD_INPUT_CLASS}
               />
             </div>
             <div>
@@ -224,7 +229,7 @@ export default function InvestorProfilePage() {
                 value={form.dependents}
                 onChange={(e) => set("dependents")(e.target.value)}
                 placeholder="0"
-                className="w-32 bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+                className={`${FIELD_INPUT_CLASS} w-32`}
               />
             </div>
           </div>
@@ -277,7 +282,7 @@ export default function InvestorProfilePage() {
               <div className="flex gap-2">
                 {[["passive", "Passive (index/ETF-first)"], ["active", "Active (stock picking)"], ["hybrid", "Hybrid"]].map(([v, l]) => (
                   <button key={v} type="button" onClick={() => set("investment_style")(v)}
-                    className={`text-sm px-3 py-1.5 rounded-sm border transition-colors ${form.investment_style === v ? "bg-purple-500/20 border-purple-500/50 text-purple-300" : "bg-input border-input-border text-muted hover:text-fg"}`}>
+                    className={aiSelectionPillClass(form.investment_style === v)}>
                     {l}
                   </button>
                 ))}
@@ -288,7 +293,7 @@ export default function InvestorProfilePage() {
               <div className="flex gap-2 flex-wrap">
                 {[["equal_weight", "Equal weight"], ["conviction", "Conviction-based"], ["market_cap", "Market-cap weighted"]].map(([v, l]) => (
                   <button key={v} type="button" onClick={() => set("sizing_approach")(v)}
-                    className={`text-sm px-3 py-1.5 rounded-sm border transition-colors ${form.sizing_approach === v ? "bg-purple-500/20 border-purple-500/50 text-purple-300" : "bg-input border-input-border text-muted hover:text-fg"}`}>
+                    className={aiSelectionPillClass(form.sizing_approach === v)}>
                     {l}
                   </button>
                 ))}
@@ -340,7 +345,7 @@ export default function InvestorProfilePage() {
               <div className="flex gap-2 flex-wrap">
                 {[["growth_only", "Growth only"], ["some_income", "Some income (5–20% yield)"], ["income_first", "Income-first (>20% yield)"]].map(([v, l]) => (
                   <button key={v} type="button" onClick={() => set("income_goal")(v)}
-                    className={`text-sm px-3 py-1.5 rounded-sm border transition-colors ${form.income_goal === v ? "bg-purple-500/20 border-purple-500/50 text-purple-300" : "bg-input border-input-border text-muted hover:text-fg"}`}>
+                    className={aiSelectionPillClass(form.income_goal === v)}>
                     {l}
                   </button>
                 ))}
@@ -356,7 +361,7 @@ export default function InvestorProfilePage() {
             <button
               type="submit"
               disabled={saveMutation.isPending || saved}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-fg text-sm rounded-lg font-medium transition-colors"
+              className={BTN_AI_CLASS}
             >
               {saved ? "Saved ✓" : saveMutation.isPending ? "Saving…" : "Save Profile"}
             </button>

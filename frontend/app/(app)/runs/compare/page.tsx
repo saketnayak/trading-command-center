@@ -35,7 +35,7 @@ function RunPickerRow({
       <td className="px-4 py-3 text-muted text-xs">{run.analysis_date}</td>
       <td className="px-4 py-3">
         {run.verdict ? (
-          <span className={`rounded-sm px-2 py-0.5 text-xs font-medium ${verdictBadge[run.verdict]}`}>
+          <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${verdictBadge[run.verdict]}`}>
             {run.verdict}
           </span>
         ) : (
@@ -77,7 +77,7 @@ function RunPicker({ anchorId }: { anchorId: string }) {
   return (
     <div className="flex flex-col gap-3">
       <p className="text-muted text-sm">Pick a second run to compare against:</p>
-      <div className="overflow-x-auto rounded-sm border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead className="bg-surface text-muted text-xs uppercase tracking-wider">
             <tr>

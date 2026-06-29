@@ -4,6 +4,7 @@ import type { Report } from "@/lib/types";
 import { getAnalystReportContent } from "@/lib/analystReports";
 import { Markdown } from "@/components/ui/Markdown";
 import { AnalystIconBadge } from "@/components/runs/RunContextIcons";
+import { ANALYST_TAB_ACTIVE_CLASS } from "@/lib/uiClasses";
 
 interface Props {
   report: Report | undefined;
@@ -43,7 +44,7 @@ export function AnalystReports({ report, analysts, embedded = false }: Props) {
             onClick={() => setActiveTab(analyst)}
             className={
               (activeTab || analysts[0]) === analyst
-                ? "px-3 py-2 text-sm border-b-2 border-blue-400 text-blue-400 whitespace-nowrap capitalize"
+                ? `px-3 py-2 text-sm whitespace-nowrap capitalize ${ANALYST_TAB_ACTIVE_CLASS}`
                 : "px-3 py-2 text-sm text-muted hover:text-fg-secondary whitespace-nowrap border-b-2 border-transparent capitalize"
             }
           >

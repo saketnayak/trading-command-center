@@ -4,6 +4,7 @@ import { getPerformanceStats } from "@/lib/api";
 import { downloadPerformanceCsv } from "@/lib/export/buildCsv";
 import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
 import { PageShell } from "@/components/layout/PageShell";
+import { BTN_SECONDARY_CLASS } from "@/lib/uiClasses";
 import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 
@@ -34,7 +35,7 @@ export default function PerformancePage() {
               onClick={() => data && downloadPerformanceCsv(data)}
               disabled={!data || data.outcomes.length === 0}
               title="Export outcomes table to CSV"
-              className="text-muted hover:text-fg disabled:opacity-40 text-xs border border-input-border rounded px-2 py-1"
+              className={BTN_SECONDARY_CLASS}
             >
               Export CSV
             </button>

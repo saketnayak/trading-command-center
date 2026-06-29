@@ -1,12 +1,10 @@
 import type { RegimeData } from "@/lib/types";
+import { matrixCellToneClass } from "@/lib/uiClasses";
 
 const REGIME_LABELS = ["Bear", "Sidew.", "Bull"] as const;
 
 function matrixCellColor(value: number): string {
-  if (value >= 0.7) return "text-green-300 bg-green-900/40";
-  if (value >= 0.5) return "text-green-400 bg-green-900/20";
-  if (value >= 0.3) return "text-yellow-400 bg-yellow-900/20";
-  return "text-muted";
+  return matrixCellToneClass(value);
 }
 
 type MarkovTransitionMatrixProps = {

@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getTickerKalman } from "@/lib/api";
 import type { KalmanData } from "@/lib/types";
@@ -27,6 +28,7 @@ export function KalmanConfirmation({
   metadataCurrency,
   variant = "default",
 }: Props) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const { data: kalman, isLoading } = useQuery<KalmanData | null>({
     queryKey: ["ticker-kalman", ticker],
     queryFn: () => getTickerKalman(ticker),
@@ -76,27 +78,44 @@ export function KalmanConfirmation({
   );
 
   if (variant === "compact") {
+    const chevron = (
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted-surface text-base leading-none text-fg-secondary group-open:rotate-180 transition-transform duration-200">
+        ▾
+      </span>
+    );
+
+    const compactBody = (
+      <div className="px-3 pb-3 pt-2 border-t border-input-border/50 space-y-2">
+        <p className={`font-semibold capitalize ${directionColor(kalman.trend_direction)}`}>
+          {kalman.trend_direction} · <span className="font-mono">{signalStr}</span>
+        </p>
+        <div className="flex flex-wrap gap-3 text-[10px] text-muted font-mono">
+          <span>{fmtMoney(kalman.latest_price, currency)}</span>
+          <span>Kalman {fmtMoney(kalman.kalman_price, currency)}</span>
+        </div>
+        <ChartQuickLook
+          label="Kalman price chart"
+          maxWidth={760}
+          thumbnail={chartThumbnail}
+          preview={chartPreviewExpanded}
+        />
+      </div>
+    );
+
     return (
-      <details open={isConflict} className={`bg-elevated border ${borderColor} rounded-lg text-xs`}>
+      <details
+        open={detailsOpen}
+        onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+        className={`bg-elevated border ${borderColor} rounded-lg text-xs group`}
+      >
         <summary className="cursor-pointer list-none px-3 py-2 flex items-center justify-between gap-2">
           <span className="font-medium text-fg">Kalman trend</span>
-          <span className={`font-semibold shrink-0 ${agreementClass}`}>{agreementLabel}</span>
-        </summary>
-        <div className="px-3 pb-3 pt-2 border-t border-input-border/50 space-y-2">
-          <p className={`font-semibold capitalize ${directionColor(kalman.trend_direction)}`}>
-            {kalman.trend_direction} · <span className="font-mono">{signalStr}</span>
-          </p>
-          <div className="flex flex-wrap gap-3 text-[10px] text-muted font-mono">
-            <span>{fmtMoney(kalman.latest_price, currency)}</span>
-            <span>Kalman {fmtMoney(kalman.kalman_price, currency)}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`font-semibold ${agreementClass}`}>{agreementLabel}</span>
+            {chevron}
           </div>
-          <ChartQuickLook
-            label="Kalman price chart"
-            maxWidth={760}
-            thumbnail={chartThumbnail}
-            preview={chartPreviewExpanded}
-          />
-        </div>
+        </summary>
+        {compactBody}
       </details>
     );
   }

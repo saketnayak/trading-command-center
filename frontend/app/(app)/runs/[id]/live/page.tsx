@@ -11,6 +11,7 @@ import { useAgentStream } from "@/lib/websocket";
 import { useRunTabTitle } from "@/lib/useRunTabTitle";
 import type { AgentEventPayload } from "@/lib/types";
 import { APP_CONTENT_CONTAINER_CLASS, APP_PAGE_PADDING_X_CLASS } from "@/components/layout/constants";
+import { BTN_PRIMARY_CLASS } from "@/lib/uiClasses";
 
 export default function LiveRunPage() {
   const { id } = useParams<{ id: string }>();
@@ -63,7 +64,7 @@ export default function LiveRunPage() {
           {isDone && (
             <Link
               href={`/runs/${id}`}
-              className="block text-center bg-blue-800 hover:bg-blue-700 text-blue-200 rounded-sm px-3 py-2 text-sm"
+              className={`${BTN_PRIMARY_CLASS} block text-center`}
             >
               View Results
             </Link>

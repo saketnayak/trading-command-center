@@ -108,7 +108,7 @@ function RunRow({
   const isRunning = run.status === "running";
 
   return (
-    <tr className={`border-t border-border hover:bg-input/40 ${selected ? "bg-blue-950/30" : ""}`}>
+    <tr className={`border-t border-border hover:bg-input/40 ${selected ? "bg-blue-50 dark:bg-blue-950/30" : ""}`}>
       {onToggle !== undefined && (
         <td className="px-3 py-3">
           <input

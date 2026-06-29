@@ -54,6 +54,12 @@ import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsMo
 import { SellCandidatesPanel } from "@/components/portfolio/SellCandidatesPanel";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
+import {
+  BTN_AI_CLASS,
+  BTN_GHOST_CLASS,
+  BTN_SECONDARY_CLASS,
+  FIELD_INPUT_SM_CLASS,
+} from "@/lib/uiClasses";
 import { PageShell } from "@/components/layout/PageShell";
 import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
 import { TabBar, type TabBarItem } from "@/components/layout/TabBar";
@@ -65,6 +71,8 @@ import {
   type PortfolioTab,
   type PortfolioTabDefinition,
 } from "@/lib/portfolioTabs";
+
+const BATCH_MODAL_INPUT = `${FIELD_INPUT_SM_CLASS} w-full`;
 
 function BatchAnalyzeModal({
   portfolioId,
@@ -113,16 +121,16 @@ function BatchAnalyzeModal({
                 value={llmConfig}
                 onChange={setLlmConfig}
                 showDepth
-                providerClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
-                modelClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
-                depthClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+                providerClassName={BATCH_MODAL_INPUT}
+                modelClassName={BATCH_MODAL_INPUT}
+                depthClassName={BATCH_MODAL_INPUT}
               />
               <div className="space-y-1">
                 <label className="text-xs text-muted">Response Language</label>
                 <select
                   value={responseLanguage}
                   onChange={(e) => setResponseLanguage(e.target.value as ResponseLanguage)}
-                  className="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+                  className={BATCH_MODAL_INPUT}
                 >
                   {RESPONSE_LANGUAGE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -139,7 +147,7 @@ function BatchAnalyzeModal({
                   max={90}
                   value={stalenessDays}
                   onChange={(e) => setStalenessDays(parseInt(e.target.value) || 7)}
-                  className="w-24 bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+                  className={`${FIELD_INPUT_SM_CLASS} w-24`}
                 />
               </div>
             </div>
@@ -149,13 +157,13 @@ function BatchAnalyzeModal({
               </p>
             )}
             <div className="flex gap-2 justify-end pt-2">
-              <button onClick={onClose} className="px-3 py-1.5 text-sm text-muted hover:text-fg">
+              <button onClick={onClose} className={BTN_GHOST_CLASS}>
                 Cancel
               </button>
               <button
                 onClick={() => analyzeMutation.mutate()}
                 disabled={analyzeMutation.isPending}
-                className="px-4 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 text-fg rounded-sm disabled:opacity-50 transition-colors"
+                className={BTN_AI_CLASS}
               >
                 {analyzeMutation.isPending ? "Starting…" : "Start Batch Analysis"}
               </button>
@@ -180,13 +188,13 @@ function BatchAnalyzeModal({
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setResult(null)}
-                className="px-3 py-1.5 text-sm text-muted hover:text-fg"
+                className={BTN_GHOST_CLASS}
               >
                 Run Again
               </button>
               <button
                 onClick={onClose}
-                className="px-4 py-1.5 text-sm bg-muted-surface hover:bg-muted-surface text-fg rounded-sm transition-colors"
+                className={BTN_SECONDARY_CLASS}
               >
                 Close
               </button>

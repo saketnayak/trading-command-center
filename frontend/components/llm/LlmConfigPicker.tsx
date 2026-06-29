@@ -12,6 +12,7 @@ import {
   type LlmProvider,
 } from "@/lib/llmConfig";
 import { useLlmProviderDefaults } from "@/lib/useDefaultLlmConfig";
+import { FIELD_INPUT_CLASS, FIELD_INPUT_SM_CLASS } from "@/lib/uiClasses";
 
 export interface LlmConfigValue {
   provider: LlmProvider;
@@ -31,10 +32,8 @@ interface Props {
   depthClassName?: string;
 }
 
-const INPUT_CLASS =
-  "bg-input border border-input-border rounded-sm px-3 py-2 text-fg text-sm focus:outline-hidden focus:border-blue-600";
-const COMPACT_INPUT_CLASS =
-  "bg-input border border-input-border rounded-sm px-2 py-1.5 text-xs text-fg focus:outline-hidden focus:border-blue-500";
+const INPUT_CLASS = FIELD_INPUT_CLASS;
+const COMPACT_INPUT_CLASS = FIELD_INPUT_SM_CLASS;
 
 export function LlmConfigPicker({
   value,

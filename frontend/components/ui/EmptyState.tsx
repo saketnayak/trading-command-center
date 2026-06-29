@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BTN_PRIMARY_CLASS } from "@/lib/uiClasses";
 import type { LucideIcon } from "lucide-react";
 
 type EmptyStateAction = {
@@ -36,7 +37,7 @@ export function EmptyState({
           {action.href ? (
             <Link
               href={action.href}
-              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-fg hover:bg-blue-500"
+              className={BTN_PRIMARY_CLASS}
             >
               {action.label}
             </Link>
@@ -44,7 +45,7 @@ export function EmptyState({
             <button
               type="button"
               onClick={action.onClick}
-              className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-fg hover:bg-blue-500"
+              className={BTN_PRIMARY_CLASS}
             >
               {action.label}
             </button>

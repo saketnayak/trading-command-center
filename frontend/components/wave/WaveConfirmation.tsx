@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { analyzeWave, getTickerWaveSummary } from "@/lib/api";
 import type { WaveSummary } from "@/lib/types";
@@ -68,6 +69,7 @@ export function WaveConfirmation({
   priceCurrency,
   variant = "default",
 }: Props) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const { data: wave, isLoading } = useQuery<WaveSummary | null>({
     queryKey: ["ticker-wave", ticker],
     queryFn: () => getTickerWaveSummary(ticker),
@@ -121,35 +123,52 @@ export function WaveConfirmation({
   );
 
   if (variant === "compact") {
+    const chevron = (
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted-surface text-base leading-none text-fg-secondary group-open:rotate-180 transition-transform duration-200">
+        ▾
+      </span>
+    );
+
+    const compactBody = (
+      <div className="px-3 pb-3 pt-2 border-t border-input-border/50 space-y-2">
+        <p className="font-semibold text-fg">
+          {wave.top_direction ?? "—"}
+          {wave.top_scenario ? ` · ${wave.top_scenario}` : ""}
+        </p>
+        {wave.zone_low != null && wave.zone_high != null && (
+          <p className="font-mono text-[10px] text-muted">
+            Zone {fmtMoney(wave.zone_low, waveCurrency)} – {fmtMoney(wave.zone_high, waveCurrency)}
+            {entry != null && (
+              <span className={inZone ? " text-green-400" : ""}>
+                {inZone ? " · entry in zone" : " · entry outside"}
+              </span>
+            )}
+          </p>
+        )}
+        <ChartQuickLook
+          label="Elliott / Fibonacci chart"
+          maxWidth={960}
+          fillContent
+          thumbnail={waveChartThumbnail}
+          preview={() => <WaveFullChartPanel ticker={ticker} fill />}
+        />
+      </div>
+    );
+
     return (
-      <details open={aligns === false} className={`bg-elevated border ${borderColor} rounded-lg text-xs`}>
+      <details
+        open={detailsOpen}
+        onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+        className={`bg-elevated border ${borderColor} rounded-lg text-xs group`}
+      >
         <summary className="cursor-pointer list-none px-3 py-2 flex items-center justify-between gap-2">
           <span className="font-medium text-fg">Elliott / Fib</span>
-          <span className={`font-semibold shrink-0 ${agreementClass}`}>{agreementLabel}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`font-semibold ${agreementClass}`}>{agreementLabel}</span>
+            {chevron}
+          </div>
         </summary>
-        <div className="px-3 pb-3 pt-2 border-t border-input-border/50 space-y-2">
-          <p className="font-semibold text-fg">
-            {wave.top_direction ?? "—"}
-            {wave.top_scenario ? ` · ${wave.top_scenario}` : ""}
-          </p>
-          {wave.zone_low != null && wave.zone_high != null && (
-            <p className="font-mono text-[10px] text-muted">
-              Zone {fmtMoney(wave.zone_low, waveCurrency)} – {fmtMoney(wave.zone_high, waveCurrency)}
-              {entry != null && (
-                <span className={inZone ? " text-green-400" : ""}>
-                  {inZone ? " · entry in zone" : " · entry outside"}
-                </span>
-              )}
-            </p>
-          )}
-          <ChartQuickLook
-            label="Elliott / Fibonacci chart"
-            maxWidth={960}
-            fillContent
-            thumbnail={waveChartThumbnail}
-            preview={() => <WaveFullChartPanel ticker={ticker} fill />}
-          />
-        </div>
+        {compactBody}
       </details>
     );
   }

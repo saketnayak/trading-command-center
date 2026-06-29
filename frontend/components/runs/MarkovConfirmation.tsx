@@ -1,4 +1,5 @@
 "use client";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getTickerRegime } from "@/lib/api";
 import type { RegimeData } from "@/lib/types";
@@ -57,6 +58,7 @@ function MarkovGraphicsPanel({
 }
 
 export function MarkovConfirmation({ ticker, verdict, variant = "default" }: Props) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const { data: regime, isLoading } = useQuery<RegimeData | null>({
     queryKey: ["ticker-regime", ticker],
     queryFn: () => getTickerRegime(ticker),
@@ -96,14 +98,24 @@ export function MarkovConfirmation({ ticker, verdict, variant = "default" }: Pro
       : "text-green-400";
 
   if (variant === "compact") {
+    const chevron = (
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted-surface text-base leading-none text-fg-secondary group-open:rotate-180 transition-transform duration-200">
+        ▾
+      </span>
+    );
+
     return (
       <details
-        open={isConflict}
+        open={detailsOpen}
+        onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
         className={`bg-elevated border ${borderColor} rounded-lg text-xs group`}
       >
         <summary className="cursor-pointer list-none px-3 py-2 flex items-center justify-between gap-2">
           <span className="font-medium text-fg">Markov regime</span>
-          <span className={`font-semibold shrink-0 ${agreementClass}`}>{agreementLabel}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`font-semibold ${agreementClass}`}>{agreementLabel}</span>
+            {chevron}
+          </div>
         </summary>
         <div className="px-3 pb-3 pt-2 border-t border-input-border/50 space-y-2">
           <p className={`${regimeColor(regime.current_regime)} font-semibold`}>

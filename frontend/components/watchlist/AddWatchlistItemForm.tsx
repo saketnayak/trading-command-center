@@ -18,6 +18,7 @@ import {
   WATCHLIST_FIELD_LABEL_CLASS,
   watchlistAnalystPillClass,
 } from "@/components/watchlist/watchlistFormStyles";
+import { BTN_PRIMARY_CLASS } from "@/lib/uiClasses";
 
 const ANALYSTS = ANALYST_OPTIONS;
 
@@ -83,7 +84,7 @@ export function AddWatchlistItemForm({ onAdd, isPending }: AddWatchlistItemFormP
           />
         </div>
 
-        <div className="rounded-sm border border-border bg-input/30 px-3 py-3">
+        <div className="rounded-lg border border-border bg-input/30 px-3 py-3">
           <WatchlistScheduleBuilder cron={cron} onCronChange={setCron} compact />
         </div>
       </div>
@@ -135,7 +136,7 @@ export function AddWatchlistItemForm({ onAdd, isPending }: AddWatchlistItemFormP
           <button
             type="submit"
             disabled={!ticker || analysts.length === 0 || isPending}
-            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-fg text-sm font-medium px-4 py-2 rounded-sm"
+            className={BTN_PRIMARY_CLASS}
           >
             {isPending ? "Adding…" : "Add to watchlist"}
           </button>

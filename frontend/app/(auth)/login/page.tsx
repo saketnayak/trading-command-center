@@ -4,6 +4,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { AuthCard } from "@/components/layout/AuthCard";
+import { BTN_PRIMARY_CLASS, FIELD_INPUT_CLASS, FIELD_LABEL_CLASS } from "@/lib/uiClasses";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -22,17 +23,17 @@ export default function LoginPage() {
     <AuthCard>
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>
-          <label className="text-muted text-xs uppercase tracking-wide block mb-1">Email</label>
+          <label className={FIELD_LABEL_CLASS}>Email</label>
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} required
-            className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-sm text-fg focus:outline-hidden focus:border-blue-500" />
+            className={FIELD_INPUT_CLASS} />
         </div>
         <div>
-          <label className="text-muted text-xs uppercase tracking-wide block mb-1">Password</label>
+          <label className={FIELD_LABEL_CLASS}>Password</label>
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} required
-            className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-sm text-fg focus:outline-hidden focus:border-blue-500" />
+            className={FIELD_INPUT_CLASS} />
         </div>
         {error && <p className="text-red-400 text-xs">{error}</p>}
-        <button type="submit" className="bg-blue-600 hover:bg-blue-700 text-fg rounded-sm px-4 py-2 text-sm font-medium">
+        <button type="submit" className={BTN_PRIMARY_CLASS}>
           Sign In
         </button>
       </form>

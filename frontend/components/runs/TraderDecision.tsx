@@ -144,9 +144,9 @@ export function TraderDecision({ run, report, metadata, compact = false }: Props
           )}
           {report.trader_decision && compact && (
             <details className="group border-t border-input-border pt-3">
-              <summary className="cursor-pointer text-xs text-muted hover:text-fg-secondary list-none flex items-center justify-between">
+              <summary className="cursor-pointer text-xs text-muted hover:text-fg-secondary list-none flex items-center justify-between gap-2">
                 <span>Rationale</span>
-                <span className="text-subtle group-open:rotate-180 transition-transform">▾</span>
+                <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted-surface text-base leading-none text-fg-secondary group-open:rotate-180 transition-transform duration-200">▾</span>
               </summary>
               <div className="mt-2 text-sm">
                 <Markdown>{report.trader_decision}</Markdown>

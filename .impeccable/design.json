@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-28T00:00:00.000Z",
+  "title": "Design System: AgentFloor",
+  "extensions": {
+    "colorMeta": {
+      "page": {
+        "role": "neutral",
+        "displayName": "Slate Page",
+        "canonical": "#f1f5f9",
+        "tonalRamp": ["#0a0e1a", "#0f1629", "#1a1d2e", "#334155", "#64748b", "#94a3b8", "#cbd5e1", "#f1f5f9"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface White",
+        "canonical": "#ffffff",
+        "tonalRamp": ["#0f1629", "#1a1d2e", "#334155", "#475569", "#64748b", "#94a3b8", "#e2e8f0", "#ffffff"]
+      },
+      "action-blue": {
+        "role": "primary",
+        "displayName": "Action Blue",
+        "canonical": "#1d4ed8",
+        "tonalRamp": ["#1e3a8a", "#1e40af", "#1d4ed8", "#2563eb", "#3b82f6", "#60a5fa", "#93c5fd", "#dbeafe"]
+      },
+      "ai-accent": {
+        "role": "secondary",
+        "displayName": "AI Accent",
+        "canonical": "#7e22ce",
+        "tonalRamp": ["#3b0764", "#581c87", "#6b21a8", "#7e22ce", "#9333ea", "#a855f7", "#c084fc", "#f3e8ff"]
+      },
+      "success": {
+        "role": "tertiary",
+        "displayName": "Gain Green",
+        "canonical": "#15803d",
+        "tonalRamp": ["#14532d", "#166534", "#15803d", "#16a34a", "#22c55e", "#4ade80", "#86efac", "#dcfce7"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Loss Red",
+        "canonical": "#b91c1c",
+        "tonalRamp": ["#7f1d1d", "#991b1b", "#b91c1c", "#dc2626", "#ef4444", "#f87171", "#fca5a5", "#fee2e2"]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink Primary",
+        "canonical": "#0f172a",
+        "tonalRamp": ["#020617", "#0f172a", "#1e293b", "#334155", "#475569", "#64748b", "#94a3b8", "#cbd5e1"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Page titles, portfolio totals, insight health scores." },
+      "headline": { "displayName": "Headline", "purpose": "Section headers and card titles." },
+      "title": { "displayName": "Title", "purpose": "Table headers, tabs, form labels." },
+      "body": { "displayName": "Body", "purpose": "Default UI copy; report prose capped at 65ch." },
+      "label": { "displayName": "Label", "purpose": "Badges, metadata, helper hints." },
+      "data": { "displayName": "Data", "purpose": "Prices, P&L, shares — always tabular mono." }
+    },
+    "shadows": [
+      { "name": "overlay-lift", "value": "0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)", "purpose": "Mobile nav drawer, dropdown menus." },
+      { "name": "popover-depth", "value": "0 25px 50px -12px rgb(0 0 0 / 0.25)", "purpose": "Chart quick-look floating panel." },
+      { "name": "micro-lift", "value": "0 1px 2px rgb(0 0 0 / 0.12)", "purpose": "CSV importer drag cards only." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "cubic-bezier(0.4, 0, 0.2, 1)", "purpose": "Default color and border transitions on buttons and nav." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Standard human-initiated action — New Run, Save, empty-state CTA.",
+      "html": "<button type=\"button\" class=\"ds-btn-primary\">New Run</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; background: #1d4ed8; color: #ffffff; padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500; font-family: ui-sans-serif, system-ui, sans-serif; border: none; border-radius: 0.5rem; cursor: pointer; transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-primary:hover { background: #1e40af; } .ds-btn-primary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }"
+    },
+    {
+      "name": "AI Generate Button",
+      "kind": "button",
+      "refersTo": "button-ai",
+      "description": "AI-powered flows only — generate insight, batch analyze.",
+      "html": "<button type=\"button\" class=\"ds-btn-ai\">Generate Insight</button>",
+      "css": ".ds-btn-ai { display: inline-flex; align-items: center; background: #7e22ce; color: #ffffff; padding: 0.5rem 1rem; font-size: 0.875rem; font-weight: 500; font-family: ui-sans-serif, system-ui, sans-serif; border: none; border-radius: 0.5rem; cursor: pointer; transition: background 0.15s cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-ai:hover { background: #6b21a8; } .ds-btn-ai:focus-visible { outline: 2px solid #a855f7; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Default form field on surface panels.",
+      "html": "<input type=\"text\" class=\"ds-input\" placeholder=\"AAPL\" aria-label=\"Ticker symbol\" />",
+      "css": ".ds-input { width: 100%; background: #ffffff; color: #0f172a; border: 1px solid #cbd5e1; border-radius: 0.375rem; padding: 0.5rem 0.75rem; font-size: 0.875rem; font-family: ui-sans-serif, system-ui, sans-serif; } .ds-input::placeholder { color: #64748b; } .ds-input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgb(37 99 235 / 0.25); }"
+    },
+    {
+      "name": "Surface Card",
+      "kind": "card",
+      "refersTo": "card-surface",
+      "description": "Default content panel on page canvas.",
+      "html": "<div class=\"ds-card\"><h3 class=\"ds-card-title\">Portfolio Holdings</h3><p class=\"ds-card-body\">12 positions · updated 2m ago</p></div>",
+      "css": ".ds-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem 1.25rem; } .ds-card-title { margin: 0 0 0.25rem; font-size: 0.875rem; font-weight: 600; color: #0f172a; } .ds-card-body { margin: 0; font-size: 0.75rem; color: #475569; }"
+    },
+    {
+      "name": "Verdict Badge Buy",
+      "kind": "chip",
+      "refersTo": "button-primary",
+      "description": "BUY verdict — financial semantic green only.",
+      "html": "<span class=\"ds-verdict ds-verdict-buy\">BUY</span>",
+      "css": ".ds-verdict { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.625rem; border-radius: 0.5rem; letter-spacing: 0.02em; } .ds-verdict-buy { background: rgb(20 83 45 / 0.4); color: #4ade80; }"
+    },
+    {
+      "name": "Nav Link Active",
+      "kind": "nav",
+      "refersTo": "button-primary",
+      "description": "Top navigation active route indicator.",
+      "html": "<a href=\"#\" class=\"ds-nav-link ds-nav-link-active\">Portfolio</a>",
+      "css": ".ds-nav-link { font-size: 0.875rem; color: #475569; text-decoration: none; padding-bottom: 0.125rem; border-bottom: 2px solid transparent; transition: color 0.15s; } .ds-nav-link:hover { color: #1e293b; } .ds-nav-link-active { color: #2563eb; border-bottom-color: #2563eb; }"
+    },
+    {
+      "name": "Empty State CTA",
+      "kind": "custom",
+      "refersTo": "button-primary",
+      "description": "Centered empty panel with icon well and primary action.",
+      "html": "<div class=\"ds-empty\"><div class=\"ds-empty-icon\" aria-hidden=\"true\">+</div><h3 class=\"ds-empty-title\">No runs yet</h3><p class=\"ds-empty-desc\">Launch your first analysis to see verdicts here.</p><button type=\"button\" class=\"ds-btn-primary\">New Run</button></div>",
+      "css": ".ds-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 2.5rem 1.5rem; border: 1px solid #e2e8f0; border-radius: 0.5rem; background: #ffffff; } .ds-empty-icon { width: 2.75rem; height: 2.75rem; border-radius: 9999px; background: #f8fafc; color: #475569; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; margin-bottom: 0.75rem; } .ds-empty-title { margin: 0; font-size: 0.875rem; font-weight: 500; color: #0f172a; } .ds-empty-desc { margin: 0.25rem 0 1rem; max-width: 20rem; font-size: 0.75rem; color: #475569; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Morning Desk",
+    "overview": "AgentFloor should feel like opening a well-designed consumer fintech app at the start of the trading day: calm, scannable, and confident. The visual system serves research workflows — portfolio holdings, AI briefings, run verdicts — not marketing spectacle. Surfaces are organized in clear tonal steps so dense data remains readable without legacy enterprise gray-box fatigue.",
+    "keyCharacteristics": [
+      "Morning-first hierarchy — portfolio and briefing surfaces lead",
+      "Semantic color discipline — blue actions, purple AI, green/red/yellow verdicts only",
+      "Tonal depth over shadow theater",
+      "Soft consumer fintech touch — 8–12px radius, comfortable padding",
+      "Data legibility — Geist Mono tabular nums for financial figures"
+    ],
+    "rules": [
+      { "name": "The Two-Lane Rule", "body": "Blue is for human navigation and standard actions. Purple is for AI generation. Do not cross these lanes.", "section": "colors" },
+      { "name": "The Verdict-Only Rule", "body": "Green, red, and yellow carry financial meaning only. Never use them for generic status.", "section": "colors" },
+      { "name": "The Tabular Rule", "body": "All numeric financial data uses Geist Mono with tabular figures.", "section": "typography" },
+      { "name": "The Muted-Body Ban", "body": "Muted text is for captions and metadata only, not body paragraphs.", "section": "typography" },
+      { "name": "The Flat-Panel Rule", "body": "Holdings rows and insight panels use border + background step, not drop shadows at rest.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do use semantic tokens (bg-surface, text-fg, border-border) over raw Tailwind palette classes in new code.",
+      "Do keep the morning portfolio check scannable — stats bar, health score, and action items above the fold.",
+      "Do reserve purple for AI-powered flows.",
+      "Do use Geist Mono + tabular nums for all financial figures.",
+      "Do support both light and dark with paired token values.",
+      "Do use portals or fixed positioning for dropdowns inside scrollable tables."
+    ],
+    "donts": [
+      "Don't build legacy enterprise admin panels — gray boxes, cramped tables, tiny type, 2005-era density.",
+      "Don't use gamified trading patterns — streaks, confetti, casino energy.",
+      "Don't apply generic AI slop — purple gradient chrome everywhere, chatbot-first layouts.",
+      "Don't use crypto meme aesthetics — neon gradients, rocket emojis, hype CTAs.",
+      "Don't use green/red/yellow for non-financial status.",
+      "Don't add colored left-border stripes on cards as accent decoration.",
+      "Don't use gradient text or glassmorphism inside the app shell.",
+      "Don't nest cards inside cards."
+    ]
+  }
+}
