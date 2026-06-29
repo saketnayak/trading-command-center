@@ -104,10 +104,10 @@ export function MorningBriefStrip({ portfolioId, onOpenInsights }: MorningBriefS
   return (
     <section
       aria-label="Morning portfolio briefing"
-      className="rounded-lg border border-purple-500/30 bg-purple-500/5 px-4 py-3"
+      className="rounded-lg border border-border bg-surface px-4 py-3"
     >
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-xs font-medium text-purple-400">Morning briefing</span>
+        <span className="text-xs font-medium text-muted">Morning briefing</span>
       </div>
       {isLoading ? (
         <p className="text-sm text-muted">Loading latest insight…</p>

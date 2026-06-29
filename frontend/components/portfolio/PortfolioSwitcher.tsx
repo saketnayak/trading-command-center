@@ -8,6 +8,9 @@ interface PortfolioSwitcherProps {
   onSelect: (id: string) => void;
   onCreate: (name: string) => void;
   onDelete: (id: string) => void;
+  /** When true, opens the dropdown in create mode (e.g. from EmptyState CTA). */
+  requestCreate?: boolean;
+  onRequestCreateHandled?: () => void;
 }
 
 export function PortfolioSwitcher({
@@ -16,6 +19,8 @@ export function PortfolioSwitcher({
   onSelect,
   onCreate,
   onDelete,
+  requestCreate = false,
+  onRequestCreateHandled,
 }: PortfolioSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -36,6 +41,13 @@ export function PortfolioSwitcher({
     document.addEventListener("mousedown", handleMouseDown);
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, []);
+
+  useEffect(() => {
+    if (!requestCreate) return;
+    setOpen(true);
+    setCreating(true);
+    onRequestCreateHandled?.();
+  }, [requestCreate, onRequestCreateHandled]);
 
   function handleSelect(id: string) {
     onSelect(id);

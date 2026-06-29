@@ -53,6 +53,9 @@ import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsModal";
 import { SellCandidatesPanel } from "@/components/portfolio/SellCandidatesPanel";
 import { MorningBriefStrip } from "@/components/portfolio/MorningBriefStrip";
+import { PortfolioTotalsSummary } from "@/components/portfolio/PortfolioTotalsSummary";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Briefcase } from "lucide-react";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
 import {
@@ -230,6 +233,7 @@ function PortfolioPageContent() {
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [drawerHolding, setDrawerHolding] = useState<PortfolioHolding | null>(null);
   const [metadataForceToken, setMetadataForceToken] = useState(0);
+  const [requestPortfolioCreate, setRequestPortfolioCreate] = useState(false);
 
   const { data: portfolios = [], isLoading: loadingPortfolios } = useQuery({
     queryKey: portfolioQueryKeys.list,
@@ -462,6 +466,11 @@ function PortfolioPageContent() {
     [tabGroups.overflow, alertCount],
   );
 
+  const hasTotals =
+    current?.totals != null &&
+    current.totals_currency != null &&
+    current.totals.market_value != null;
+
   return (
     <>
     <PageShell gap="4">
@@ -477,12 +486,21 @@ function PortfolioPageContent() {
                 onSelect={handleSelectPortfolio}
                 onCreate={(name) => createMutation.mutate(name)}
                 onDelete={(id) => deleteMutation.mutate(id)}
+                requestCreate={requestPortfolioCreate}
+                onRequestCreateHandled={() => setRequestPortfolioCreate(false)}
               />
             </div>
           }
           actions={
             selectedPortfolio ? (
-              <PortfolioActions
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
+                {hasTotals && current?.totals && current.totals_currency && (
+                  <PortfolioTotalsSummary
+                    totals={current.totals}
+                    totalsCurrency={current.totals_currency}
+                  />
+                )}
+                <PortfolioActions
                 freshnessLabel={
                   <PortfolioFreshnessLabel
                     portfolioId={selectedId}
@@ -500,6 +518,7 @@ function PortfolioPageContent() {
                 onExportClick={handleExport}
                 onDeliveryClick={() => setDeliveryOpen(true)}
               />
+              </div>
             ) : undefined
           }
         />
@@ -507,12 +526,11 @@ function PortfolioPageContent() {
         {selectedPortfolio && (
           <PortfolioHeader
             portfolio={selectedPortfolio}
-            totals={current?.totals ?? null}
-            totalsCurrency={current?.totals_currency ?? null}
             preferredCurrency={current?.display_currency ?? "USD"}
             portfolioCurrencies={current?.portfolio_currencies ?? []}
             snapshotDate={current?.snapshot?.uploaded_at ?? null}
             broker={current?.snapshot?.broker ?? null}
+            totalsUnavailable={!hasTotals && current?.totals != null}
           />
         )}
 
@@ -531,9 +549,15 @@ function PortfolioPageContent() {
         )}
 
         {selectedId === null && portfolios.length === 0 && !loadingPortfolios && (
-          <p className="text-muted text-sm text-center py-10">
-            No portfolios yet. Create one above to get started.
-          </p>
+          <EmptyState
+            icon={Briefcase}
+            title="No portfolios yet"
+            description="Create a portfolio to upload holdings, run AI analysis, and get your morning briefing."
+            action={{
+              label: "Create portfolio",
+              onClick: () => setRequestPortfolioCreate(true),
+            }}
+          />
         )}
 
         {selectedId && loadingCurrent && (
@@ -628,7 +652,7 @@ function PortfolioPageContent() {
               <div
                 id="portfolio-panel-news"
                 role="tabpanel"
-                aria-labelledby="portfolio-tab-overflow"
+                aria-labelledby="portfolio-tab-news"
               >
               <NewsPanel
                 portfolioId={selectedId}
@@ -641,7 +665,7 @@ function PortfolioPageContent() {
               <div
                 id="portfolio-panel-chat"
                 role="tabpanel"
-                aria-labelledby="portfolio-tab-overflow"
+                aria-labelledby="portfolio-tab-chat"
               >
               <ChatPanel portfolioId={selectedId} />
               </div>
@@ -651,7 +675,7 @@ function PortfolioPageContent() {
               <div
                 id="portfolio-panel-thesis"
                 role="tabpanel"
-                aria-labelledby="portfolio-tab-overflow"
+                aria-labelledby="portfolio-tab-thesis"
               >
               <ThesisPanel portfolioId={selectedId} />
               </div>

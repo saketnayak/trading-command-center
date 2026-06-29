@@ -172,7 +172,7 @@ export function TabBar({
           <button
             ref={triggerRef}
             type="button"
-            id={`${tabIdPrefix}-overflow`}
+            id={activeOverflowTab ? `${tabIdPrefix}-${activeOverflowTab.id}` : `${tabIdPrefix}-overflow`}
             role="tab"
             aria-selected={activeOverflow}
             aria-haspopup="menu"

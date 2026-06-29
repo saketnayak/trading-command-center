@@ -22,10 +22,10 @@ export const BTN_GHOST_CLASS =
   "rounded-lg px-3 py-2 text-sm text-muted transition-colors hover:text-fg disabled:opacity-30";
 
 export const BTN_AI_CLASS =
-  "inline-flex items-center justify-center rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-fg transition-colors hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center rounded-lg bg-purple-700 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 dark:bg-purple-900 dark:hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-50";
 
 export const BTN_AI_SM_CLASS =
-  "inline-flex items-center justify-center rounded-lg bg-purple-600 px-3 py-2 text-xs font-medium text-fg transition-colors hover:bg-purple-500 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center rounded-lg bg-purple-700 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-purple-600 dark:bg-purple-900 dark:hover:bg-purple-800 disabled:cursor-not-allowed disabled:opacity-50";
 
 export const BTN_DANGER_CLASS =
   "inline-flex items-center justify-center rounded-lg bg-red-700 px-3 py-2 text-xs font-medium text-fg transition-colors hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-40";

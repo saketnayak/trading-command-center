@@ -4,7 +4,7 @@ export type { PortfolioTab };
 
 export const DEFAULT_PORTFOLIO_TAB: PortfolioTab = "holdings";
 
-export const PRIMARY_PORTFOLIO_TAB_IDS: readonly PortfolioTab[] = ["holdings", "insights", "earnings"];
+export const PRIMARY_PORTFOLIO_TAB_IDS: readonly PortfolioTab[] = ["holdings", "insights", "earnings", "news"];
 
 const VALID_TABS: readonly PortfolioTab[] = [
   "holdings",
@@ -29,7 +29,7 @@ const BASE_TAB_DEFINITIONS: PortfolioTabDefinition[] = [
   { id: "holdings", label: "Holdings", tier: "primary" },
   { id: "insights", label: "AI Insights", tier: "primary", badge: "✦", showAlertCount: true },
   { id: "earnings", label: "Earnings", tier: "primary", hideWhenAllCrypto: true },
-  { id: "news", label: "News", tier: "overflow" },
+  { id: "news", label: "News", tier: "primary" },
   { id: "chat", label: "Chat", tier: "overflow" },
   { id: "thesis", label: "Thesis", tier: "overflow" },
 ];
