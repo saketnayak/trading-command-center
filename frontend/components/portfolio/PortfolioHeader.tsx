@@ -45,7 +45,7 @@ export function PortfolioHeader({
     : null;
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-input/50 border border-border rounded-sm px-4 py-3">
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between rounded-lg border border-border bg-input/50 px-4 py-3">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 min-w-0">
         <span className="text-purple-400 font-medium text-sm truncate">{portfolio.name}</span>
         {portfolio.holding_count > 0 && (
@@ -67,15 +67,15 @@ export function PortfolioHeader({
       </div>
 
       {hasTotals ? (
-        <div className="flex flex-wrap items-center gap-4 sm:gap-6 shrink-0">
+        <div className="flex flex-wrap items-baseline gap-4 sm:gap-6 shrink-0">
           <div className="text-right">
-            <div className="text-fg text-sm font-semibold font-data">
+            <div className="text-fg text-lg sm:text-xl font-semibold font-data tabular-nums">
               {fmtMoney(totals!.market_value, totalsCurrency!)}
             </div>
-            <div className="text-xs text-muted">Market Value ({totalsCurrency})</div>
+            <div className="text-xs text-muted">Market value ({totalsCurrency})</div>
           </div>
           <div className={`text-right ${pnlColor}`}>
-            <div className="text-sm font-semibold font-data">
+            <div className="text-base sm:text-lg font-semibold font-data tabular-nums">
               {pnl != null && pnl >= 0 ? "+" : ""}{fmtMoney(pnl, totalsCurrency!)}
               {" "}
               <span className="text-xs font-normal">({fmtPct(pnlPct)})</span>

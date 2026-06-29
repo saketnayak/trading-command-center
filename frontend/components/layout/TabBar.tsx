@@ -21,6 +21,8 @@ type TabBarProps = {
   activeId: string;
   onChange: (id: string) => void;
   overflowLabel?: string;
+  /** Prefix for tab button ids (used with tabpanel aria-labelledby). */
+  tabIdPrefix?: string;
   className?: string;
 };
 
@@ -28,14 +30,17 @@ function TabButton({
   tab,
   active,
   onSelect,
+  tabId,
 }: {
   tab: TabBarItem;
   active: boolean;
   onSelect: () => void;
+  tabId: string;
 }) {
   return (
     <button
       type="button"
+      id={tabId}
       role="tab"
       aria-selected={active}
       onClick={onSelect}
@@ -64,6 +69,7 @@ export function TabBar({
   activeId,
   onChange,
   overflowLabel = "More",
+  tabIdPrefix = "tab",
   className = "",
 }: TabBarProps) {
   const menuId = useId();
@@ -157,6 +163,7 @@ export function TabBar({
           tab={tab}
           active={activeId === tab.id}
           onSelect={() => onChange(tab.id)}
+          tabId={`${tabIdPrefix}-${tab.id}`}
         />
       ))}
 
@@ -165,6 +172,7 @@ export function TabBar({
           <button
             ref={triggerRef}
             type="button"
+            id={`${tabIdPrefix}-overflow`}
             role="tab"
             aria-selected={activeOverflow}
             aria-haspopup="menu"

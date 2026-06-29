@@ -14,6 +14,7 @@ import type { PortfolioHolding, FundamentalsData, RegimeData, WaveSummary, TrimS
 import { finnhubUnavailableMessage } from "@/lib/finnhubMessages";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { HoldingsMobileCards } from "@/components/portfolio/HoldingsMobileCards";
+import { FIELD_INPUT_SM_CLASS, BTN_SECONDARY_CLASS } from "@/lib/uiClasses";
 
 interface HoldingsTableProps {
   portfolioId: string;
@@ -115,7 +116,7 @@ function EditInput({
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
       placeholder={placeholder}
-      className={`bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg focus:outline-hidden focus:border-blue-500 ${className ?? ""}`}
+      className={`bg-input border border-input-border rounded-md px-2 py-1 text-xs text-fg focus:outline-hidden focus:border-blue-500 ${className ?? ""}`}
     />
   );
 }
@@ -360,6 +361,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
   const [filterPeg, setFilterPeg] = useState("");
   const [filterRegime, setFilterRegime] = useState("");
   const [trimOnly, setTrimOnly] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const newTickerRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -525,7 +527,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
   return (
     <div className="space-y-3">
       {priceUnavailableReason === "no_finnhub_key" && (
-        <div className="text-xs text-amber-400/80 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2">
+        <div className="text-xs text-amber-400/80 bg-amber-900/20 border border-amber-700/40 rounded-md px-3 py-2">
           Showing delayed prices via Yahoo Finance — add your Finnhub API key in{" "}
           <Link href="/settings" className="text-blue-400 hover:underline">Settings</Link>{" "}
           for real-time data.
@@ -538,20 +540,55 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {/* Ticker search */}
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className={`${BTN_SECONDARY_CLASS} gap-1.5`}
+          aria-expanded={filtersOpen}
+        >
+          Filters
+          {isFiltered && (
+            <span className="min-w-[16px] rounded-md bg-blue-600 px-1.5 py-0.5 text-center font-mono text-[10px] leading-none text-fg">
+              {filteredHoldings.length}
+            </span>
+          )}
+        </button>
+        {isFiltered && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted tabular-nums">
+              {filteredHoldings.length} / {holdings.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setFilterTicker("");
+                setFilterSignal("");
+                setFilterPeg("");
+                setFilterRegime("");
+                setTrimOnly(false);
+              }}
+              className="text-xs text-muted hover:text-fg"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
+
+      {filtersOpen && (
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-input-border bg-input/30 p-3">
         <input
           type="text"
           value={filterTicker}
           onChange={(e) => setFilterTicker(e.target.value)}
           placeholder="Filter by ticker…"
-          className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-xs text-fg w-40 focus:outline-hidden focus:border-blue-500 placeholder-slate-500"
+          className={`${FIELD_INPUT_SM_CLASS} w-40 text-xs`}
         />
 
-        {/* Signal filter */}
         <select
           value={filterSignal}
           onChange={(e) => setFilterSignal(e.target.value)}
-          className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-xs text-fg focus:outline-hidden focus:border-blue-500"
+          className={`${FIELD_INPUT_SM_CLASS} w-auto text-xs`}
         >
           <option value="">All signals</option>
           <option value="buy">Buy</option>
@@ -560,12 +597,11 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
           <option value="none">Not analyzed</option>
         </select>
 
-        {/* PEG filter */}
         {hasFundamentals && (
           <select
             value={filterPeg}
             onChange={(e) => setFilterPeg(e.target.value)}
-            className="bg-input/80 border border-input-border rounded-lg px-2.5 py-1.5 text-xs text-fg focus:outline-none focus:border-blue-500/60 cursor-pointer transition-colors"
+            className={`${FIELD_INPUT_SM_CLASS} w-auto text-xs`}
           >
             <option value="">All PEG</option>
             <option value="undervalued">Undervalued (&lt; 1)</option>
@@ -575,9 +611,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
           </select>
         )}
 
-        {/* Regime filter — pill toggles */}
         {hasRegime && (
-          <div className="flex items-center rounded-lg border border-input-border bg-input/80 p-0.5 gap-0.5">
+          <div className="flex items-center rounded-lg border border-input-border bg-input p-0.5 gap-0.5">
             {(["", "Bull", "Sideways", "Bear"] as const).map((val) => {
               const isActive = filterRegime === val;
               const label = val === "" ? "All" : val === "Sideways" ? "Sidew." : val;
@@ -608,7 +643,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
           <button
             type="button"
             onClick={() => setTrimOnly((v) => !v)}
-            className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
               trimOnly
                 ? "bg-orange-500/20 text-orange-300 border-orange-500/50"
                 : "bg-transparent text-muted border-input-border hover:border-border-strong"
@@ -617,21 +652,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
             Trim signals only
           </button>
         )}
-
-        {isFiltered && (
-          <div className="flex items-center gap-1.5 ml-1">
-            <span className="text-xs text-muted tabular-nums">
-              {filteredHoldings.length} / {holdings.length}
-            </span>
-            <button
-              onClick={() => { setFilterTicker(""); setFilterSignal(""); setFilterPeg(""); setFilterRegime(""); setTrimOnly(false); }}
-              className="text-[11px] text-muted hover:text-fg border border-input-border hover:border-border-strong rounded px-1.5 py-0.5 transition-colors"
-            >
-              ✕ Clear
-            </button>
-          </div>
-        )}
       </div>
+      )}
 
       {sortedHoldings.length === 0 && !addingNew ? (
         <EmptyState

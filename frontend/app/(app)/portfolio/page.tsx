@@ -52,6 +52,7 @@ import { ThesisPanel } from "@/components/portfolio/ThesisPanel";
 import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsModal";
 import { SellCandidatesPanel } from "@/components/portfolio/SellCandidatesPanel";
+import { MorningBriefStrip } from "@/components/portfolio/MorningBriefStrip";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
 import {
@@ -467,7 +468,9 @@ function PortfolioPageContent() {
         <PageHeader
           title={
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-              <PageTitle className="shrink-0">Portfolio</PageTitle>
+              <PageTitle className="shrink-0 text-xl sm:text-2xl font-semibold tracking-tight text-fg">
+                Portfolio
+              </PageTitle>
               <PortfolioSwitcher
                 portfolios={portfolios}
                 selectedId={selectedId}
@@ -542,6 +545,7 @@ function PortfolioPageContent() {
             primaryTabs={primaryTabs}
             overflowTabs={overflowTabs}
             activeId={tab}
+            tabIdPrefix="portfolio-tab"
             onChange={(id) => setTab(id as PortfolioTab)}
           />
         )}
@@ -551,7 +555,16 @@ function PortfolioPageContent() {
         {selectedId && !loadingCurrent && current && (
           <>
             {tab === "holdings" && (
-              <div className="space-y-3">
+              <div
+                id="portfolio-panel-holdings"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-holdings"
+                className="space-y-3"
+              >
+                <MorningBriefStrip
+                  portfolioId={selectedId}
+                  onOpenInsights={() => setTab("insights")}
+                />
                 {hasHoldings && (
                   <PortfolioStatsBar
                     holdings={current.holdings}
@@ -584,34 +597,64 @@ function PortfolioPageContent() {
             )}
 
             {tab === "insights" && (
+              <div
+                id="portfolio-panel-insights"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-insights"
+              >
               <InsightsDashboard
                 portfolioId={selectedId}
                 hasHoldings={hasHoldings}
                 portfolioName={selectedPortfolio?.name}
               />
+              </div>
             )}
 
             {tab === "earnings" && (
+              <div
+                id="portfolio-panel-earnings"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-earnings"
+              >
               <EarningsPanel
                 portfolioId={selectedId}
                 holdings={current.holdings}
                 priceUnavailableReason={current.price_unavailable_reason}
               />
+              </div>
             )}
 
             {tab === "news" && (
+              <div
+                id="portfolio-panel-news"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-overflow"
+              >
               <NewsPanel
                 portfolioId={selectedId}
                 priceUnavailableReason={current.price_unavailable_reason}
               />
+              </div>
             )}
 
             {tab === "chat" && selectedId && (
+              <div
+                id="portfolio-panel-chat"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-overflow"
+              >
               <ChatPanel portfolioId={selectedId} />
+              </div>
             )}
 
             {tab === "thesis" && selectedId && (
+              <div
+                id="portfolio-panel-thesis"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-overflow"
+              >
               <ThesisPanel portfolioId={selectedId} />
+              </div>
             )}
           </>
         )}

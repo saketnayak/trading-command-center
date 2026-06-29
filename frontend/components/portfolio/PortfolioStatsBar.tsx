@@ -1,5 +1,7 @@
 "use client";
+import { useState, type ReactNode } from "react";
 import type { PortfolioHolding, FundamentalsData, RegimeData, TrimSignalEntry } from "@/lib/types";
+import { BTN_AI_SM_CLASS } from "@/lib/uiClasses";
 
 interface Props {
   holdings: PortfolioHolding[];
@@ -16,6 +18,8 @@ function daysAgo(dateStr: string): number {
 }
 
 export function PortfolioStatsBar({ holdings, onAnalyzeStale, fundamentals, regime, trimSignals }: Props) {
+  const [expanded, setExpanded] = useState(false);
+
   if (holdings.length === 0) return null;
 
   const withPrice = holdings.filter((h) => h.unrealized_pnl_pct != null);
@@ -38,8 +42,9 @@ export function PortfolioStatsBar({ holdings, onAnalyzeStale, fundamentals, regi
       }).length
     : 0;
 
-  // Regime stats
-  let bullCount = 0, sidewaysCount = 0, bearCount = 0;
+  let bullCount = 0;
+  let sidewaysCount = 0;
+  let bearCount = 0;
   const regimeSignals: number[] = [];
   if (regime) {
     for (const h of holdings) {
@@ -56,131 +61,128 @@ export function PortfolioStatsBar({ holdings, onAnalyzeStale, fundamentals, regi
   const signalArrow = avgSignal > 0.1 ? "↑" : avgSignal < -0.1 ? "↓" : "→";
   const signalColor = avgSignal > 0.1 ? "text-green-400" : avgSignal < -0.1 ? "text-red-400" : "text-yellow-400";
 
+  const trimFlagged = trimSignals
+    ? Object.values(trimSignals).filter((e) => e.level !== "none")
+    : [];
+  const hasExtraStats =
+    (worst && worst.ticker !== best?.ticker) ||
+    undervaluedByPeg > 0 ||
+    regimeSignals.length > 0 ||
+    trimFlagged.length > 0;
+
   return (
-    <div className="flex flex-wrap items-center gap-x-0 gap-y-2 bg-input/40 border border-input-border/60 rounded-lg text-xs overflow-hidden">
-      {/* Performance group */}
-      <div className="flex items-center gap-4 px-4 py-3">
+    <div className="rounded-lg border border-input-border/60 bg-input/40 text-xs overflow-hidden">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
         {best && (
           <Stat
-            label="Best performer"
+            label="Top mover"
             value={`${best.ticker} ${best.unrealized_pnl_pct != null ? `+${best.unrealized_pnl_pct.toFixed(1)}%` : ""}`}
             color="text-green-400"
           />
         )}
-        {worst && worst.ticker !== best?.ticker && (
-          <Stat
-            label="Worst performer"
-            value={`${worst.ticker} ${worst.unrealized_pnl_pct != null ? `${worst.unrealized_pnl_pct.toFixed(1)}%` : ""}`}
-            color="text-red-400"
-          />
-        )}
-      </div>
-
-      <Divider />
-
-      {/* Signals + PEG group */}
-      <div className="flex items-center gap-4 px-4 py-3">
-        <div className="flex flex-col gap-0.5 min-w-[64px]">
-          <span className="text-muted uppercase tracking-wide text-[10px] whitespace-nowrap">AI Signals</span>
-          <span className="font-semibold whitespace-nowrap">
-            <span className="text-green-400">{buyCount} buy</span>
-            <span className="text-subtle"> · </span>
-            <span className="text-red-400">{sellCount} sell</span>
-          </span>
-        </div>
-        {undervaluedByPeg > 0 && (
-          <Stat label="Undervalued (PEG &lt; 1)" value={String(undervaluedByPeg)} color="text-emerald-400" />
-        )}
-      </div>
-
-      {/* Regime group */}
-      {regimeSignals.length > 0 && (
-        <>
-          <Divider />
-          <div className="flex items-center gap-4 px-4 py-3">
-            <div
-              className="flex flex-col gap-0.5"
-              title="Markov regime distribution across holdings"
-            >
-              <span className="text-muted uppercase tracking-wide text-[10px]">Regime</span>
-              <span className="font-semibold whitespace-nowrap">
-                <span className="text-green-400">{bullCount} Bull</span>
-                <span className="text-subtle"> · </span>
-                <span className="text-yellow-400">{sidewaysCount} Sidew.</span>
-                <span className="text-subtle"> · </span>
-                <span className="text-red-400">{bearCount} Bear</span>
-              </span>
-            </div>
-            {hasRegimeData && (
-              <div
-                className="flex flex-col gap-0.5"
-                title="Average Markov directional signal across holdings (bull_prob − bear_prob). Range: −1 to +1."
-              >
-                <span className="text-muted uppercase tracking-wide text-[10px]">Avg signal</span>
-                <span className={`font-semibold font-mono ${signalColor}`}>
-                  {avgSignal >= 0 ? "+" : ""}{avgSignal.toFixed(2)} {signalArrow}
-                </span>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {trimSignals && (() => {
-        const flagged = Object.values(trimSignals).filter((e) => e.level !== "none");
-        if (flagged.length === 0) return null;
-        const strong = flagged.filter((e) => e.level === "strong_trim").length;
-        const consider = flagged.filter((e) => e.level === "consider_trim").length;
-        const watch = flagged.filter((e) => e.level === "watch").length;
-        return (
-          <>
-            <div className="self-stretch w-px bg-muted-surface/60" />
-            <div className="flex items-center gap-4 px-4 py-3">
-              <div
-                className="text-xs text-muted"
-                title="Holdings flagged for review based on AI verdict, regime, valuation, and concentration."
-              >
-                Trim signals:{" "}
-                {strong > 0 && <span className="text-red-400">{strong} strong</span>}
-                {strong > 0 && (consider > 0 || watch > 0) && " · "}
-                {consider > 0 && <span className="text-orange-400">{consider} consider</span>}
-                {consider > 0 && watch > 0 && " · "}
-                {watch > 0 && <span className="text-yellow-400">{watch} watch</span>}
-              </div>
-            </div>
-          </>
-        );
-      })()}
-
-      {/* Stale group — pushed right */}
-      <div className="flex items-center gap-2 ml-auto px-4 py-3">
         <Stat
-          label="Stale / unanalyzed"
-          value={`${staleCount} of ${holdings.length}`}
-          color={staleCount > 0 ? "text-amber-400" : "text-muted"}
+          label="AI signals"
+          value={
+            <>
+              <span className="text-green-400">{buyCount} buy</span>
+              <span className="text-subtle"> · </span>
+              <span className="text-red-400">{sellCount} sell</span>
+            </>
+          }
         />
-        {staleCount > 0 && onAnalyzeStale && (
+        <div className="ml-auto flex items-center gap-2">
+          <Stat
+            label="Stale"
+            value={`${staleCount} of ${holdings.length}`}
+            color={staleCount > 0 ? "text-amber-400" : "text-muted"}
+          />
+          {staleCount > 0 && onAnalyzeStale && (
+            <button type="button" onClick={onAnalyzeStale} className={BTN_AI_SM_CLASS}>
+              Analyze stale
+            </button>
+          )}
+        </div>
+        {hasExtraStats && (
           <button
-            onClick={onAnalyzeStale}
-            className="px-2.5 py-1 rounded-sm bg-purple-600/20 border border-purple-500/40 text-purple-300 hover:bg-purple-600/30 transition-colors text-xs"
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            aria-expanded={expanded}
           >
-            Analyze All Stale
+            {expanded ? "Less stats" : "More stats"}
           </button>
         )}
       </div>
+
+      {expanded && hasExtraStats && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-input-border/40 px-4 py-3">
+          {worst && worst.ticker !== best?.ticker && (
+            <Stat
+              label="Laggard"
+              value={`${worst.ticker} ${worst.unrealized_pnl_pct != null ? `${worst.unrealized_pnl_pct.toFixed(1)}%` : ""}`}
+              color="text-red-400"
+            />
+          )}
+          {undervaluedByPeg > 0 && (
+            <Stat label="Undervalued (PEG &lt; 1)" value={String(undervaluedByPeg)} color="text-emerald-400" />
+          )}
+          {regimeSignals.length > 0 && (
+            <Stat
+              label="Regime"
+              value={
+                <>
+                  <span className="text-green-400">{bullCount} bull</span>
+                  <span className="text-subtle"> · </span>
+                  <span className="text-yellow-400">{sidewaysCount} side</span>
+                  <span className="text-subtle"> · </span>
+                  <span className="text-red-400">{bearCount} bear</span>
+                </>
+              }
+              title="Markov regime distribution across holdings"
+            />
+          )}
+          {hasRegimeData && (
+            <Stat
+              label="Avg signal"
+              value={`${avgSignal >= 0 ? "+" : ""}${avgSignal.toFixed(2)} ${signalArrow}`}
+              color={signalColor}
+              mono
+              title="Average Markov directional signal (bull_prob − bear_prob)"
+            />
+          )}
+          {trimFlagged.length > 0 && (
+            <Stat
+              label="Trim flags"
+              value={String(trimFlagged.length)}
+              color="text-orange-400"
+              title="Holdings flagged for review"
+            />
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function Divider() {
-  return <div className="self-stretch w-px bg-muted-surface/60" />;
-}
-
-function Stat({ label, value, color }: { label: string; value: string; color: string }) {
+function Stat({
+  label,
+  value,
+  color,
+  mono,
+  title,
+}: {
+  label: string;
+  value: React.ReactNode;
+  color?: string;
+  mono?: boolean;
+  title?: string;
+}) {
   return (
-    <div className="flex flex-col gap-0.5 min-w-[64px]">
-      <span className="text-muted uppercase tracking-wide text-[10px] whitespace-nowrap">{label}</span>
-      <span className={`font-semibold ${color}`}>{value}</span>
+    <div className="flex flex-col gap-0.5 min-w-[64px]" title={title}>
+      <span className="text-muted text-xs whitespace-nowrap">{label}</span>
+      <span className={`font-semibold whitespace-nowrap ${color ?? "text-fg"} ${mono ? "font-mono" : ""}`}>
+        {value}
+      </span>
     </div>
   );
 }
