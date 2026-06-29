@@ -28,6 +28,7 @@ interface HoldingsTableProps {
   trimSignals?: Record<string, TrimSignalEntry>;
   tickerMetadata?: Record<string, TickerMetadata>;
   onTickerClick?: (holding: PortfolioHolding) => void;
+  onUploadClick?: () => void;
 }
 
 interface DraftRow {
@@ -347,7 +348,7 @@ function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, fundamentalsUnavailableReason, displayCurrency, fundamentals, regime, wave, trimSignals, tickerMetadata = {}, onTickerClick }: HoldingsTableProps) {
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, fundamentalsUnavailableReason, displayCurrency, fundamentals, regime, wave, trimSignals, tickerMetadata = {}, onTickerClick, onUploadClick }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "", currency: displayCurrency });
@@ -535,7 +536,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
         </div>
       )}
       {fundamentalsMessage && (
-        <div className="text-xs text-amber-400/90 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2">
+        <div className="text-xs text-amber-400/90 bg-amber-900/20 border border-amber-700/40 rounded-md px-3 py-2">
           {fundamentalsMessage}
         </div>
       )}
@@ -687,6 +688,11 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
             isFiltered
               ? undefined
               : { label: "Add holding", onClick: () => setAddingNew(true) }
+          }
+          secondaryAction={
+            !isFiltered && onUploadClick
+              ? { label: "Upload CSV", onClick: onUploadClick }
+              : undefined
           }
         />
       ) : (

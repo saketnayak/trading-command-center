@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BTN_PRIMARY_CLASS } from "@/lib/uiClasses";
+import { BTN_PRIMARY_CLASS, BTN_SECONDARY_CLASS } from "@/lib/uiClasses";
 import type { LucideIcon } from "lucide-react";
 
 type EmptyStateAction = {
@@ -13,6 +13,7 @@ type EmptyStateProps = {
   title: string;
   description?: string;
   action?: EmptyStateAction;
+  secondaryAction?: EmptyStateAction;
   className?: string;
 };
 
@@ -21,6 +22,7 @@ export function EmptyState({
   title,
   description,
   action,
+  secondaryAction,
   className = "",
 }: EmptyStateProps) {
   return (
@@ -33,7 +35,7 @@ export function EmptyState({
       <h3 className="text-sm font-medium text-fg">{title}</h3>
       {description && <p className="mt-1 max-w-sm text-xs text-muted">{description}</p>}
       {action && (
-        <div className="mt-4">
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
           {action.href ? (
             <Link
               href={action.href}
@@ -50,6 +52,20 @@ export function EmptyState({
               {action.label}
             </button>
           )}
+          {secondaryAction &&
+            (secondaryAction.href ? (
+              <Link href={secondaryAction.href} className={BTN_SECONDARY_CLASS}>
+                {secondaryAction.label}
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={secondaryAction.onClick}
+                className={BTN_SECONDARY_CLASS}
+              >
+                {secondaryAction.label}
+              </button>
+            ))}
         </div>
       )}
     </div>

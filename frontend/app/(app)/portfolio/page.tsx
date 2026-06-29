@@ -403,13 +403,6 @@ function PortfolioPageContent() {
     }
   }, [selectedId]);
 
-  // Open upload drawer when selected portfolio has no snapshot yet
-  useEffect(() => {
-    if (selectedId != null && !loadingCurrent && current !== undefined && current.snapshot === null) {
-      setUploadOpen(true);
-    }
-  }, [selectedId, current, loadingCurrent]);
-
   const createMutation = useMutation({
     mutationFn: (name: string) => createPortfolio(name),
     onSuccess: (p: Portfolio) => {
@@ -629,6 +622,7 @@ function PortfolioPageContent() {
                   trimSignals={markovEnabled ? trimByHoldingId : undefined}
                   tickerMetadata={tickerMetadata}
                   onTickerClick={setDrawerHolding}
+                  onUploadClick={() => setUploadOpen(true)}
                 />
               </div>
             )}
