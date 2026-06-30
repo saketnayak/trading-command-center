@@ -38,6 +38,7 @@ docs/launch/
 
 # TradingAgents output cache
 backend/results/
+backend/data/logos/
 
 # Standalone Elliott app reference copy (vendored code: backend/elliott_wave/)
 external/

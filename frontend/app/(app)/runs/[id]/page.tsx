@@ -12,6 +12,7 @@ import type { Run } from "@/lib/types";
 import { PageShell } from "@/components/layout/PageShell";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Breadcrumbs, HISTORY_BREADCRUMB, RESEARCH_BREADCRUMB } from "@/components/layout/Breadcrumbs";
+import { TickerLabel } from "@/components/ui/TickerLabel";
 
 function rerunUrl(run: Run): string {
   const p = new URLSearchParams({
@@ -165,7 +166,7 @@ export default function RunResultsPage() {
       <PageHeader
         title={
           <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-            <span className="text-lg font-semibold text-fg font-mono">{run.ticker}</span>
+            <TickerLabel ticker={run.ticker} metadata={metadata} logoSize="md" className="text-lg" />
             <LabelEditor id={id} label={run.label} />
           </div>
         }

@@ -116,6 +116,11 @@ function CompareContent() {
     enabled: !!a && !!b,
   });
 
+  const tickers = data ? [data.a.run.ticker, data.b.run.ticker] : [];
+  const { data: tickerMetadata = {} } = useTickerMetadata(tickers, {
+    enabled: tickers.length > 0,
+  });
+
   if (!a) {
     return (
       <p className="text-muted text-sm">
@@ -135,7 +140,7 @@ function CompareContent() {
   if (error) return <div className="text-red-400 text-sm">Failed to load comparison.</div>;
   if (!data) return null;
 
-  return <ComparisonPanel a={data.a} b={data.b} />;
+  return <ComparisonPanel a={data.a} b={data.b} tickerMetadata={tickerMetadata} />;
 }
 
 export default function ComparePage() {

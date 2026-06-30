@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { analyzeWave, getAppSettings } from "@/lib/api";
 import { AnalysisChart } from "@/components/wave/AnalysisChart";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
+import { CompanyLogo } from "@/components/ui/CompanyLogo";
 import { APP_PAGE_PADDING_X_CLASS, TOP_NAV_HEIGHT_REM } from "@/components/layout/constants";
 import { Breadcrumbs, RESEARCH_BREADCRUMB } from "@/components/layout/Breadcrumbs";
 import { fmtMoney } from "@/lib/currency";
@@ -64,9 +65,12 @@ export default function WaveChartPage() {
         />
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h1 className="font-mono text-2xl font-semibold text-fg">{symbol}</h1>
-              <p className="truncate text-sm text-muted">{companyName}</p>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <CompanyLogo ticker={symbol} size="lg" />
+              <div className="min-w-0">
+                <h1 className="font-mono text-2xl font-semibold text-fg">{symbol}</h1>
+                <p className="truncate text-sm text-muted">{companyName}</p>
+              </div>
             </div>
           </div>
           <VisibilityControls value={visibility} onChange={setVisibility} />

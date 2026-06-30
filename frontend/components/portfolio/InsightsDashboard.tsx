@@ -4,7 +4,9 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { generateInsight, getLatestInsight, listInsights } from "@/lib/api";
 import { WatchButton } from "@/components/portfolio/WatchButton";
-import type { PortfolioInsight, InsightActionItem, InsightRiskAlert } from "@/lib/types";
+import type { PortfolioInsight, InsightActionItem, InsightRiskAlert, TickerMetadata } from "@/lib/types";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import { BehavioralAlerts } from "@/components/portfolio/BehavioralAlerts";
 import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
@@ -101,7 +103,13 @@ function HealthScoreRing({ score }: { score: number }) {
   );
 }
 
-function ActionItemCard({ item }: { item: InsightActionItem }) {
+function ActionItemCard({
+  item,
+  metadata,
+}: {
+  item: InsightActionItem;
+  metadata?: TickerMetadata;
+}) {
   const router = useRouter();
 
   return (
@@ -115,7 +123,9 @@ function ActionItemCard({ item }: { item: InsightActionItem }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <span className="text-fg text-sm font-semibold">{item.ticker}</span>
+            {item.ticker ? (
+              <TickerLabel ticker={item.ticker} metadata={metadata} />
+            ) : null}
             <p className="text-muted text-xs mt-0.5 leading-relaxed">{item.rationale}</p>
           </div>
           {item.ticker && (
@@ -284,6 +294,12 @@ function triggerDownload(blob: Blob, filename: string) {
 
 function InsightView({ insight, portfolioName }: { insight: PortfolioInsight; portfolioName?: string }) {
   const [pdfLoading, setPdfLoading] = useState(false);
+  const actionTickers = (insight.action_items ?? [])
+    .map((item) => item.ticker)
+    .filter((ticker): ticker is string => Boolean(ticker));
+  const { data: tickerMetadata = {} } = useTickerMetadata(actionTickers, {
+    enabled: actionTickers.length > 0,
+  });
 
   async function handleExportPdf() {
     setPdfLoading(true);
@@ -379,7 +395,11 @@ function InsightView({ insight, portfolioName }: { insight: PortfolioInsight; po
             </h3>
             <div className="space-y-2">
               {insight.action_items.map((item, i) => (
-                <ActionItemCard key={i} item={item} />
+                <ActionItemCard
+                  key={i}
+                  item={item}
+                  metadata={item.ticker ? tickerMetadata[item.ticker.toUpperCase()] : undefined}
+                />
               ))}
             </div>
           </div>

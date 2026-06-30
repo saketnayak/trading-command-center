@@ -2,7 +2,8 @@
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -10,8 +11,10 @@ from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.user import User
 from app.services.finnhub_client import get_finnhub_key
+from app.services import logo_cache_service
 from app.services.ticker_metadata_service import (
     get_many_ticker_metadata,
+    get_ticker_metadata,
     metadata_to_dict,
     normalize_ticker,
 )
@@ -73,3 +76,32 @@ async def get_ticker_metadata_batch(
         if t in rows
     }
     return TickerMetadataResponse(items=items)
+
+
+_LOGO_CACHE_CONTROL = "public, max-age=2592000, immutable"
+
+
+@router.get("/tickers/{symbol}/logo")
+async def get_ticker_logo(
+    symbol: str,
+    db: AsyncSession = Depends(get_db),
+    _user: User = Depends(get_current_user),
+):
+    """Serve a disk-cached company logo (30-day TTL). Source URL remains in ticker_metadata."""
+    ticker = normalize_ticker(symbol)
+    finnhub_key = await _get_finnhub_key(db)
+    metadata = await get_ticker_metadata(ticker, db, finnhub_key)
+    source_url = metadata.logo_url
+    if not source_url:
+        raise HTTPException(status_code=404, detail="Logo not available")
+
+    cached = await logo_cache_service.ensure_logo_cached(ticker, source_url)
+    if cached is None:
+        raise HTTPException(status_code=404, detail="Logo not available")
+
+    path, content_type = cached
+    return FileResponse(
+        path,
+        media_type=content_type,
+        headers={"Cache-Control": _LOGO_CACHE_CONTROL},
+    )
