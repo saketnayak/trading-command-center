@@ -1991,10 +1991,13 @@ async def get_portfolio_trim_signals(
 
     fundamentals_map: dict[str, dict] = {}
     if av_key:
-        fundamentals_list = await asyncio.gather(
+        fundamentals_results = await asyncio.gather(
             *[_fetch_fundamentals(ticker, av_key) for ticker in tickers]
         )
-        fundamentals_map = dict(zip(tickers, fundamentals_list))
+        fundamentals_map = {
+            ticker: fundamentals
+            for ticker, (fundamentals, _) in zip(tickers, fundamentals_results)
+        }
 
     total_value = 0.0
     holding_values: dict[str, float] = {}
