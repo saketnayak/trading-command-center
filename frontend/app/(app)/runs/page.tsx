@@ -10,6 +10,7 @@ import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
 import { PageShell } from "@/components/layout/PageShell";
 import { getRuns, bulkAbortRuns, bulkDeleteRuns } from "@/lib/api";
 import { downloadRunsCsv } from "@/lib/export/buildCsv";
+import { BTN_ICON_CLASS, BTN_PRIMARY_CLASS, BTN_PRIMARY_SM_CLASS, BTN_SECONDARY_CLASS } from "@/lib/uiClasses";
 import type { Run } from "@/lib/types";
 
 interface FilterValues {
@@ -94,8 +95,8 @@ export default function RunsPage() {
     <PageShell>
         <PageHeader
           className="mb-4"
-          leading={<PageTitle className="text-fg text-lg font-semibold">Run History</PageTitle>}
-          trailing={
+          title={<PageTitle className="text-fg">Run History</PageTitle>}
+          actions={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             {lastUpdated && (
               <span className="text-muted text-xs">
@@ -106,7 +107,8 @@ export default function RunsPage() {
               onClick={() => refetch()}
               disabled={isFetching}
               title="Refresh"
-              className="text-muted hover:text-fg disabled:opacity-40 transition-colors"
+              aria-label="Refresh runs"
+              className={`${BTN_ICON_CLASS} ${isFetching ? "[&_svg]:animate-spin" : ""}`}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -121,13 +123,13 @@ export default function RunsPage() {
               onClick={() => downloadRunsCsv(runs)}
               disabled={runs.length === 0}
               title="Export current view to CSV"
-              className="text-muted hover:text-fg disabled:opacity-40 text-xs border border-input-border rounded px-2 py-1.5"
+              className={BTN_SECONDARY_CLASS}
             >
               Export CSV
             </button>
             <Link
               href="/runs/new"
-              className="bg-blue-600 hover:bg-blue-700 text-fg rounded-sm px-3 py-1.5 text-sm"
+              className={BTN_PRIMARY_CLASS}
             >
               New Run
             </Link>
@@ -135,15 +137,15 @@ export default function RunsPage() {
           }
         />
 
-        <div className="flex gap-1 border-b border-border mb-4">
+        <div className="mb-4 flex gap-1 border-b border-border">
           {(["active", "archived"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
               className={
                 tab === t
-                  ? "px-4 py-2 text-sm border-b-2 border-blue-400 text-blue-400 capitalize"
-                  : "px-4 py-2 text-sm text-muted hover:text-fg-secondary capitalize border-b-2 border-transparent"
+                  ? "border-b-2 border-blue-500 px-4 py-2.5 text-sm font-medium capitalize text-blue-500"
+                  : "border-b-2 border-transparent px-4 py-2.5 text-sm capitalize text-muted transition-colors hover:text-fg-secondary"
               }
             >
               {t}
@@ -155,7 +157,7 @@ export default function RunsPage() {
         <RunFilters value={filters} onChange={setFilters} />
 
         {selectedIds.length > 0 && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between bg-input/80 border border-input-border rounded-lg px-4 py-2.5 mb-1">
+          <div className="mb-3 flex flex-col gap-2 rounded-lg border border-input-border bg-surface px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-sm text-fg-secondary">
               {selectedIds.length} {selectedIds.length === 1 ? "run" : "runs"} selected
             </span>
@@ -207,7 +209,7 @@ export default function RunsPage() {
               {canCompare && (
                 <button
                   onClick={() => router.push(`/runs/compare?a=${selectedIds[0]}&b=${selectedIds[1]}`)}
-                  className="bg-blue-600 hover:bg-blue-700 text-fg text-xs px-3 py-1.5 rounded-sm"
+                  className={BTN_PRIMARY_SM_CLASS}
                 >
                   Compare 2 runs →
                 </button>

@@ -11,7 +11,7 @@ function formatDur(secs: number): string {
 function Stat({ label, value, color }: { label: string; value: string | number; color?: string }) {
   return (
     <div className="flex flex-col items-center px-3 sm:px-5 py-3 min-w-[4.5rem]">
-      <span className={`text-lg sm:text-xl font-semibold tabular-nums ${color ?? "text-fg"}`}>{value}</span>
+      <span className={`text-lg sm:text-xl font-semibold font-data ${color ?? "text-fg"}`}>{value}</span>
       <span className="text-muted text-xs mt-0.5 text-center">{label}</span>
     </div>
   );

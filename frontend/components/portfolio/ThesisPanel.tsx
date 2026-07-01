@@ -5,6 +5,7 @@ import { createThesisCrossRef, getThesisCrossRefs, deleteThesisCrossRef } from "
 import type { ThesisCrossRef, ThesisCrossRefPosition, ThesisCrossRefRecommendation } from "@/lib/types";
 import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
+import { BTN_AI_CLASS, FIELD_INPUT_SM_CLASS } from "@/lib/uiClasses";
 
 function AlignmentGauge({ score }: { score: number }) {
   const color = score <= 3 ? "text-red-400" : score <= 6 ? "text-yellow-400" : "text-green-400";
@@ -259,13 +260,13 @@ export function ThesisPanel({ portfolioId }: { portfolioId: string }) {
                 layout="compact"
                 value={llmConfig}
                 onChange={setLlmConfig}
-                providerClassName="bg-input border border-input-border rounded-sm px-2 py-1.5 text-xs text-fg-secondary focus:outline-hidden focus:border-blue-500"
-                modelClassName="w-40 bg-input border border-input-border rounded-sm px-2 py-1.5 text-xs text-fg-secondary placeholder:text-subtle focus:outline-hidden focus:border-blue-500"
+                providerClassName={FIELD_INPUT_SM_CLASS}
+                modelClassName={`${FIELD_INPUT_SM_CLASS} w-40`}
               />
               <button
                 onClick={() => analyzeMutation.mutate()}
                 disabled={!charValid || analyzeMutation.isPending}
-                className="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-muted-surface disabled:text-muted text-fg text-xs font-medium rounded-lg transition-colors"
+                className={BTN_AI_CLASS}
               >
                 {analyzeMutation.isPending ? "Analyzing…" : "Analyze thesis"}
               </button>

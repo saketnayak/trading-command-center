@@ -29,6 +29,7 @@ _chart_payload_service = ChartPayloadService()
 DEFAULT_PERIOD = "2y"
 DEFAULT_INTERVAL = "1d"
 DEFAULT_PROFILE: AnalysisProfile = "full_confluence"
+SPARKLINE_BARS = 90
 
 
 def _cache_key(
@@ -68,6 +69,16 @@ def _run_analyze_sync(
     return payload
 
 
+def _extract_sparkline(payload: dict[str, Any]) -> list[float]:
+    bars = (payload.get("chart") or {}).get("ohlcv") or []
+    closes: list[float] = []
+    for bar in bars[-SPARKLINE_BARS:]:
+        value = _safe_float(bar.get("close"))
+        if value is not None:
+            closes.append(round(value, 4))
+    return closes
+
+
 def _to_summary(payload: dict[str, Any], ticker: str) -> dict[str, Any]:
     overview = payload.get("overview") or {}
     top_scenarios = payload.get("top_scenarios") or []
@@ -86,6 +97,7 @@ def _to_summary(payload: dict[str, Any], ticker: str) -> dict[str, Any]:
         "confidence": region.get("confidence") if region else None,
         "zone_low": region.get("zone_low") if region else None,
         "zone_high": region.get("zone_high") if region else None,
+        "sparkline": _extract_sparkline(payload),
         "projection_direction": (payload.get("projection") or {}).get("direction"),
         "projection_target": (payload.get("projection") or {}).get("primary_target"),
         "warnings": overview.get("warnings") or [],

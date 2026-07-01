@@ -75,8 +75,10 @@ interface Props {
 
 export function Markdown({ children }: Props) {
   return (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-      {normalizeMarkdown(children)}
-    </ReactMarkdown>
+    <div className="prose-report">
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+        {normalizeMarkdown(children)}
+      </ReactMarkdown>
+    </div>
   );
 }

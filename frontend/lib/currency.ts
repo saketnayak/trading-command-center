@@ -4,13 +4,21 @@ export const SUPPORTED_CURRENCIES = [
 
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 
+/** ISO 4217 currencies that display without fractional digits. */
+const ZERO_DECIMAL_CURRENCIES = new Set<string>(["JPY"]);
+
+function fractionDigitsFor(currency: string): number {
+  return ZERO_DECIMAL_CURRENCIES.has(currency) ? 0 : 2;
+}
+
 export function fmtMoney(n: number | null | undefined, currency: string): string {
   if (n == null) return "—";
+  const digits = fractionDigitsFor(currency);
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: currency === "JPY" ? 0 : 2,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   }).format(n);
 }
 

@@ -17,6 +17,7 @@ from app.services.finnhub_client import (
     FinnhubError,
     fetch_json,
 )
+import app.services.yfinance_service as _yf
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def _parse_ipo_date(value: Any) -> date | None:
         return None
 
 
-def _market_cap_from_profile(raw: dict) -> float | None:
+def _market_cap_from_finnhub(raw: dict) -> float | None:
     cap = raw.get("marketCapitalization")
     if cap is None:
         return None
@@ -74,6 +75,79 @@ def _market_cap_from_profile(raw: dict) -> float | None:
         return float(cap)
     except (TypeError, ValueError):
         return None
+
+
+def _market_cap_from_yfinance(raw: dict) -> float | None:
+    """Convert yfinance absolute marketCap to Finnhub-style millions."""
+    cap = raw.get("marketCap")
+    if cap is None:
+        return None
+    try:
+        return float(cap) / 1_000_000
+    except (TypeError, ValueError):
+        return None
+
+
+def _map_yfinance_profile(raw: dict) -> dict[str, Any]:
+    name = raw.get("longName") or raw.get("shortName")
+    if not name or not str(name).strip():
+        return {}
+    short_name = raw.get("shortName")
+    display = str(short_name).strip() if short_name else str(name).strip()
+    return {
+        "asset_type": "stock",
+        "company_name": str(name).strip(),
+        "display_name": display,
+        "sector": raw.get("sector"),
+        "industry": raw.get("industry"),
+        "logo_url": None,
+        "website": raw.get("website"),
+        "exchange": raw.get("exchange"),
+        "country": raw.get("country"),
+        "currency": raw.get("currency"),
+        "market_cap": _market_cap_from_yfinance(raw),
+        "ipo_date": None,
+        "source": "yfinance",
+    }
+
+
+def _merge_stock_profiles(
+    primary: dict[str, Any],
+    fallback: dict[str, Any],
+) -> dict[str, Any]:
+    """Merge profiles with yfinance (primary) fields winning over Finnhub (fallback)."""
+    merged = dict(primary)
+    for key in (
+        "company_name",
+        "display_name",
+        "sector",
+        "industry",
+        "website",
+        "exchange",
+        "country",
+        "currency",
+        "logo_url",
+    ):
+        primary_val = primary.get(key)
+        if primary_val is None or primary_val == "":
+            fallback_val = fallback.get(key)
+            if fallback_val is not None and fallback_val != "":
+                merged[key] = fallback_val
+    if merged.get("market_cap") is None and fallback.get("market_cap") is not None:
+        merged["market_cap"] = fallback["market_cap"]
+    if merged.get("ipo_date") is None and fallback.get("ipo_date") is not None:
+        merged["ipo_date"] = fallback["ipo_date"]
+
+    sources: list[str] = []
+    if primary.get("company_name") or primary.get("display_name"):
+        sources.append(str(primary.get("source") or "yfinance"))
+    fallback_source = fallback.get("source")
+    if (fallback.get("company_name") or fallback.get("display_name")) and fallback_source:
+        if fallback_source not in sources:
+            sources.append(str(fallback_source))
+    merged["source"] = "+".join(sources) if sources else "none"
+    merged["asset_type"] = "stock"
+    return merged
 
 
 async def _fetch_stock_profile(ticker: str, api_key: str) -> tuple[dict[str, Any], dict, FinnhubError | None]:
@@ -98,7 +172,7 @@ async def _fetch_stock_profile(ticker: str, api_key: str) -> tuple[dict[str, Any
         "exchange": raw.get("exchange"),
         "country": raw.get("country"),
         "currency": raw.get("currency"),
-        "market_cap": _market_cap_from_profile(raw),
+        "market_cap": _market_cap_from_finnhub(raw),
         "ipo_date": _parse_ipo_date(raw.get("ipo")),
         "source": "finnhub",
     }
@@ -143,10 +217,37 @@ async def refresh_ticker_metadata(
     try:
         if is_crypto(normalized):
             mapped, payload = await _fetch_crypto_profile(normalized)
-        elif finnhub_key:
-            mapped, payload, profile_error = await _fetch_stock_profile(normalized, finnhub_key)
         else:
-            mapped = {"asset_type": "stock", "source": "none"}
+            yf_raw: dict | None = None
+            fh_raw: dict = {}
+            fh_mapped: dict[str, Any] = {}
+            try:
+                yf_raw = await _yf.fetch_company_profile(normalized)
+            except Exception as exc:
+                logger.warning("yfinance profile failed for %s: %s", normalized, exc)
+            yf_mapped = _map_yfinance_profile(yf_raw) if yf_raw else {}
+
+            if finnhub_key:
+                fh_mapped, fh_raw, profile_error = await _fetch_stock_profile(
+                    normalized, finnhub_key
+                )
+
+            if yf_mapped.get("company_name"):
+                mapped = (
+                    _merge_stock_profiles(yf_mapped, fh_mapped)
+                    if fh_mapped.get("company_name")
+                    else yf_mapped
+                )
+            elif fh_mapped.get("company_name"):
+                mapped = fh_mapped
+            else:
+                mapped = {"asset_type": "stock", "source": "none"}
+
+            payload = {}
+            if yf_raw:
+                payload["yfinance"] = yf_raw
+            if fh_raw:
+                payload["finnhub"] = fh_raw
     except Exception as exc:
         logger.warning("ticker metadata refresh failed for %s: %s", normalized, exc)
         mapped = {}
@@ -195,6 +296,18 @@ async def refresh_ticker_metadata(
 
     await db.commit()
     await db.refresh(row)
+
+    from app.services import logo_cache_service
+
+    try:
+        await logo_cache_service.ensure_logo_for_ticker(
+            normalized,
+            logo_url=row.logo_url,
+            website=row.website,
+        )
+    except Exception as exc:
+        logger.warning("logo cache warm failed for %s: %s", normalized, exc)
+
     return row
 
 

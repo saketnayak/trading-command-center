@@ -1,8 +1,9 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Pause, Play, Trash2, CalendarClock } from "lucide-react";
+import { Pause, Play, Trash2, CalendarClock, ListPlus } from "lucide-react";
 import {
   getWatchlist,
   addWatchlistItem,
@@ -10,129 +11,27 @@ import {
   updateWatchlistItem,
   triggerWatchlistRun,
 } from "@/lib/api";
-import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
-import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
-import { DEFAULT_LLM_DEPTH } from "@/lib/llmConfig";
 import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { WatchlistItem, AddWatchlistItemRequest, TickerMetadata } from "@/lib/types";
 import { IconButton } from "@/components/ui/IconButton";
 import { AnalystIcons, LanguageFlag } from "@/components/runs/RunContextIcons";
-import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
-import type { ResponseLanguage } from "@/lib/responseLanguage";
-import {
-  DEFAULT_WATCHLIST_CRON,
-  WatchlistScheduleBuilder,
-} from "@/components/watchlist/WatchlistScheduleBuilder";
 import { CronLabel } from "@/components/watchlist/CronLabel";
+import { WatchlistItemCard } from "@/components/watchlist/WatchlistItemCard";
+import { AddWatchlistItemForm } from "@/components/watchlist/AddWatchlistItemForm";
+import { WatchlistScheduleEditor } from "@/components/watchlist/WatchlistScheduleEditor";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
 import { PageShell } from "@/components/layout/PageShell";
 
-import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
-
-const ANALYSTS = ANALYST_OPTIONS;
-
-// ─── Add Item Form ────────────────────────────────────────────────────────────
-
-function AddItemForm({ onAdd, isPending }: { onAdd: (req: AddWatchlistItemRequest) => void; isPending: boolean }) {
-  const { provider, model, depth, resolveModel } = useDefaultLlmConfig();
-  const [ticker, setTicker] = useState("");
-  const [llmConfig, setLlmConfig] = useState<LlmConfigValue>({ provider, model, depth });
-  const [analysts, setAnalysts] = useState<string[]>(DEFAULT_ANALYSTS);
-  const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>(DEFAULT_RESPONSE_LANGUAGE);
-  const [cron, setCron] = useState<string | null>(DEFAULT_WATCHLIST_CRON);
-
-  useEffect(() => {
-    setLlmConfig({ provider, model, depth });
-  }, [provider, model, depth]);
-
-  function toggleAnalyst(name: string) {
-    setAnalysts((prev) => prev.includes(name) ? prev.filter((a) => a !== name) : [...prev, name]);
-  }
-
-  function handleAdd() {
-    if (!ticker || analysts.length === 0) return;
-    onAdd({
-      ticker,
-      llm_provider: llmConfig.provider,
-      llm_model: resolveModel(llmConfig),
-      depth: llmConfig.depth ?? DEFAULT_LLM_DEPTH,
-      analysts,
-      response_language: responseLanguage,
-      schedule_cron: cron,
-    });
-    setTicker("");
-  }
-
-  const inputCls = "bg-page border border-input-border text-fg text-sm rounded-lg px-3 py-2 focus:outline-hidden focus:border-blue-500";
-
-  return (
-    <div className="flex flex-col gap-5">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">Ticker</label>
-          <input value={ticker} onChange={(e) => setTicker(e.target.value.toUpperCase())} placeholder="AAPL" className={inputCls} />
-        </div>
-
-        <div className="flex flex-col gap-1 sm:col-span-2">
-          <LlmConfigPicker
-            layout="inline"
-            value={llmConfig}
-            onChange={setLlmConfig}
-            showDepth
-            providerClassName={inputCls}
-            modelClassName={inputCls}
-            depthClassName={inputCls}
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted">Language</label>
-          <select value={responseLanguage} onChange={(e) => setResponseLanguage(e.target.value as ResponseLanguage)} className={inputCls}>
-            {RESPONSE_LANGUAGE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-muted">Analysts</label>
-        <div className="flex flex-wrap gap-2">
-          {ANALYSTS.map((a) => {
-            const sel = analysts.includes(a);
-            return (
-              <button key={a} type="button" onClick={() => toggleAnalyst(a)}
-                className={`px-3 py-1 rounded-sm border text-xs capitalize ${sel ? "bg-blue-700 text-fg border-blue-600" : "bg-page text-muted border-input-border"}`}>
-                {a}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="border-t border-border pt-4">
-        <p className="text-xs text-muted uppercase tracking-wide font-semibold mb-3">Schedule</p>
-        <WatchlistScheduleBuilder
-          cron={cron}
-          onCronChange={setCron}
-        />
-      </div>
-
-      <button
-        onClick={handleAdd}
-        disabled={!ticker || analysts.length === 0 || isPending}
-        className="self-start bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-fg text-sm font-medium px-5 py-2 rounded-lg"
-      >
-        {isPending ? "Adding…" : "Add to Watchlist"}
-      </button>
-    </div>
-  );
-}
-
-// ─── Item Row ─────────────────────────────────────────────────────────────────
-
-function ItemRow({ item, onRemove, onToggle, onRunNow, onSaveSchedule, metadata }: {
+function ItemRow({
+  item,
+  onRemove,
+  onToggle,
+  onRunNow,
+  onSaveSchedule,
+  metadata,
+}: {
   item: WatchlistItem;
   onRemove: () => void;
   onToggle: () => void;
@@ -146,123 +45,104 @@ function ItemRow({ item, onRemove, onToggle, onRunNow, onSaveSchedule, metadata 
 
   return (
     <>
-    <tr className="border-t border-border hover:bg-muted-surface/40">
-      <td className="px-4 py-3">
-        <TickerLabel ticker={item.ticker} metadata={metadata} />
-      </td>
-      <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.llm_provider} / {item.llm_model}</td>
-      <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.depth}</td>
-      <td className="hidden lg:table-cell px-4 py-3">
-        <LanguageFlag value={item.response_language} />
-      </td>
-      <td className="hidden lg:table-cell px-4 py-3">
-        <div className="flex flex-wrap items-center gap-1.5">
+      <tr className="border-t border-border hover:bg-muted-surface/40 hidden md:table-row">
+        <td className="px-4 py-3">
+          <TickerLabel ticker={item.ticker} metadata={metadata} />
+        </td>
+        <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">
+          {item.llm_provider} / {item.llm_model}
+        </td>
+        <td className="hidden lg:table-cell px-4 py-3 text-muted text-sm">{item.depth}</td>
+        <td className="hidden lg:table-cell px-4 py-3">
+          <LanguageFlag value={item.response_language} />
+        </td>
+        <td className="hidden lg:table-cell px-4 py-3">
           <AnalystIcons analysts={item.analysts} />
-        </div>
-      </td>
-      <td className="hidden lg:table-cell px-4 py-3">
-        <CronLabel cron={item.schedule_cron} nextRunAt={item.next_run_at} />
-      </td>
-      <td className="px-4 py-3 text-xs">
-        {item.last_run_at && item.last_run_id ? (
-          <Link href={`/runs/${item.last_run_id}`} className="text-blue-400 hover:underline">
-            {new Date(item.last_run_at).toLocaleDateString()}
-          </Link>
-        ) : (
-          <span className="text-muted">Never</span>
-        )}
-      </td>
-      <td className="px-4 py-3">
-        <span className={`text-xs px-2 py-0.5 rounded-full ${item.enabled ? "bg-green-900/40 text-green-400" : "bg-input text-muted"}`}>
-          {item.enabled ? "Active" : "Paused"}
-        </span>
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex gap-1.5">
-          <IconButton
-            icon={Play}
-            label={`Run ${item.ticker} now`}
-            title="Run now"
-            tone="primary"
-            onClick={onRunNow}
-          />
-          <IconButton
-            icon={CalendarClock}
-            label={`Edit ${item.ticker} schedule`}
-            title="Edit schedule"
-            tone="default"
-            onClick={() => {
-              setDraftCron(item.schedule_cron);
-              setScheduleEditorKey((k) => k + 1);
-              setEditingSchedule((v) => !v);
-            }}
-          />
-          <IconButton
-            icon={item.enabled ? Pause : Play}
-            label={item.enabled ? `Pause ${item.ticker} schedule` : `Resume ${item.ticker} schedule`}
-            title={item.enabled ? "Pause" : "Resume"}
-            tone="default"
-            onClick={onToggle}
-          />
-          <IconButton
-            icon={Trash2}
-            label={`Remove ${item.ticker} from watchlist`}
-            title="Remove"
-            tone="danger"
-            onClick={onRemove}
-          />
-        </div>
-      </td>
-    </tr>
-    {editingSchedule && (
-      <tr className="border-t border-border bg-page/40">
-        <td colSpan={9} className="px-4 py-4">
-          <div className="flex flex-col gap-3 max-w-4xl">
-            <p className="text-xs text-muted uppercase tracking-wide font-semibold">Edit schedule for {item.ticker}</p>
-            <WatchlistScheduleBuilder
-              key={`${item.id}-${scheduleEditorKey}`}
-              instanceKey={`${item.id}-${item.schedule_cron ?? "manual"}-${scheduleEditorKey}`}
-              cron={draftCron}
-              onCronChange={setDraftCron}
+        </td>
+        <td className="hidden lg:table-cell px-4 py-3">
+          <CronLabel cron={item.schedule_cron} nextRunAt={item.next_run_at} />
+        </td>
+        <td className="px-4 py-3 text-xs">
+          {item.last_run_at && item.last_run_id ? (
+            <Link href={`/runs/${item.last_run_id}`} className="text-blue-400 hover:underline">
+              {new Date(item.last_run_at).toLocaleDateString()}
+            </Link>
+          ) : (
+            <span className="text-muted">Never</span>
+          )}
+        </td>
+        <td className="px-4 py-3">
+          <span
+            className={`text-xs px-2 py-0.5 rounded-full ${item.enabled ? "bg-green-900/40 text-green-400" : "bg-input text-muted"}`}
+          >
+            {item.enabled ? "Active" : "Paused"}
+          </span>
+        </td>
+        <td className="px-4 py-3">
+          <div className="flex gap-1.5">
+            <IconButton
+              icon={Play}
+              label={`Run ${item.ticker} now`}
+              title="Run now"
+              tone="primary"
+              onClick={onRunNow}
             />
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  onSaveSchedule(draftCron);
-                  setEditingSchedule(false);
-                }}
-                className="bg-blue-600 hover:bg-blue-500 text-fg text-xs font-medium px-3 py-1.5 rounded-lg"
-              >
-                Save schedule
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingSchedule(false)}
-                className="text-xs text-muted hover:text-fg-secondary px-3 py-1.5 border border-input-border rounded-lg"
-              >
-                Cancel
-              </button>
-            </div>
+            <IconButton
+              icon={CalendarClock}
+              label={`Edit ${item.ticker} schedule`}
+              title="Edit schedule"
+              tone="default"
+              onClick={() => {
+                setDraftCron(item.schedule_cron);
+                setScheduleEditorKey((k) => k + 1);
+                setEditingSchedule((v) => !v);
+              }}
+            />
+            <IconButton
+              icon={item.enabled ? Pause : Play}
+              label={item.enabled ? `Pause ${item.ticker} schedule` : `Resume ${item.ticker} schedule`}
+              title={item.enabled ? "Pause" : "Resume"}
+              tone="default"
+              onClick={onToggle}
+            />
+            <IconButton
+              icon={Trash2}
+              label={`Remove ${item.ticker} from watchlist`}
+              title="Remove"
+              tone="danger"
+              onClick={onRemove}
+            />
           </div>
         </td>
       </tr>
-    )}
+      {editingSchedule && (
+        <tr className="border-t border-border bg-page/40 hidden md:table-row">
+          <td colSpan={9} className="px-4 py-4">
+            <WatchlistScheduleEditor
+              ticker={item.ticker}
+              cron={draftCron}
+              onCronChange={setDraftCron}
+              instanceKey={`${item.id}-${item.schedule_cron ?? "manual"}-${scheduleEditorKey}`}
+              onSave={() => {
+                onSaveSchedule(draftCron);
+                setEditingSchedule(false);
+              }}
+              onCancel={() => setEditingSchedule(false)}
+            />
+          </td>
+        </tr>
+      )}
     </>
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default function WatchlistPage() {
   const qc = useQueryClient();
-
-  const [showAddTicker, setShowAddTicker] = useState(true);
 
   const { data: watchlist, isLoading } = useQuery({ queryKey: ["watchlist"], queryFn: getWatchlist });
   const { data: tickerMetadata = {} } = useTickerMetadata(
     watchlist?.items.map((item) => item.ticker) ?? [],
-    { enabled: !!watchlist && watchlist.items.length > 0 }
+    { enabled: !!watchlist && watchlist.items.length > 0 },
   );
 
   const addMutation = useMutation({
@@ -298,78 +178,102 @@ export default function WatchlistPage() {
     },
   });
 
-  return (
-    <PageShell width="wide" gap="6">
-        <PageHeader
-          back={{ href: "/runs", label: "← Back to History" }}
-          trailing={<PageTitle>Watchlist</PageTitle>}
-        />
+  function scrollToAddForm() {
+    document.getElementById("watchlist-add-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
-        <div className="bg-elevated border border-input-border rounded-xl p-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
-            <p className="text-xs text-muted uppercase tracking-wide font-semibold">
-              Add Ticker
-            </p>
-        
-            <button
-              type="button"
-              onClick={() => setShowAddTicker((v) =>!v)}
-              className="text-xs text-muted hover:text-fg-secondary px-2 py-1 border border-input-border rounded-sm"
-            >
-              {showAddTicker? "Hide": "Show"}
-            </button>
-          </div>
-        
-          {showAddTicker && (
-            <>
-              <AddItemForm onAdd={(req) => addMutation.mutate(req)} isPending={addMutation.isPending} />
-              {addMutation.error && (
-                <p className="text-red-400 text-sm mt-3">{String(addMutation.error)}</p>
+  return (
+    <PageShell gap="6">
+      <PageHeader
+        title={<PageTitle>Watchlist</PageTitle>}
+        description="Schedule recurring AI analyses or run tickers on demand."
+      />
+
+      <section
+        id="watchlist-add-form"
+        className="rounded-lg border border-border bg-surface p-4 sm:p-5"
+      >
+        <h2 className="text-sm font-medium text-fg mb-4">Add ticker</h2>
+        <AddWatchlistItemForm onAdd={(req) => addMutation.mutate(req)} isPending={addMutation.isPending} />
+        {addMutation.error && (
+          <p className="text-red-400 text-sm mt-3">{String(addMutation.error)}</p>
+        )}
+      </section>
+
+      {isLoading && <div className="text-muted text-sm">Loading watchlist…</div>}
+
+      {watchlist && (
+        <section className="rounded-lg border border-border bg-surface overflow-hidden">
+          <div className="border-b border-border px-4 py-3 sm:px-5">
+            <h2 className="text-sm font-medium text-fg">
+              Scheduled tickers
+              {watchlist.items.length > 0 && (
+                <span className="ml-2 text-xs font-normal text-muted">{watchlist.items.length}</span>
               )}
+            </h2>
+          </div>
+
+          {watchlist.items.length === 0 ? (
+            <EmptyState
+              icon={ListPlus}
+              title="No tickers on your watchlist"
+              description="Add a ticker above to schedule recurring AI analyses."
+              action={{ label: "Add ticker", onClick: scrollToAddForm }}
+              className="border-0 rounded-none bg-transparent"
+            />
+          ) : (
+            <>
+              <div className="space-y-3 p-3 md:hidden">
+                {watchlist.items.map((item) => (
+                  <WatchlistItemCard
+                    key={item.id}
+                    item={item}
+                    metadata={tickerMetadata[item.ticker.toUpperCase()]}
+                    onRemove={() => removeMutation.mutate(item.id)}
+                    onToggle={() => toggleMutation.mutate({ id: item.id, enabled: !item.enabled })}
+                    onRunNow={() => runNowMutation.mutate(item.id)}
+                    onSaveSchedule={(schedule_cron) =>
+                      scheduleMutation.mutate({ id: item.id, schedule_cron })
+                    }
+                  />
+                ))}
+              </div>
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-sm lg:min-w-[720px]">
+                  <thead className="bg-page/60 text-xs text-muted uppercase tracking-wider">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">Ticker</th>
+                      <th className="hidden lg:table-cell px-4 py-3 text-left font-semibold">Model</th>
+                      <th className="hidden lg:table-cell px-4 py-3 text-left font-semibold">Depth</th>
+                      <th className="hidden lg:table-cell px-4 py-3 text-left font-semibold">Language</th>
+                      <th className="hidden lg:table-cell px-4 py-3 text-left font-semibold">Analysts</th>
+                      <th className="hidden lg:table-cell px-4 py-3 text-left font-semibold">Schedule</th>
+                      <th className="px-4 py-3 text-left font-semibold">Last run</th>
+                      <th className="px-4 py-3 text-left font-semibold">Status</th>
+                      <th className="px-4 py-3 text-left font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {watchlist.items.map((item) => (
+                      <ItemRow
+                        key={item.id}
+                        item={item}
+                        onRemove={() => removeMutation.mutate(item.id)}
+                        onToggle={() => toggleMutation.mutate({ id: item.id, enabled: !item.enabled })}
+                        onRunNow={() => runNowMutation.mutate(item.id)}
+                        onSaveSchedule={(schedule_cron) =>
+                          scheduleMutation.mutate({ id: item.id, schedule_cron })
+                        }
+                        metadata={tickerMetadata[item.ticker.toUpperCase()]}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </>
           )}
-        </div>
-
-        {isLoading && <div className="text-muted text-sm">Loading watchlist…</div>}
-
-        {watchlist && (
-          <div className="bg-elevated border border-input-border rounded-xl overflow-hidden">
-            {watchlist.items.length === 0 ? (
-              <p className="text-muted text-sm text-center py-10">No tickers yet. Add one above to start tracking.</p>
-            ) : (
-              <div className="overflow-x-auto"><table className="w-full text-sm lg:min-w-[720px]">
-                <thead className="bg-page">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Ticker</th>
-                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Model</th>
-                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Depth</th>
-                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Language</th>
-                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Analysts</th>
-                    <th className="hidden lg:table-cell px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Schedule</th>
-                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Last Run</th>
-                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Status</th>
-                    <th className="px-4 py-3 text-left text-xs text-muted font-semibold uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {watchlist.items.map((item) => (
-                    <ItemRow
-                      key={item.id}
-                      item={item}
-                      onRemove={() => removeMutation.mutate(item.id)}
-                      onToggle={() => toggleMutation.mutate({ id: item.id, enabled: !item.enabled })}
-                      onRunNow={() => runNowMutation.mutate(item.id)}
-                      onSaveSchedule={(schedule_cron) =>
-                        scheduleMutation.mutate({ id: item.id, schedule_cron })
-                      }
-                      metadata={tickerMetadata[item.ticker.toUpperCase()]}
-                    />
-                  ))}
-                </tbody>
-              </table></div>
-            )}
-          </div>
-        )}
-      </PageShell>
+        </section>
+      )}
+    </PageShell>
   );
 }

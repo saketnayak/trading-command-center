@@ -31,6 +31,13 @@ def test_to_summary_extracts_overview_fields() -> None:
                 "confidence": 66.0,
             }
         ],
+        "chart": {
+            "ohlcv": [
+                {"time": "2026-01-01T00:00:00+00:00", "close": 160.0},
+                {"time": "2026-01-02T00:00:00+00:00", "close": 162.5},
+                {"time": "2026-01-03T00:00:00+00:00", "close": 171.0},
+            ]
+        },
     }
     summary = _to_summary(payload, "aapl")
     assert summary["ticker"] == "AAPL"
@@ -40,6 +47,7 @@ def test_to_summary_extracts_overview_fields() -> None:
     assert summary["zone_low"] == 170.0
     assert summary["confidence"] == 66.0
     assert summary["warnings"] == ["low data"]
+    assert summary["sparkline"] == [160.0, 162.5, 171.0]
 
 
 def test_build_projection_adds_forward_fibonacci_path() -> None:

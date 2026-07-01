@@ -9,6 +9,7 @@ import { ANALYST_OPTIONS, DEFAULT_ANALYSTS } from "@/lib/analystReports";
 import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 import { DEFAULT_LLM_DEPTH, DEFAULT_LLM_PROVIDER, type LlmDepth, type LlmProvider } from "@/lib/llmConfig";
+import { BTN_PRIMARY_CLASS, FIELD_INPUT_CLASS, FIELD_LABEL_CLASS, selectionPillClass } from "@/lib/uiClasses";
 
 const ANALYSTS = ANALYST_OPTIONS;
 
@@ -106,18 +107,18 @@ export function RunForm({ onSuccess, initialValues }: Props) {
   return (
     <form onSubmit={handleSubmit} className="bg-surface border border-border rounded-lg p-6 max-w-lg">
       <div className="mb-4">
-        <label className="block text-muted text-xs mb-1">Label <span className="text-subtle">(optional)</span></label>
+        <label className={FIELD_LABEL_CLASS}>Label <span className="normal-case text-subtle">(optional)</span></label>
         <input
           type="text"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           placeholder="e.g. pre-earnings check"
-          className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-fg text-sm focus:outline-hidden focus:border-blue-600"
+          className={FIELD_INPUT_CLASS}
         />
       </div>
 
       <div className="mb-4">
-        <label className="block text-muted text-xs mb-1">Ticker</label>
+        <label className={FIELD_LABEL_CLASS}>Ticker</label>
         <input
           required
           type="text"
@@ -125,7 +126,7 @@ export function RunForm({ onSuccess, initialValues }: Props) {
           value={ticker}
           onChange={(e) => setTicker(e.target.value.toUpperCase())}
           placeholder="AAPL"
-          className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-fg text-sm focus:outline-hidden focus:border-blue-600"
+          className={FIELD_INPUT_CLASS}
         />
         <datalist id="ticker-suggestions">
           {POPULAR_TICKERS.map((t) => <option key={t} value={t} />)}
@@ -133,18 +134,18 @@ export function RunForm({ onSuccess, initialValues }: Props) {
       </div>
 
       <div className="mb-4">
-        <label className="block text-muted text-xs mb-1">Analysis Date</label>
+        <label className={FIELD_LABEL_CLASS}>Analysis Date</label>
         <input
           required
           type="date"
           value={analysisDate}
           onChange={(e) => setAnalysisDate(e.target.value)}
-          className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-fg text-sm focus:outline-hidden focus:border-blue-600"
+          className={FIELD_INPUT_CLASS}
         />
       </div>
 
       <div className="mb-4">
-        <label className="block text-muted text-xs mb-1">Analysts</label>
+        <label className={FIELD_LABEL_CLASS}>Analysts</label>
         <div className="flex flex-wrap gap-2">
           {ANALYSTS.map((a) => {
             const selected = analysts.includes(a);
@@ -153,11 +154,7 @@ export function RunForm({ onSuccess, initialValues }: Props) {
                 key={a}
                 type="button"
                 onClick={() => toggleAnalyst(a)}
-                className={`px-3 py-1 rounded border text-xs capitalize ${
-                  selected
-                    ? "bg-blue-700 text-fg border-blue-600"
-                    : "bg-input text-muted border-input-border"
-                }`}
+                className={selectionPillClass(selected)}
               >
                 {a}
               </button>
@@ -178,11 +175,11 @@ export function RunForm({ onSuccess, initialValues }: Props) {
       </div>
 
       <div className="mb-6">
-        <label className="block text-muted text-xs mb-1">Response Language</label>
+        <label className={FIELD_LABEL_CLASS}>Response Language</label>
         <select
           value={responseLanguage}
           onChange={(e) => setResponseLanguage(e.target.value as ResponseLanguage)}
-          className="w-full bg-input border border-input-border rounded-sm px-3 py-2 text-fg text-sm focus:outline-hidden focus:border-blue-600"
+          className={FIELD_INPUT_CLASS}
         >
           {RESPONSE_LANGUAGE_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>{option.label}</option>
@@ -193,7 +190,7 @@ export function RunForm({ onSuccess, initialValues }: Props) {
       <button
         type="submit"
         disabled={mutation.isPending || analysts.length === 0}
-        className="bg-blue-600 hover:bg-blue-700 text-fg rounded-sm px-4 py-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+        className={BTN_PRIMARY_CLASS}
       >
         {mutation.isPending ? "Launching…" : "Launch Run"}
       </button>

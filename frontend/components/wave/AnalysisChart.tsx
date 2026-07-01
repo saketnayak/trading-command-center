@@ -15,9 +15,12 @@ interface AnalysisChartProps {
   hover?: boolean;
   compact?: boolean;
   height?: number | string;
+  maxBars?: number;
   showModeBar?: boolean;
   visibility?: ChartVisibilityOptions;
   className?: string;
+  /** Expand to fill the parent flex container (Quick Look pop-out). */
+  fill?: boolean;
 }
 
 export function AnalysisChart({
@@ -26,35 +29,46 @@ export function AnalysisChart({
   hover = true,
   compact = false,
   height,
+  maxBars,
   showModeBar = false,
   visibility,
   className = "",
+  fill = false,
 }: AnalysisChartProps) {
   const { resolvedTheme } = useTheme();
   const theme = resolvedTheme === "light" ? "light" : "dark";
-  const chartHeight = height ?? (compact ? 190 : 620);
-  const layoutHeight = typeof chartHeight === "number" ? chartHeight : undefined;
+  const chartHeight = fill ? "100%" : (height ?? (compact ? 190 : 620));
+  const layoutHeight = fill ? undefined : typeof height === "number" ? height : compact ? 190 : undefined;
   const { data, layout } = useMemo(
     () => buildChartFigure(chart, title, theme, hover, {
-      compact,
+      compact: fill ? false : compact,
       height: layoutHeight,
+      maxBars,
       visibility,
     }),
-    [chart, title, theme, hover, compact, layoutHeight, visibility],
+    [chart, title, theme, hover, fill, compact, layoutHeight, maxBars, visibility],
   );
 
   return (
-    <div className={`w-full overflow-hidden rounded-lg border border-border bg-surface ${className}`}>
-      <Plot
-        data={data}
-        layout={layout}
-        config={{ responsive: true, displayModeBar: showModeBar }}
-        style={{
-          width: "100%",
-          height: typeof chartHeight === "number" ? `${chartHeight}px` : chartHeight,
-        }}
-        useResizeHandler
-      />
+    <div
+      className={`w-full ${
+        fill
+          ? "flex h-full min-h-0 flex-1 flex-col"
+          : "overflow-hidden rounded-lg border border-border bg-surface"
+      } ${className}`}
+    >
+      <div className={fill ? "min-h-0 flex-1" : undefined}>
+        <Plot
+          data={data}
+          layout={layout}
+          config={{ responsive: true, displayModeBar: showModeBar }}
+          style={{
+            width: "100%",
+            height: typeof chartHeight === "number" ? `${chartHeight}px` : chartHeight,
+          }}
+          useResizeHandler
+        />
+      </div>
     </div>
   );
 }

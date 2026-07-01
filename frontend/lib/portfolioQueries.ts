@@ -59,8 +59,6 @@ export type PortfolioTab =
   | "insights"
   | "earnings"
   | "news"
-  | "trending"
-  | "discover"
   | "chat"
   | "thesis";
 

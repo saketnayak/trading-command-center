@@ -3,19 +3,16 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { TraderDecision } from "@/components/runs/TraderDecision";
-import { AnalystReports } from "@/components/runs/AnalystReports";
-import { BullBearDebate } from "@/components/runs/BullBearDebate";
 import { getAppSettings, getRun, getReport, getRunOutcome, updateRun } from "@/lib/api";
 import { DownloadMenu } from "@/components/runs/DownloadMenu";
-import { OutcomeCard } from "@/components/runs/OutcomeCard";
-import { MarkovConfirmation } from "@/components/runs/MarkovConfirmation";
-import { KalmanConfirmation } from "@/components/runs/KalmanConfirmation";
-import { WaveConfirmation } from "@/components/wave/WaveConfirmation";
-import { LanguageFlag } from "@/components/runs/RunContextIcons";
+import { RunSummaryPanel } from "@/components/runs/RunSummaryPanel";
+import { RunEvidenceTabs } from "@/components/runs/RunEvidenceTabs";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
-import type { Run, RunOutcome } from "@/lib/types";
+import type { Run } from "@/lib/types";
 import { PageShell } from "@/components/layout/PageShell";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { Breadcrumbs, HISTORY_BREADCRUMB, RESEARCH_BREADCRUMB } from "@/components/layout/Breadcrumbs";
+import { TickerLabel } from "@/components/ui/TickerLabel";
 
 function rerunUrl(run: Run): string {
   const p = new URLSearchParams({
@@ -27,71 +24,6 @@ function rerunUrl(run: Run): string {
     response_language: run.response_language,
   });
   return `/runs/new?${p.toString()}`;
-}
-
-function NotesEditor({ id, notes }: { id: string; notes: string | null }) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(notes ?? "");
-  const queryClient = useQueryClient();
-
-  const mutation = useMutation({
-    mutationFn: (next: string) => updateRun(id, { notes: next || null }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["run", id] });
-      queryClient.invalidateQueries({ queryKey: ["runs"] });
-      setEditing(false);
-    },
-  });
-
-  if (editing) {
-    return (
-      <div className="bg-elevated border border-input-border rounded-lg p-4 flex flex-col gap-2">
-        <label className="text-xs text-muted uppercase tracking-wide">Notes</label>
-        <textarea
-          autoFocus
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="What did you decide? Did you take the trade? Any context worth keeping…"
-          rows={4}
-          className="bg-page border border-input-border rounded px-3 py-2 text-sm text-fg focus:outline-none focus:border-blue-500 resize-y"
-        />
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <button
-            onClick={() => mutation.mutate(value)}
-            disabled={mutation.isPending}
-            className="bg-blue-600 hover:bg-blue-700 text-fg text-xs rounded px-3 py-1.5 disabled:opacity-50"
-          >
-            {mutation.isPending ? "Saving…" : "Save"}
-          </button>
-          <button
-            onClick={() => { setValue(notes ?? ""); setEditing(false); }}
-            className="text-xs text-muted hover:text-fg-secondary"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-elevated border border-input-border rounded-lg p-4 flex items-start justify-between gap-4">
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-muted uppercase tracking-wide mb-1">Notes</p>
-        {notes ? (
-          <p className="text-sm text-fg whitespace-pre-wrap wrap-break-word">{notes}</p>
-        ) : (
-          <p className="text-sm text-subtle italic">No notes yet — capture your decision or context.</p>
-        )}
-      </div>
-      <button
-        onClick={() => { setValue(notes ?? ""); setEditing(true); }}
-        className="text-xs text-muted hover:text-blue-400 shrink-0"
-      >
-        {notes ? "Edit" : "Add"}
-      </button>
-    </div>
-  );
 }
 
 function LabelEditor({ id, label }: { id: string; label: string | null }) {
@@ -111,7 +43,7 @@ function LabelEditor({ id, label }: { id: string; label: string | null }) {
   if (editing) {
     return (
       <form
-        className="flex items-center gap-2"
+        className="flex flex-wrap items-center gap-2"
         onSubmit={(e) => { e.preventDefault(); mutation.mutate(value); }}
       >
         <input
@@ -119,7 +51,7 @@ function LabelEditor({ id, label }: { id: string; label: string | null }) {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Add a label…"
-          className="bg-page border border-input-border rounded-sm px-2 py-0.5 text-sm text-fg focus:outline-hidden focus:border-blue-500 w-48"
+          className="bg-page border border-input-border rounded-sm px-2 py-0.5 text-sm text-fg focus:outline-hidden focus:border-blue-500 w-full sm:w-48"
         />
         <button type="submit" disabled={mutation.isPending} className="text-xs text-blue-400 hover:text-blue-300">
           {mutation.isPending ? "Saving…" : "Save"}
@@ -134,7 +66,7 @@ function LabelEditor({ id, label }: { id: string; label: string | null }) {
   return (
     <button
       onClick={() => { setValue(label ?? ""); setEditing(true); }}
-      className="flex items-center gap-1.5 text-sm text-muted hover:text-fg group"
+      className="flex items-center gap-1.5 text-sm text-muted hover:text-fg group text-left"
       title="Click to edit label"
     >
       {label ? (
@@ -172,7 +104,7 @@ export default function RunResultsPage() {
     retry: false,
   });
 
-  const { data: outcome } = useQuery<RunOutcome>({
+  const { data: outcome } = useQuery({
     queryKey: ["outcome", id],
     queryFn: () => getRunOutcome(id),
     enabled: run?.status === "completed",
@@ -190,14 +122,19 @@ export default function RunResultsPage() {
     retry: false,
   });
 
+  const strategy = {
+    markovEnabled: strategySettings?.enableMarkovRegime !== false,
+    kalmanEnabled: strategySettings?.enableKalmanFilter !== false,
+    waveEnabled: strategySettings?.enableElliottWave !== false,
+  };
+
   const isRunning = run?.status === "pending" || run?.status === "running";
+  const metadata = run ? tickerMetadata[run.ticker.toUpperCase()] : undefined;
 
   if (runLoading) {
     return (
-      <PageShell width="default" gap="6">
-        <Link href="/runs" className="text-blue-400 hover:underline text-sm">
-          ← Back to History
-        </Link>
+      <PageShell gap="6">
+        <PageHeader back={{ href: "/runs", label: "← Back to History" }} />
         <div className="bg-surface border border-input-border rounded-lg px-4 py-6 text-sm text-muted">
           Loading run…
         </div>
@@ -207,10 +144,8 @@ export default function RunResultsPage() {
 
   if (runIsError || !run) {
     return (
-      <PageShell width="default" gap="6">
-        <Link href="/runs" className="text-blue-400 hover:underline text-sm">
-          ← Back to History
-        </Link>
+      <PageShell gap="6">
+        <PageHeader back={{ href: "/runs", label: "← Back to History" }} />
         <div className="bg-surface border border-red-500/40 rounded-lg px-4 py-6 text-sm text-red-300">
           {runError instanceof Error ? runError.message : "Failed to load this run."}
         </div>
@@ -219,84 +154,67 @@ export default function RunResultsPage() {
   }
 
   return (
-    <PageShell width="default" gap="6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-            <Link href="/runs" className="text-blue-400 hover:underline text-sm">
-              ← Back to History
-            </Link>
+    <PageShell gap="6">
+      <Breadcrumbs
+        className="mb-1"
+        items={[
+          RESEARCH_BREADCRUMB,
+          HISTORY_BREADCRUMB,
+          { label: `${run.ticker} Run` },
+        ]}
+      />
+      <PageHeader
+        title={
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <TickerLabel ticker={run.ticker} metadata={metadata} logoSize="md" className="text-lg" />
             <LabelEditor id={id} label={run.label} />
           </div>
+        }
+        actions={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {run && (
-              <Link href={rerunUrl(run)} className="text-muted hover:text-blue-400 text-sm">
-                Re-run
-              </Link>
-            )}
-            {run && (
-              <Link href={`/runs/compare?a=${id}`} className="text-muted hover:text-blue-400 text-sm">
-                Compare →
-              </Link>
-            )}
+            <Link href={rerunUrl(run)} className="text-muted hover:text-blue-400 text-sm">
+              Re-run
+            </Link>
+            <Link href={`/runs/compare?a=${id}`} className="text-muted hover:text-blue-400 text-sm">
+              Compare →
+            </Link>
             <DownloadMenu run={run} report={report} />
           </div>
+        }
+      />
+
+      {isRunning && (
+        <div className="bg-surface border border-input-border rounded-lg px-4 py-3 text-sm text-fg-secondary">
+          Run in progress —{" "}
+          <Link href={`/runs/${id}/live`} className="text-blue-400 hover:underline">
+            View live feed →
+          </Link>
         </div>
+      )}
 
-        {isRunning && (
-          <div className="bg-surface border border-input-border rounded-lg px-4 py-3 text-sm text-fg-secondary">
-            Run in progress —{" "}
-            <Link href={`/runs/${id}/live`} className="text-blue-400 hover:underline">
-              View live feed →
-            </Link>
-          </div>
-        )}
+      {run.status === "completed" && reportLoading && (
+        <div className="bg-surface border border-input-border rounded-lg px-4 py-3 text-sm text-muted">
+          Loading report…
+        </div>
+      )}
 
-        {run.status === "completed" && reportLoading && (
-          <div className="bg-surface border border-input-border rounded-lg px-4 py-3 text-sm text-muted">
-            Loading report…
-          </div>
-        )}
+      {run.status === "completed" && reportIsError && (
+        <div className="bg-surface border border-red-500/40 rounded-lg px-4 py-3 text-sm text-red-300">
+          {reportError instanceof Error ? reportError.message : "Failed to load report."}
+        </div>
+      )}
 
-        {run.status === "completed" && reportIsError && (
-          <div className="bg-surface border border-red-500/40 rounded-lg px-4 py-3 text-sm text-red-300">
-            {reportError instanceof Error ? reportError.message : "Failed to load report."}
-          </div>
-        )}
-
-        <TraderDecision
+      <div className="flex flex-col lg:flex-row gap-6 lg:items-start">
+        <RunSummaryPanel
+          runId={id}
           run={run}
           report={report}
-          metadata={run ? tickerMetadata[run.ticker.toUpperCase()] : undefined}
+          outcome={outcome}
+          metadata={metadata}
+          strategy={strategy}
         />
-        {run && strategySettings?.enableMarkovRegime !== false && <MarkovConfirmation ticker={run.ticker} verdict={run.verdict} />}
-        {run && strategySettings?.enableKalmanFilter !== false && (
-          <KalmanConfirmation
-            ticker={run.ticker}
-            verdict={run.verdict}
-            priceCurrency={report?.price_currency ?? run.price_currency}
-            metadataCurrency={run ? tickerMetadata[run.ticker.toUpperCase()]?.currency : undefined}
-          />
-        )}
-        {run && strategySettings?.enableElliottWave !== false && (
-          <WaveConfirmation
-            ticker={run.ticker}
-            verdict={run.verdict}
-            suggestedEntry={report?.suggested_entry}
-            suggestedStop={report?.suggested_stop}
-            suggestedTarget={report?.suggested_target}
-            priceCurrency={report?.price_currency ?? run.price_currency}
-          />
-        )}
-        {run && (
-          <div className="bg-surface border border-input-border rounded-lg px-4 py-3 text-xs text-muted flex items-center gap-2">
-            Response language:
-            <LanguageFlag value={run.response_language} />
-          </div>
-        )}
-        {outcome && <OutcomeCard outcome={outcome} />}
-        {run && <NotesEditor id={id} notes={run.notes} />}
-        <AnalystReports report={report} analysts={run?.analysts ?? []} />
-        <BullBearDebate report={report} />
+        <RunEvidenceTabs run={run} report={report} />
+      </div>
     </PageShell>
   );
 }

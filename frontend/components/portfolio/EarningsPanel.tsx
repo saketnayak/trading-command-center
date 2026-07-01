@@ -6,6 +6,7 @@ import {
   PORTFOLIO_STALE_TIMES,
   PORTFOLIO_EARNINGS_DAYS_AHEAD,
 } from "@/lib/portfolioQueries";
+import { ALERT_BANNER_CLASS } from "@/lib/uiClasses";
 import { finnhubUnavailableMessage } from "@/lib/finnhubMessages";
 import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
@@ -98,7 +99,7 @@ export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }:
   return (
     <div className="space-y-2">
       {unavailableMessage && (
-        <div className="text-xs text-amber-400/90 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2">
+        <div className={ALERT_BANNER_CLASS}>
           {unavailableMessage}
         </div>
       )}
@@ -106,7 +107,7 @@ export function EarningsPanel({ portfolioId, holdings, priceUnavailableReason }:
         Upcoming earnings dates for your holdings (next 60 days). Dates flagged{" "}
         <span className="text-yellow-400">yellow</span> have stale or missing analysis.
       </p>
-      <div className="overflow-x-auto rounded-sm border border-border">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
           <thead className="bg-surface text-muted text-xs uppercase tracking-wider">
             <tr>

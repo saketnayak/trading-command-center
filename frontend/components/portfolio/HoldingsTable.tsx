@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, LoaderCircle, Pencil, Play, Plus, Trash2, X } from "lucide-react";
+import { Check, LoaderCircle, Pencil, Play, Plus, Trash2, X, Briefcase } from "lucide-react";
 import { addHolding, updateHolding, deleteHolding } from "@/lib/api";
 import { fmtMoney, fmtPnl, SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { analysisFromLastRun } from "@/lib/holdingLastRun";
@@ -12,6 +12,9 @@ import { TickerLabel } from "@/components/ui/TickerLabel";
 import { WaveBadge } from "@/components/wave/WaveBadge";
 import type { PortfolioHolding, FundamentalsData, RegimeData, WaveSummary, TrimSignalEntry, FinnhubUnavailableReason, TickerMetadata } from "@/lib/types";
 import { finnhubUnavailableMessage } from "@/lib/finnhubMessages";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { HoldingsMobileCards } from "@/components/portfolio/HoldingsMobileCards";
+import { FIELD_INPUT_SM_CLASS, BTN_SECONDARY_CLASS, ALERT_BANNER_CLASS } from "@/lib/uiClasses";
 
 interface HoldingsTableProps {
   portfolioId: string;
@@ -25,6 +28,7 @@ interface HoldingsTableProps {
   trimSignals?: Record<string, TrimSignalEntry>;
   tickerMetadata?: Record<string, TickerMetadata>;
   onTickerClick?: (holding: PortfolioHolding) => void;
+  onUploadClick?: () => void;
 }
 
 interface DraftRow {
@@ -113,7 +117,7 @@ function EditInput({
       onChange={(e) => onChange(e.target.value)}
       onKeyDown={onKeyDown}
       placeholder={placeholder}
-      className={`bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg focus:outline-hidden focus:border-blue-500 ${className ?? ""}`}
+      className={`bg-input border border-input-border rounded-md px-2 py-1 text-xs text-fg focus:outline-hidden focus:border-blue-500 ${className ?? ""}`}
     />
   );
 }
@@ -344,7 +348,7 @@ function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, fundamentalsUnavailableReason, displayCurrency, fundamentals, regime, wave, trimSignals, tickerMetadata = {}, onTickerClick }: HoldingsTableProps) {
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, fundamentalsUnavailableReason, displayCurrency, fundamentals, regime, wave, trimSignals, tickerMetadata = {}, onTickerClick, onUploadClick }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "", currency: displayCurrency });
@@ -358,6 +362,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
   const [filterPeg, setFilterPeg] = useState("");
   const [filterRegime, setFilterRegime] = useState("");
   const [trimOnly, setTrimOnly] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [showDetailColumns, setShowDetailColumns] = useState(false);
   const newTickerRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -523,33 +529,86 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
   return (
     <div className="space-y-3">
       {priceUnavailableReason === "no_finnhub_key" && (
-        <div className="text-xs text-amber-400/80 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2">
+        <div className={`${ALERT_BANNER_CLASS} text-amber-400/80`}>
           Showing delayed prices via Yahoo Finance — add your Finnhub API key in{" "}
           <Link href="/settings" className="text-blue-400 hover:underline">Settings</Link>{" "}
           for real-time data.
         </div>
       )}
       {fundamentalsMessage && (
-        <div className="text-xs text-amber-400/90 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2">
+        <div className={ALERT_BANNER_CLASS}>
           {fundamentalsMessage}
         </div>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        {/* Ticker search */}
+        <button
+          type="button"
+          onClick={() => setFiltersOpen((v) => !v)}
+          className={`${BTN_SECONDARY_CLASS} gap-1.5`}
+          aria-expanded={filtersOpen}
+        >
+          Filters
+          {isFiltered && (
+            <span className="min-w-[16px] rounded-md bg-blue-600 px-1.5 py-0.5 text-center font-mono text-[10px] leading-none text-white">
+              {filteredHoldings.length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowDetailColumns((v) => !v)}
+          className={BTN_SECONDARY_CLASS}
+          aria-pressed={showDetailColumns}
+          title={
+            !showDetailColumns && (hasRegime || hasTrimSignals)
+              ? "Show price, value, regime agreement, and trim columns. Expand a row for full fundamentals."
+              : undefined
+          }
+        >
+          {showDetailColumns ? "Fewer columns" : "More columns"}
+        </button>
+        {!showDetailColumns && (hasRegime || hasTrimSignals) && (
+          <span className="text-xs text-muted">
+            Regime &amp; trim signals in more columns · expand rows for fundamentals
+          </span>
+        )}
+        {isFiltered && (
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-muted tabular-nums">
+              {filteredHoldings.length} / {holdings.length}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setFilterTicker("");
+                setFilterSignal("");
+                setFilterPeg("");
+                setFilterRegime("");
+                setTrimOnly(false);
+              }}
+              className="text-xs text-muted hover:text-fg"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+      </div>
+
+      {filtersOpen && (
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-input-border bg-input/30 p-3">
         <input
           type="text"
           value={filterTicker}
           onChange={(e) => setFilterTicker(e.target.value)}
           placeholder="Filter by ticker…"
-          className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-xs text-fg w-40 focus:outline-hidden focus:border-blue-500 placeholder-slate-500"
+          className={`${FIELD_INPUT_SM_CLASS} w-40 text-xs`}
         />
 
-        {/* Signal filter */}
         <select
           value={filterSignal}
           onChange={(e) => setFilterSignal(e.target.value)}
-          className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-xs text-fg focus:outline-hidden focus:border-blue-500"
+          className={`${FIELD_INPUT_SM_CLASS} w-auto text-xs`}
         >
           <option value="">All signals</option>
           <option value="buy">Buy</option>
@@ -558,12 +617,11 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
           <option value="none">Not analyzed</option>
         </select>
 
-        {/* PEG filter */}
         {hasFundamentals && (
           <select
             value={filterPeg}
             onChange={(e) => setFilterPeg(e.target.value)}
-            className="bg-input/80 border border-input-border rounded-lg px-2.5 py-1.5 text-xs text-fg focus:outline-none focus:border-blue-500/60 cursor-pointer transition-colors"
+            className={`${FIELD_INPUT_SM_CLASS} w-auto text-xs`}
           >
             <option value="">All PEG</option>
             <option value="undervalued">Undervalued (&lt; 1)</option>
@@ -573,9 +631,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
           </select>
         )}
 
-        {/* Regime filter — pill toggles */}
         {hasRegime && (
-          <div className="flex items-center rounded-lg border border-input-border bg-input/80 p-0.5 gap-0.5">
+          <div className="flex items-center rounded-lg border border-input-border bg-input p-0.5 gap-0.5">
             {(["", "Bull", "Sideways", "Bear"] as const).map((val) => {
               const isActive = filterRegime === val;
               const label = val === "" ? "All" : val === "Sideways" ? "Sidew." : val;
@@ -606,7 +663,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
           <button
             type="button"
             onClick={() => setTrimOnly((v) => !v)}
-            className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium border transition-colors ${
               trimOnly
                 ? "bg-orange-500/20 text-orange-300 border-orange-500/50"
                 : "bg-transparent text-muted border-input-border hover:border-border-strong"
@@ -615,49 +672,143 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
             Trim signals only
           </button>
         )}
-
-        {isFiltered && (
-          <div className="flex items-center gap-1.5 ml-1">
-            <span className="text-xs text-muted tabular-nums">
-              {filteredHoldings.length} / {holdings.length}
-            </span>
-            <button
-              onClick={() => { setFilterTicker(""); setFilterSignal(""); setFilterPeg(""); setFilterRegime(""); setTrimOnly(false); }}
-              className="text-[11px] text-muted hover:text-fg border border-input-border hover:border-border-strong rounded px-1.5 py-0.5 transition-colors"
-            >
-              ✕ Clear
-            </button>
-          </div>
-        )}
       </div>
+      )}
 
-      <div className="overflow-x-auto rounded-sm border border-border">
+      {sortedHoldings.length === 0 && !addingNew ? (
+        <EmptyState
+          icon={Briefcase}
+          title={isFiltered ? "No holdings match filters" : "No holdings yet"}
+          description={
+            isFiltered
+              ? "Try clearing filters or broadening your search."
+              : "Add a row manually or upload a CSV snapshot to get started."
+          }
+          action={
+            isFiltered
+              ? undefined
+              : { label: "Add holding", onClick: () => setAddingNew(true) }
+          }
+          secondaryAction={
+            !isFiltered && onUploadClick
+              ? { label: "Upload CSV", onClick: onUploadClick }
+              : undefined
+          }
+        />
+      ) : (
+        <>
+          {addingNew && (
+            <div className="md:hidden rounded-lg border border-dashed border-input-border bg-input/20 p-4 space-y-3">
+              <p className="text-xs font-medium text-muted uppercase tracking-wide">New holding</p>
+              <div className="grid grid-cols-2 gap-2">
+                <EditInput
+                  autoFocus
+                  value={newDraft.ticker}
+                  onChange={(v) => setNewDraft((d) => ({ ...d, ticker: v }))}
+                  onKeyDown={handleNewKey}
+                  placeholder="AAPL"
+                  className="col-span-2 uppercase"
+                />
+                <EditInput
+                  value={newDraft.shares}
+                  onChange={(v) => {
+                    if (v === "" || /^\d*\.?\d*$/.test(v)) setNewDraft((d) => ({ ...d, shares: v }));
+                  }}
+                  onKeyDown={handleNewKey}
+                  placeholder="Shares"
+                  className="text-right"
+                />
+                <EditInput
+                  value={newDraft.avg_cost}
+                  onChange={(v) => {
+                    if (v === "" || /^\d*\.?\d*$/.test(v)) setNewDraft((d) => ({ ...d, avg_cost: v }));
+                  }}
+                  onKeyDown={handleNewKey}
+                  placeholder="Avg cost"
+                  className="text-right"
+                />
+              </div>
+              <div className="flex gap-1.5">
+                <IconButton
+                  icon={addMutation.isPending ? LoaderCircle : Check}
+                  label="Add holding"
+                  title="Add"
+                  tone="success"
+                  onClick={saveNew}
+                  disabled={addMutation.isPending}
+                  iconClassName={addMutation.isPending ? "animate-spin" : undefined}
+                />
+                <IconButton
+                  icon={X}
+                  label="Cancel adding holding"
+                  title="Cancel"
+                  tone="default"
+                  onClick={() => {
+                    setAddingNew(false);
+                    setNewDraft({ ticker: "", shares: "", avg_cost: "", currency: displayCurrency });
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          <HoldingsMobileCards
+            holdings={sortedHoldings}
+            displayCurrency={displayCurrency}
+            fundamentals={fundamentals}
+            regime={regime}
+            wave={wave}
+            trimSignals={trimSignals}
+            tickerMetadata={tickerMetadata}
+            onTickerClick={onTickerClick}
+            editingId={editingId}
+            editDraft={editDraft}
+            setEditDraft={setEditDraft}
+            onStartEdit={startEdit}
+            onCancelEdit={cancelEdit}
+            onSaveEdit={saveEdit}
+            editSaving={updateMutation.isPending}
+            onDelete={(id) => deleteMutation.mutate(id)}
+            deletePending={deleteMutation.isPending}
+            expandedIds={expandedIds}
+            onToggleExpand={toggleExpand}
+          />
+
+      <div className="hidden md:block overflow-x-auto rounded-lg border border-border">
         <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-surface text-muted text-xs uppercase tracking-wider">
+          <thead className="sticky top-0 bg-surface text-muted text-xs">
             <tr>
               <SortableHeader label="Ticker"         colKey="ticker"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} align="left" />
               <SortableHeader label="Position"       colKey="shares"         sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <SortableHeader label="Current Price"  colKey="current_price"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="hidden lg:table-cell" />
-              <SortableHeader label="Market Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="hidden lg:table-cell" />
+              {showDetailColumns && (
+                <>
+                  <SortableHeader label="Price"  colKey="current_price"  sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="hidden lg:table-cell" />
+                  <SortableHeader label="Value"   colKey="market_value"   sortKey={sortKey} sortDir={sortDir} onSort={handleSort} className="hidden lg:table-cell" />
+                </>
+              )}
               <SortableHeader label="Unrealized P&L" colKey="unrealized_pnl" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-              <th className="text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">Last Analysis</th>
-              {hasRegime && (
-                <th className="hidden lg:table-cell text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">AI vs Regime</th>
+              <th className="text-left px-3 py-3 whitespace-nowrap text-xs text-muted">Last analysis</th>
+              {showDetailColumns && hasRegime && (
+                <th
+                  className="hidden lg:table-cell text-left px-3 py-3 whitespace-nowrap text-xs text-muted"
+                  title="Compares latest AI verdict (buy/sell/hold) with the Markov regime signal (bull/sideways/bear)"
+                >
+                  AI vs regime
+                </th>
               )}
-              {hasTrimSignals && (
-                <th className="hidden lg:table-cell text-left px-3 py-3 whitespace-nowrap text-muted text-xs uppercase tracking-wider">Trim</th>
+              {showDetailColumns && hasTrimSignals && (
+                <th
+                  className="hidden lg:table-cell text-left px-3 py-3 whitespace-nowrap text-xs text-muted"
+                  title="Sell-candidate score from regime, fundamentals, and position size — strong trim suggests reducing exposure"
+                >
+                  Trim
+                </th>
               )}
-              <th className="text-left px-3 py-3">Actions</th>
+              <th className="text-left px-3 py-3 text-xs text-muted">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {sortedHoldings.length === 0 && !addingNew ? (
-              <tr>
-                <td colSpan={colSpan} className="text-center text-muted px-4 py-8">
-                  {isFiltered ? "No holdings match the current filters." : "No holdings. Add a row below or upload a CSV."}
-                </td>
-              </tr>
-            ) : (
+            {sortedHoldings.length === 0 && !addingNew ? null : (
               sortedHoldings.map((h) => {
                 const isEditing = editingId === h.id;
                 const isExpanded = expandedIds.has(h.id);
@@ -708,11 +859,13 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                                 }
                               />
                               <div className="flex min-w-0 flex-wrap items-center gap-1">
-                                {fundData && fundData.asset_type === "stock" && (
+                                {showDetailColumns && fundData && fundData.asset_type === "stock" && (
                                   <PegBadge peg={fundData.peg_ratio} />
                                 )}
-                                {regime?.[h.ticker] && <RegimeBadge data={regime[h.ticker]} />}
-                                {wave?.[h.ticker.toUpperCase()] && (
+                                {showDetailColumns && regime?.[h.ticker] && (
+                                  <RegimeBadge data={regime[h.ticker]} />
+                                )}
+                                {showDetailColumns && wave?.[h.ticker.toUpperCase()] && (
                                   <WaveBadge data={wave[h.ticker.toUpperCase()]} />
                                 )}
                               </div>
@@ -722,7 +875,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                       </td>
 
                       {/* Position: shares + avg cost stacked */}
-                      <td className="px-3 py-2 text-right tabular-nums">
+                      <td className="px-3 py-2 text-right font-data">
                         {isEditing ? (
                           <div className="flex flex-col gap-1 items-end">
                             <EditInput
@@ -754,8 +907,8 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                           </div>
                         ) : (
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-fg-secondary font-mono text-xs">{h.shares.toLocaleString("en-US")} sh</span>
-                            <span className="text-muted font-mono text-[10px]">
+                            <span className="text-fg-secondary font-data text-xs">{h.shares.toLocaleString("en-US")} sh</span>
+                            <span className="text-muted font-data text-[10px]">
                               @ {fmtMoney(h.avg_cost, h.cost_basis_currency ?? h.currency ?? displayCurrency)}
                             </span>
                           </div>
@@ -763,23 +916,27 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                       </td>
 
                       {/* Current Price (read-only) */}
-                      <td className="hidden lg:table-cell px-3 py-2 text-right text-fg-secondary tabular-nums font-mono text-xs">
-                        {fmtMoney(h.current_price, h.quote_currency ?? displayCurrency)}
-                      </td>
+                      {showDetailColumns && (
+                        <td className="hidden lg:table-cell px-3 py-2 text-right text-fg-secondary font-data text-xs">
+                          {fmtMoney(h.current_price, h.quote_currency ?? displayCurrency)}
+                        </td>
+                      )}
 
                       {/* Market Value (read-only) */}
-                      <td className="hidden lg:table-cell px-3 py-2 text-right text-fg-secondary tabular-nums font-mono text-xs">
-                        {fmtMoney(h.market_value, h.quote_currency ?? displayCurrency)}
-                      </td>
+                      {showDetailColumns && (
+                        <td className="hidden lg:table-cell px-3 py-2 text-right text-fg-secondary font-data text-xs">
+                          {fmtMoney(h.market_value, h.quote_currency ?? displayCurrency)}
+                        </td>
+                      )}
 
                       {/* Unrealized P&L (read-only) */}
-                      <td className={`px-3 py-2 text-right tabular-nums ${pnlColor}`}>
+                      <td className={`px-3 py-2 text-right font-data ${pnlColor}`}>
                         {h.pnl_unavailable_reason === "currency_mismatch" ? (
-                          <div className="font-mono text-[10px] text-amber-400" title="Cost basis and quote currencies differ">
+                          <div className="font-data text-[10px] text-amber-400" title="Cost basis and quote currencies differ">
                             —
                           </div>
                         ) : (
-                          <div className="font-semibold font-mono text-xs">
+                          <div className="font-semibold font-data text-xs">
                             {fmtPnl(pnl, h.unrealized_pnl_pct, h.quote_currency ?? displayCurrency)}
                           </div>
                         )}
@@ -831,7 +988,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                       </td>
 
                       {/* AI vs Regime */}
-                      {hasRegime && (() => {
+                      {showDetailColumns && hasRegime && (() => {
                         const r = regime?.[h.ticker];
                         const verdict = rowEntry?.verdict;
                         if (!r || !verdict) return <td className="hidden lg:table-cell px-3 py-2 text-muted text-xs">—</td>;
@@ -864,7 +1021,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                       })()}
 
                       {/* Trim */}
-                      {hasTrimSignals && (
+                      {showDetailColumns && hasTrimSignals && (
                         <td className="hidden lg:table-cell px-3 py-2">
                           <TrimBadge entry={trimSignals?.[h.id]} />
                         </td>
@@ -1006,8 +1163,10 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
           </tbody>
         </table>
       </div>
+        </>
+      )}
 
-      {!addingNew && (
+      {!addingNew && sortedHoldings.length > 0 && (
         <button
           onClick={() => setAddingNew(true)}
           className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg-secondary border border-dashed border-input-border hover:border-border-strong rounded-sm px-3 py-1.5 transition-colors"

@@ -7,27 +7,32 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { responseLanguageLabel } from "@/lib/responseLanguage";
+import {
+  ANALYST_ICON_BADGE,
+  ANALYST_ICON_BADGE_FALLBACK,
+  LANGUAGE_FLAG_BADGE,
+} from "@/lib/uiClasses";
 
 const analystIcon: Record<string, { icon: LucideIcon; label: string; className: string }> = {
   market: {
     icon: BarChart3,
     label: "Market analyst",
-    className: "text-blue-300 bg-blue-950/50 border-blue-700/50",
+    className: ANALYST_ICON_BADGE.market,
   },
   social: {
     icon: MessageCircle,
     label: "Social sentiment analyst",
-    className: "text-pink-300 bg-pink-950/40 border-pink-700/40",
+    className: ANALYST_ICON_BADGE.social,
   },
   news: {
     icon: Newspaper,
     label: "News analyst",
-    className: "text-amber-300 bg-amber-950/40 border-amber-700/40",
+    className: ANALYST_ICON_BADGE.news,
   },
   fundamentals: {
     icon: Building2,
     label: "Fundamentals analyst",
-    className: "text-emerald-300 bg-emerald-950/40 border-emerald-700/40",
+    className: ANALYST_ICON_BADGE.fundamentals,
   },
 };
 
@@ -76,7 +81,7 @@ export function AnalystIconBadge({ analyst }: { analyst: string }) {
   const config = analystIcon[analyst] ?? {
     icon: BookOpen,
     label: `${analyst} analyst`,
-    className: "text-muted bg-input border-input-border",
+    className: ANALYST_ICON_BADGE_FALLBACK,
   };
 
   return (
@@ -94,7 +99,7 @@ export function LanguageFlag({ value }: { value: string }) {
 
   return (
     <span
-      className="inline-flex h-6 min-w-6 items-center justify-center rounded-full border border-violet-700/40 bg-violet-950/40 px-1.5 text-sm leading-none"
+      className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full border px-1.5 text-sm leading-none ${LANGUAGE_FLAG_BADGE}`}
       title={`Response language: ${language}`}
       aria-label={`Response language: ${language}`}
     >
