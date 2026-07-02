@@ -155,7 +155,28 @@
 
 /** Readable line length for AI report / markdown bodies. */
 @utility prose-report {
-  max-width: 65ch;
+  width: 100%;
+  max-width: min(65ch, 100%);
+  min-width: 0;
+}
+
+@layer components {
+  /* ponytail: table-layout:fixed wraps cells; upgrade = horizontal scroll only on wide tables */
+  .prose-report div:has(> table) {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .prose-report table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
+  }
+
+  .prose-report :is(th, td) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
 
 @layer utilities {
@@ -237,11 +258,11 @@
 .upload-drawer-csv-importer .CSVImporter_ColumnDragCard {
   background: var(--af-input);
   color: var(--af-fg);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--af-fg) 12%, transparent);
 }
 
 .dark .upload-drawer-csv-importer .CSVImporter_ColumnDragCard {
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--af-fg) 35%, transparent);
 }
 
 .upload-drawer-csv-importer .CSVImporter_ColumnDragCard__cardHeader {
