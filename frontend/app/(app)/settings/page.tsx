@@ -42,20 +42,24 @@ import {
   type AppSettings,
 } from "@/lib/appSettings";
 import { PageShell } from "@/components/layout/PageShell";
+import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
+import { SectionCard } from "@/components/settings/SectionCard";
+import { SettingsLayout } from "@/components/settings/SettingsLayout";
+import { visibleSettingsSections } from "@/lib/settingsNav";
+import {
+  BTN_DANGER_CLASS,
+  BTN_DANGER_SM_CLASS,
+  BTN_GHOST_CLASS,
+  BTN_PRIMARY_SM_CLASS,
+  BTN_SECONDARY_CLASS,
+  FIELD_INPUT_CLASS,
+  FIELD_INPUT_SM_CLASS,
+} from "@/lib/uiClasses";
 
-function SectionCard({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <div className="mb-3">
-        <h2 className="text-fg text-base font-semibold">{title}</h2>
-        {description && <p className="text-muted text-xs mt-0.5">{description}</p>}
-      </div>
-      <div className="bg-surface border border-border rounded-lg overflow-hidden">
-        {children}
-      </div>
-    </section>
-  );
-}
+const SETTINGS_INPUT_CLASS = `${FIELD_INPUT_CLASS} w-full sm:max-w-xs`;
+const SETTINGS_INPUT_MD_CLASS = `${FIELD_INPUT_CLASS} w-full sm:max-w-md`;
+const SETTINGS_INPUT_NARROW_CLASS = `${FIELD_INPUT_CLASS} w-32`;
+const SETTINGS_INPUT_COMPACT_CLASS = `${FIELD_INPUT_SM_CLASS} w-full sm:max-w-xs`;
 
 function Divider() {
   return <div className="border-t border-border" />;
@@ -184,11 +188,12 @@ function StrategySettingsPanel({ isAdmin }: { isAdmin: boolean }) {
     if (isAdmin) mutation.mutate(APP_SETTINGS_DEFAULTS);
   }
 
-  const inputClass = "bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500";
+  const inputClass = SETTINGS_INPUT_CLASS;
   const disabled = !isAdmin || isLoading || mutation.isPending;
 
   return (
     <SectionCard
+      id="strategy"
       title="Strategy Configuration"
       description="Controls analytical module visibility and Kalman trend/noise defaults."
     >
@@ -261,7 +266,7 @@ function StrategySettingsPanel({ isAdmin }: { isAdmin: boolean }) {
               setStatus("idle");
             }}
             disabled={disabled}
-            className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+            className={SETTINGS_INPUT_CLASS}
           >
             <option value="causal">Live Tracking (Causal)</option>
             <option value="historical">Historical View (Smoothed)</option>
@@ -312,7 +317,7 @@ function StrategySettingsPanel({ isAdmin }: { isAdmin: boolean }) {
           <button
             onClick={handleSave}
             disabled={disabled}
-            className="bg-blue-600 hover:bg-blue-700 text-fg rounded-sm px-4 py-1.5 text-xs disabled:opacity-50"
+            className={BTN_PRIMARY_SM_CLASS}
           >
             {mutation.isPending ? "Saving..." : "Save Strategy Settings"}
           </button>
@@ -499,10 +504,12 @@ export default function SettingsPage() {
 
   return (
     <>
-    <PageShell width="settings" gap="8">
+    <PageShell gap="6">
+        <PageHeader title={<PageTitle>Settings</PageTitle>} />
 
-        {/* Profile */}
-        <SectionCard title="My Profile" description="Your display name and login credentials.">
+        <SettingsLayout sections={visibleSettingsSections(isAdmin)}>
+
+        <SectionCard id="profile" title="My Profile" description="Your display name and login credentials.">
           <div className="px-4 py-4 flex flex-col gap-4">
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
               <label className="text-muted text-xs sm:w-32 shrink-0">Display Name</label>
@@ -510,7 +517,7 @@ export default function SettingsPage() {
                 type="text"
                 value={profileName}
                 onChange={(e) => { setProfileName(e.target.value); setProfileStatus("idle"); }}
-                className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+                className={SETTINGS_INPUT_CLASS}
               />
             </div>
             <Divider />
@@ -523,7 +530,7 @@ export default function SettingsPage() {
                   value={currentPassword}
                   onChange={(e) => { setCurrentPassword(e.target.value); setProfileStatus("idle"); }}
                   placeholder="Current password"
-                  className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+                  className={SETTINGS_INPUT_CLASS}
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -533,7 +540,7 @@ export default function SettingsPage() {
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); setProfileStatus("idle"); }}
                   placeholder="New password"
-                  className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+                  className={SETTINGS_INPUT_CLASS}
                 />
               </div>
             </div>
@@ -548,7 +555,7 @@ export default function SettingsPage() {
               <select
                 value={preferredCurrency}
                 onChange={(e) => { setPreferredCurrency(e.target.value); setProfileStatus("idle"); }}
-                className="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-32 focus:outline-hidden focus:border-blue-500"
+                className={SETTINGS_INPUT_NARROW_CLASS}
               >
                 {SUPPORTED_CURRENCIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
@@ -567,16 +574,16 @@ export default function SettingsPage() {
                 value={defaultLlmConfig}
                 onChange={(value) => { setDefaultLlmConfig(value); setProfileStatus("idle"); }}
                 showDepth
-                providerClassName="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
-                modelClassName="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-md focus:outline-hidden focus:border-blue-500"
-                depthClassName="bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+                providerClassName={SETTINGS_INPUT_CLASS}
+                modelClassName={SETTINGS_INPUT_MD_CLASS}
+                depthClassName={SETTINGS_INPUT_CLASS}
               />
             </div>
             <div className="flex items-center gap-3 pt-1">
               <button
                 onClick={() => profileMutation.mutate()}
                 disabled={profileMutation.isPending}
-                className="bg-blue-600 hover:bg-blue-700 text-fg rounded-sm px-4 py-1.5 text-xs disabled:opacity-50"
+                className={BTN_PRIMARY_SM_CLASS}
               >
                 {profileMutation.isPending ? "Saving…" : "Save Changes"}
               </button>
@@ -586,8 +593,7 @@ export default function SettingsPage() {
           </div>
         </SectionCard>
 
-        {/* Investor DNA */}
-        <SectionCard title="Investor DNA" description="Personalize AI insights with your investment context.">
+        <SectionCard id="investor-dna" title="Investor DNA" description="Personalize AI insights with your investment context.">
           <div className="px-4 py-4">
             {profileLoading ? (
               <div className="h-8 bg-input rounded-sm animate-pulse w-48" />
@@ -615,13 +621,13 @@ export default function SettingsPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                   <span className="text-xs text-green-400 font-medium">● DNA active</span>
-                  <a href="/settings/investor-profile" className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 rounded-sm px-2 py-1">Edit</a>
+                  <a href="/settings/investor-profile" className={`${BTN_SECONDARY_CLASS} text-blue-400 hover:text-blue-300 border-blue-500/30`}>Edit</a>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-muted text-sm">Personalize your AI insights by sharing your investment context.</p>
-                <a href="/settings/investor-profile" className="text-xs text-purple-400 hover:text-purple-300 border border-purple-500/30 rounded-sm px-3 py-1.5">Set up →</a>
+                <a href="/settings/investor-profile" className={`${BTN_SECONDARY_CLASS} text-purple-400 hover:text-purple-300 border-purple-500/30`}>Set up →</a>
               </div>
             )}
           </div>
@@ -629,9 +635,8 @@ export default function SettingsPage() {
 
         <StrategySettingsPanel isAdmin={isAdmin} />
 
-        {/* LLM Providers */}
         {isAdmin && (
-          <SectionCard title="LLM Providers" description="API keys and server URLs used when running analyses.">
+          <SectionCard id="llm-providers" title="LLM Providers" description="API keys and server URLs used when running analyses.">
             <SubGroupLabel label="Cloud APIs" />
             {CLOUD_LLM_PROVIDERS.map((provider, i) => (
               <div key={provider}>
@@ -661,9 +666,9 @@ export default function SettingsPage() {
           </SectionCard>
         )}
 
-        {/* Data Providers */}
         {isAdmin && (
           <SectionCard
+            id="data-providers"
             title="Data Providers"
             description="Third-party data sources used for portfolio prices and outcome tracking."
           >
@@ -681,9 +686,9 @@ export default function SettingsPage() {
           </SectionCard>
         )}
 
-        {/* Email Notifications */}
         {isAdmin && (
           <SectionCard
+            id="notifications"
             title="Email Notifications"
             description="Notifies users when their analysis runs complete."
           >
@@ -737,9 +742,8 @@ SMTP_FROM=noreply@yourdomain.com`}
           </SectionCard>
         )}
 
-        {/* Team */}
         {isAdmin && (
-          <SectionCard title="Team" description="Manage members and send invitations.">
+          <SectionCard id="team" title="Team" description="Manage members and send invitations.">
             <div className="divide-y divide-border">
               {users.map((u) => (
                 <TeamMemberRow
@@ -759,12 +763,12 @@ SMTP_FROM=noreply@yourdomain.com`}
                 value={inviteEmail}
                 onChange={(e) => { setInviteEmail(e.target.value); setInviteStatus("idle"); }}
                 placeholder="member@example.com"
-                className="bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+                className={SETTINGS_INPUT_COMPACT_CLASS}
               />
               <button
                 onClick={() => { setInviteStatus("idle"); setInviteUrl(null); inviteMutation.mutate(); }}
                 disabled={inviteMutation.isPending || !inviteEmail}
-                className="bg-blue-600 hover:bg-blue-700 text-fg rounded-sm px-3 py-1 text-xs disabled:opacity-50"
+                className={BTN_PRIMARY_SM_CLASS}
               >
                 {inviteMutation.isPending ? "Sending…" : "Invite Member"}
               </button>
@@ -783,7 +787,7 @@ SMTP_FROM=noreply@yourdomain.com`}
                   />
                   <button
                     onClick={() => navigator.clipboard.writeText(inviteUrl)}
-                    className="bg-muted-surface hover:bg-muted-surface text-fg-secondary rounded-sm px-3 py-1 text-xs shrink-0"
+                    className={`${BTN_SECONDARY_CLASS} shrink-0 font-mono text-fg-secondary`}
                   >
                     Copy
                   </button>
@@ -793,9 +797,9 @@ SMTP_FROM=noreply@yourdomain.com`}
           </SectionCard>
         )}
 
-        {/* Database */}
         {isAdmin && (
           <SectionCard
+            id="database"
             title="Database"
             description="Download a full backup or restore from a previously downloaded backup file."
           >
@@ -811,7 +815,7 @@ SMTP_FROM=noreply@yourdomain.com`}
                 <button
                   onClick={handleDownloadBackup}
                   disabled={backupLoading}
-                  className="shrink-0 bg-muted-surface hover:bg-muted-surface text-fg rounded-sm px-4 py-1.5 text-xs disabled:opacity-50 flex items-center gap-1.5 transition-colors"
+                  className={`${BTN_SECONDARY_CLASS} shrink-0`}
                 >
                   {backupLoading ? (
                     <>
@@ -842,7 +846,7 @@ SMTP_FROM=noreply@yourdomain.com`}
                   </p>
                 </div>
                 <div className="shrink-0 flex items-center gap-2">
-                  <label className="cursor-pointer bg-input border border-input-border rounded-sm px-3 py-1.5 text-xs text-fg-secondary hover:border-border-strong transition-colors">
+                  <label className={`${BTN_SECONDARY_CLASS} cursor-pointer text-fg-secondary hover:border-border-strong`}>
                     {restoreFile ? restoreFile.name : "Choose file…"}
                     <input
                       type="file"
@@ -854,7 +858,7 @@ SMTP_FROM=noreply@yourdomain.com`}
                   <button
                     onClick={() => setRestoreModalOpen(true)}
                     disabled={!restoreFile}
-                    className="bg-red-700 hover:bg-red-600 text-fg rounded-sm px-3 py-1.5 text-xs disabled:opacity-40 transition-colors"
+                    className={BTN_DANGER_CLASS}
                   >
                     Restore…
                   </button>
@@ -863,6 +867,8 @@ SMTP_FROM=noreply@yourdomain.com`}
             </div>
           </SectionCard>
         )}
+
+        </SettingsLayout>
 
       </PageShell>
 
@@ -934,7 +940,7 @@ SMTP_FROM=noreply@yourdomain.com`}
                       value={restoreConfirmText}
                       onChange={(e) => setRestoreConfirmText(e.target.value)}
                       placeholder="RESTORE"
-                      className="w-full bg-input border border-input-border rounded-sm px-3 py-1.5 text-sm text-fg focus:outline-hidden focus:border-red-500 font-mono"
+                      className={`${FIELD_INPUT_CLASS} font-mono focus:border-red-500`}
                     />
                   </div>
                   <p className="text-xs text-muted">
@@ -955,7 +961,7 @@ SMTP_FROM=noreply@yourdomain.com`}
                 <button
                   onClick={() => { setRestoreModalOpen(false); setRestoreConfirmText(""); restoreMutation.reset(); }}
                   disabled={restoreMutation.isPending}
-                  className="px-3 py-1.5 text-sm text-muted hover:text-fg disabled:opacity-30"
+                  className={BTN_GHOST_CLASS}
                 >
                   Cancel
                 </button>
@@ -963,7 +969,7 @@ SMTP_FROM=noreply@yourdomain.com`}
                   <button
                     onClick={() => restoreMutation.mutate()}
                     disabled={restoreConfirmText !== "RESTORE"}
-                    className="px-4 py-1.5 text-sm bg-red-700 hover:bg-red-600 text-fg rounded-sm disabled:opacity-40 transition-colors"
+                    className={BTN_DANGER_SM_CLASS}
                   >
                     Restore Database
                   </button>

@@ -1,7 +1,8 @@
 """Integration tests for the verdict-change extension on LastRun and the
 GET /portfolio/{id}/trim-signals endpoint."""
 import uuid
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient, ASGITransport
@@ -47,7 +48,7 @@ async def _create_portfolio_with_holding(
     async with AsyncSessionLocal() as db:
         snap = PortfolioSnapshot(
             portfolio_id=portfolio_id,
-            uploaded_at=datetime.utcnow(),
+            uploaded_at=datetime.now(timezone.utc),
             row_count=1,
         )
         db.add(snap)
@@ -189,6 +190,35 @@ async def test_trim_signals_returns_strong_trim_when_verdict_sell():
     assert entries[0]["ticker"] == "TSLA"
     assert entries[0]["level"] == "strong_trim"
     assert any("AI verdict: SELL" in reason for reason in entries[0]["reasons"])
+
+
+@pytest.mark.asyncio
+async def test_trim_signals_unpacks_fundamentals_tuple(monkeypatch):
+    """Regression: _fetch_fundamentals returns (dict, error) — trim-signals must unpack it."""
+    from app.routers import portfolio as portfolio_router
+    from app.services import markov_service
+
+    async def fake_fetch_fundamentals(ticker: str, api_key: str):
+        return {"peg_ratio": 2.5, "asset_type": "stock"}, None
+
+    monkeypatch.setattr(portfolio_router, "_fetch_fundamentals", fake_fetch_fundamentals)
+    monkeypatch.setattr(portfolio_router, "_get_finnhub_key", AsyncMock(return_value="test-key"))
+    monkeypatch.setattr(markov_service, "get_regime_for_portfolio", AsyncMock(return_value={}))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+        token, user_id = await _register_and_token(c, "fundtuple@test.com")
+        portfolio_id = await _create_portfolio_with_holding(c, token, ticker="AAPL")
+        await _insert_run(user_id, "AAPL", RunVerdict.sell, days_ago=1)
+
+        r = await c.get(
+            f"/portfolio/{portfolio_id}/trim-signals",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    assert r.status_code == 200, r.text
+    entries = r.json()["entries"]
+    assert len(entries) == 1
+    assert entries[0]["ticker"] == "AAPL"
+    assert entries[0]["level"] == "strong_trim"
 
 
 @pytest.mark.asyncio

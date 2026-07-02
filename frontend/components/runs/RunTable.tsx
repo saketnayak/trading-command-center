@@ -10,6 +10,7 @@ import {
   RefreshCcw,
   Trash2,
   X,
+  FlaskConical,
 } from "lucide-react";
 import { archiveRun, deleteRun } from "@/lib/api";
 import { IconButton, IconLink } from "@/components/ui/IconButton";
@@ -18,6 +19,7 @@ import { RunContextIcons } from "@/components/runs/RunContextIcons";
 import { fmtPriceString, resolveQuoteCurrency } from "@/lib/currency";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import type { Run, TickerMetadata } from "@/lib/types";
+import { EmptyState } from "@/components/ui/EmptyState";
 
 function rerunUrl(run: Run): string {
   const p = new URLSearchParams({
@@ -68,7 +70,7 @@ function PriceSummary({ run, metadata }: { run: Run; metadata?: TickerMetadata }
   const fmt = (v: string | null) => fmtPriceString(v, currency);
   return (
     <span
-      className="font-mono text-xs text-fg-secondary"
+      className="font-data text-xs text-fg-secondary"
       title="Entry · Stop · Target"
     >
       {fmt(entry)} · {fmt(stop)} · {fmt(target)}
@@ -106,7 +108,7 @@ function RunRow({
   const isRunning = run.status === "running";
 
   return (
-    <tr className={`border-t border-border hover:bg-input/40 ${selected ? "bg-blue-950/30" : ""}`}>
+    <tr className={`border-t border-border hover:bg-input/40 ${selected ? "bg-blue-50 dark:bg-blue-950/30" : ""}`}>
       {onToggle !== undefined && (
         <td className="px-3 py-3">
           <input
@@ -144,11 +146,11 @@ function RunRow({
       <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">
         <RunContextIcons analysts={run.analysts} responseLanguage={run.response_language} />
       </td>
-      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs font-mono">{run.llm_model}</td>
-      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs font-data">{run.llm_model}</td>
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs font-data">
         {run.started_at ? new Date(run.started_at).toLocaleDateString() : "—"}
       </td>
-      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs">{formatDuration(run.started_at, run.completed_at)}</td>
+      <td className="hidden lg:table-cell px-4 py-3 text-muted text-xs font-data">{formatDuration(run.started_at, run.completed_at)}</td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1.5">
           <IconLink
@@ -238,6 +240,18 @@ export function RunTable({ runs, archived, onMutate, selectedIds, onSelectionCha
 
   return (
     <div className="overflow-x-auto rounded-sm border border-border">
+      {runs.length === 0 ? (
+        <EmptyState
+          icon={FlaskConical}
+          title={archived ? "No archived runs" : "No runs yet"}
+          description={
+            archived
+              ? "Completed runs you archive will appear here."
+              : "Launch your first multi-agent analysis to get a verdict and report."
+          }
+          action={archived ? undefined : { label: "New Run", href: "/runs/new" }}
+        />
+      ) : (
       <table className="w-full text-sm">
         <thead className="sticky top-0 bg-surface text-muted text-xs uppercase tracking-wider">
           <tr>
@@ -265,14 +279,7 @@ export function RunTable({ runs, archived, onMutate, selectedIds, onSelectionCha
           </tr>
         </thead>
         <tbody>
-          {runs.length === 0 ? (
-            <tr>
-              <td colSpan={showCheckboxes ? 10 : 9} className="text-center text-muted px-4 py-8">
-                {archived ? "No archived runs." : "No runs yet."}
-              </td>
-            </tr>
-          ) : (
-            runs.map((run) => (
+          {runs.map((run) => (
               <RunRow
                 key={run.id}
                 run={run}
@@ -282,10 +289,10 @@ export function RunTable({ runs, archived, onMutate, selectedIds, onSelectionCha
                 onToggle={showCheckboxes ? () => toggle(run.id) : undefined}
                 metadata={tickerMetadata[run.ticker.toUpperCase()]}
               />
-            ))
-          )}
+            ))}
         </tbody>
       </table>
+      )}
     </div>
   );
 }

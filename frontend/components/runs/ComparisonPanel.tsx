@@ -1,6 +1,8 @@
 "use client";
 import { RunContextIcons } from "@/components/runs/RunContextIcons";
-import type { RunWithReport } from "@/lib/types";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { agreementBannerClass } from "@/lib/uiClasses";
+import type { RunWithReport, TickerMetadata } from "@/lib/types";
 import { getAnalystReportContent } from "@/lib/analystReports";
 import { fmtPriceString, resolveQuoteCurrency } from "@/lib/currency";
 
@@ -20,16 +22,24 @@ function AnalystSection({ label, content }: { label: string; content: string | u
   );
 }
 
-function RunColumn({ side, data }: { side: "A" | "B"; data: RunWithReport }) {
+function RunColumn({
+  side,
+  data,
+  metadata,
+}: {
+  side: "A" | "B";
+  data: RunWithReport;
+  metadata?: TickerMetadata;
+}) {
   const { run, report } = data;
   const raw = report?.raw_report as Record<string, unknown> | undefined;
   const currency = resolveQuoteCurrency(report?.price_currency ?? run.price_currency);
 
   return (
     <div className="flex-1 min-w-0 bg-elevated border border-input-border rounded-xl p-5 flex flex-col gap-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 flex-wrap">
         <span className="bg-muted-surface text-fg-secondary text-xs font-bold px-2 py-0.5 rounded-sm">Run {side}</span>
-        <span className="text-xl font-bold text-fg">{run.ticker}</span>
+        <TickerLabel ticker={run.ticker} metadata={metadata} logoSize="md" />
         <span className="text-sm text-muted">{run.analysis_date}</span>
       </div>
 
@@ -83,7 +93,15 @@ function RunColumn({ side, data }: { side: "A" | "B"; data: RunWithReport }) {
   );
 }
 
-export function ComparisonPanel({ a, b }: { a: RunWithReport; b: RunWithReport }) {
+export function ComparisonPanel({
+  a,
+  b,
+  tickerMetadata = {},
+}: {
+  a: RunWithReport;
+  b: RunWithReport;
+  tickerMetadata?: Record<string, TickerMetadata>;
+}) {
   const verdictA = a.report?.verdict;
   const verdictB = b.report?.verdict;
   const agree = verdictA && verdictB && verdictA === verdictB;
@@ -91,15 +109,15 @@ export function ComparisonPanel({ a, b }: { a: RunWithReport; b: RunWithReport }
   return (
     <div className="flex flex-col gap-4">
       {verdictA && verdictB && (
-        <div className={`text-center text-sm px-4 py-2 rounded-lg border ${agree ? "border-green-700 bg-green-900/20 text-green-400" : "border-amber-700 bg-amber-900/20 text-amber-400"}`}>
+        <div className={`text-center text-sm px-4 py-2 rounded-lg border ${agreementBannerClass(!!agree)}`}>
           {agree
             ? `Both runs agree: ${verdictA.toUpperCase()}`
             : `Verdicts differ — Run A says ${verdictA.toUpperCase()}, Run B says ${verdictB.toUpperCase()}`}
         </div>
       )}
       <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-start">
-        <RunColumn side="A" data={a} />
-        <RunColumn side="B" data={b} />
+        <RunColumn side="A" data={a} metadata={tickerMetadata[a.run.ticker.toUpperCase()]} />
+        <RunColumn side="B" data={b} metadata={tickerMetadata[b.run.ticker.toUpperCase()]} />
       </div>
     </div>
   );

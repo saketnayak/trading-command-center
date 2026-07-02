@@ -4,6 +4,7 @@ import { Markdown } from "@/components/ui/Markdown";
 
 interface Props {
   report: Report | undefined;
+  embedded?: boolean;
 }
 
 function extractHistory(value: unknown): string {
@@ -15,17 +16,26 @@ function extractHistory(value: unknown): string {
   return "";
 }
 
-export function BullBearDebate({ report }: Props) {
-  if (!report) return null;
+export function BullBearDebate({ report, embedded = false }: Props) {
+  if (!report) {
+    if (embedded) {
+      return <p className="text-muted text-sm">Debate transcript not available yet.</p>;
+    }
+    return null;
+  }
 
   const debateHistory = extractHistory(report.raw_report?.investment_debate_state);
   const riskHistory = extractHistory(report.raw_report?.risk_debate_state);
 
-  if (!debateHistory && !riskHistory) return null;
+  if (!debateHistory && !riskHistory) {
+    if (embedded) {
+      return <p className="text-muted text-sm">No bull/bear debate recorded for this run.</p>;
+    }
+    return null;
+  }
 
-  return (
-    <div className="bg-surface border border-border rounded-lg p-6 flex flex-col gap-6">
-      <h2 className="text-fg text-lg font-semibold">Bull / Bear Debate</h2>
+  const content = (
+    <div className="flex flex-col gap-6">
       {debateHistory && (
         <div>
           <h3 className="text-muted text-xs uppercase tracking-wider mb-3">Investment Debate</h3>
@@ -38,6 +48,15 @@ export function BullBearDebate({ report }: Props) {
           <Markdown>{riskHistory}</Markdown>
         </div>
       )}
+    </div>
+  );
+
+  if (embedded) return content;
+
+  return (
+    <div className="bg-surface border border-border rounded-lg p-6 flex flex-col gap-6">
+      <h2 className="text-fg text-sm font-medium">Bull / Bear Debate</h2>
+      {content}
     </div>
   );
 }

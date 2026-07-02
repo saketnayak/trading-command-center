@@ -5,18 +5,17 @@ import { signOut, useSession } from "next-auth/react";
 import { useEffect, useState, type FocusEvent, type MouseEvent } from "react";
 import { Logo } from "./Logo";
 import { KeyboardShortcuts } from "./KeyboardShortcuts";
+import { NavDropdown } from "./NavDropdown";
 import { ThemeToggle } from "./ThemeToggle";
-import { TOP_NAV_OFFSET_PX, APP_CONTENT_CONTAINER_CLASS } from "./constants";
+import { TOP_NAV_OFFSET_PX, APP_CONTENT_CONTAINER_CLASS, APP_PAGE_PADDING_X_CLASS } from "./constants";
 import { usePortfolioPrefetch } from "@/lib/usePortfolioPrefetch";
-
-const NAV = [
-  { href: "/runs/new", label: "New Run" },
-  { href: "/runs", label: "History" },
-  { href: "/watchlist", label: "Watchlist" },
-  { href: "/portfolio", label: "Portfolio", prefetchPortfolio: true },
-  { href: "/runs/performance", label: "Performance" },
-  { href: "/settings", label: "Settings" },
-];
+import {
+  isNavItemActive,
+  isResearchActive,
+  MOBILE_NAV_SECTIONS,
+  PRIMARY_NAV,
+  RESEARCH_NAV,
+} from "@/lib/navConfig";
 
 function navLinkClass(active: boolean) {
   return active
@@ -30,12 +29,14 @@ function NavLink({
   active,
   className,
   onPrefetch,
+  onNavigate,
 }: {
   href: string;
   label: string;
   active: boolean;
   className: string;
   onPrefetch?: () => void;
+  onNavigate?: () => void;
 }) {
   function handleIntent(_event: MouseEvent<HTMLAnchorElement> | FocusEvent<HTMLAnchorElement>) {
     onPrefetch?.();
@@ -46,6 +47,7 @@ function NavLink({
       href={href}
       onMouseEnter={onPrefetch ? handleIntent : undefined}
       onFocus={onPrefetch ? handleIntent : undefined}
+      onClick={onNavigate}
       className={className}
     >
       {label}
@@ -59,17 +61,7 @@ export function TopNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const prefetchPortfolio = usePortfolioPrefetch();
 
-  const isActive = (href: string) => {
-    if (path === href) return true;
-    if (href === "/runs") {
-      return (
-        path.startsWith("/runs/") &&
-        !path.startsWith("/runs/performance") &&
-        path !== "/runs/new"
-      );
-    }
-    return false;
-  };
+  const researchActive = isResearchActive(path);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -84,60 +76,72 @@ export function TopNav() {
     };
   }, [menuOpen]);
 
+  const closeMobileMenu = () => setMenuOpen(false);
+
   return (
     <>
       <KeyboardShortcuts />
       <nav className="bg-surface border-b border-border sticky top-0 z-50 shrink-0">
-        <div className={`${APP_CONTENT_CONTAINER_CLASS} flex items-center gap-2 sm:gap-4 px-3 sm:px-4 py-2`}>
-        <Link href="/runs" className="flex items-center shrink-0" aria-label="AgentFloor home">
-          <Logo height={28} />
-        </Link>
+        <div className={`${APP_CONTENT_CONTAINER_CLASS} flex items-center gap-2 sm:gap-4 ${APP_PAGE_PADDING_X_CLASS} py-2`}>
+          <Link href="/runs" className="flex items-center shrink-0" aria-label="AgentFloor home">
+            <Logo height={28} />
+          </Link>
 
-        <span className="hidden lg:inline text-nav-divider text-lg">|</span>
+          <span className="hidden lg:inline text-nav-divider text-lg">|</span>
 
-        <div className="hidden lg:flex items-center gap-3 min-w-0">
-          {NAV.map(({ href, label, prefetchPortfolio: shouldPrefetch }) => (
-            <NavLink
-              key={href}
-              href={href}
-              label={label}
-              active={isActive(href)}
-              onPrefetch={shouldPrefetch ? prefetchPortfolio : undefined}
-              className={`text-xs px-1 pb-0.5 whitespace-nowrap ${navLinkClass(isActive(href))}`}
+          <div className="hidden lg:flex items-center gap-3 min-w-0">
+            <NavDropdown
+              label="Research"
+              active={researchActive}
+              items={RESEARCH_NAV.map((item) => ({
+                href: item.href,
+                label: item.label,
+                active: isNavItemActive(path, item.href),
+              }))}
             />
-          ))}
-        </div>
 
-        <div className="ml-auto flex items-center gap-2 sm:gap-3">
-          <ThemeToggle />
-          <span className="hidden md:inline text-muted text-xs max-w-[10rem] truncate" title="Press ? for keyboard shortcuts">
-            {session?.user?.email}
-          </span>
-          <button
-            type="button"
-            onClick={() => signOut()}
-            className="hidden sm:inline text-subtle text-xs hover:text-muted"
-          >
-            Sign out
-          </button>
-          <button
-            type="button"
-            className="lg:hidden p-1.5 rounded border border-border text-fg-secondary hover:text-fg hover:bg-elevated"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((v) => !v)}
-          >
-            {menuOpen ? (
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden>
-                <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden>
-                <path fillRule="evenodd" d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75ZM2 10a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 10Zm0 5.25a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z" clipRule="evenodd" />
-              </svg>
-            )}
-          </button>
-        </div>
+            {PRIMARY_NAV.map(({ href, label, prefetchPortfolio: shouldPrefetch }) => (
+              <NavLink
+                key={href}
+                href={href}
+                label={label}
+                active={isNavItemActive(path, href)}
+                onPrefetch={shouldPrefetch ? prefetchPortfolio : undefined}
+                className={`text-xs px-1 pb-0.5 whitespace-nowrap ${navLinkClass(isNavItemActive(path, href))}`}
+              />
+            ))}
+          </div>
+
+          <div className="ml-auto flex items-center gap-2 sm:gap-3">
+            <ThemeToggle />
+            <span className="hidden md:inline text-muted text-xs max-w-[10rem] truncate" title="Press ? for keyboard shortcuts">
+              {session?.user?.email}
+            </span>
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className="hidden sm:inline text-subtle text-xs hover:text-muted"
+            >
+              Sign out
+            </button>
+            <button
+              type="button"
+              className="lg:hidden p-1.5 rounded border border-border text-fg-secondary hover:text-fg hover:bg-elevated"
+              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              {menuOpen ? (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden>
+                  <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                </svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden>
+                  <path fillRule="evenodd" d="M2 4.75A.75.75 0 0 1 2.75 4h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 4.75ZM2 10a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75A.75.75 0 0 1 2 10Zm0 5.25a.75.75 0 0 1 .75-.75h14.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75Z" clipRule="evenodd" />
+                </svg>
+              )}
+            </button>
+          </div>
         </div>
       </nav>
 
@@ -147,7 +151,7 @@ export function TopNav() {
             type="button"
             className="absolute inset-0 bg-black/50"
             aria-label="Close menu"
-            onClick={() => setMenuOpen(false)}
+            onClick={closeMobileMenu}
           />
           <div
             className="absolute left-0 right-0 overflow-y-auto bg-surface border-b border-border shadow-lg p-4 flex flex-col gap-4"
@@ -156,18 +160,31 @@ export function TopNav() {
               maxHeight: `calc(100vh - ${TOP_NAV_OFFSET_PX}px)`,
             }}
           >
-            <div className="flex flex-col gap-1">
-              {NAV.map(({ href, label, prefetchPortfolio: shouldPrefetch }) => (
-                <NavLink
-                  key={href}
-                  href={href}
-                  label={label}
-                  active={isActive(href)}
-                  onPrefetch={shouldPrefetch ? prefetchPortfolio : undefined}
-                  className={`text-sm px-3 py-2.5 rounded-sm ${isActive(href) ? "bg-elevated text-fg font-medium" : "text-fg-secondary hover:bg-elevated"}`}
-                />
-              ))}
-            </div>
+            {MOBILE_NAV_SECTIONS.map((section, index) => (
+              <div key={section.title ?? `section-${index}`} className="flex flex-col gap-1">
+                {section.title && (
+                  <p className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">
+                    {section.title}
+                  </p>
+                )}
+                {section.items.map(({ href, label, prefetchPortfolio: shouldPrefetch }) => (
+                  <NavLink
+                    key={href}
+                    href={href}
+                    label={label}
+                    active={isNavItemActive(path, href)}
+                    onPrefetch={shouldPrefetch ? prefetchPortfolio : undefined}
+                    onNavigate={closeMobileMenu}
+                    className={`text-sm px-3 py-2.5 rounded-sm ${
+                      isNavItemActive(path, href)
+                        ? "bg-elevated text-fg font-medium"
+                        : "text-fg-secondary hover:bg-elevated"
+                    }`}
+                  />
+                ))}
+              </div>
+            ))}
+
             <div className="border-t border-border pt-3 flex flex-col gap-2 text-sm">
               {(session?.user as { role?: string })?.role === "admin" && (
                 <span className="self-start bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 text-xs px-1.5 py-0.5 rounded">

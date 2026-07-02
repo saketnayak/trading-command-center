@@ -128,3 +128,34 @@ def test_prepare_ohlcv_frame_selects_required_columns():
 
     assert list(prepared.columns) == ["Open", "High", "Low", "Close", "Volume"]
     assert len(prepared) == 2
+
+
+@pytest.mark.asyncio
+async def test_fetch_company_profile_returns_mapped_fields(monkeypatch):
+    class FakeInfo(dict):
+        pass
+
+    def fake_ticker(_symbol: str):
+        class FakeTicker:
+            info = FakeInfo(
+                {
+                    "longName": "Apple Inc.",
+                    "shortName": "Apple",
+                    "sector": "Technology",
+                    "industry": "Consumer Electronics",
+                    "website": "https://www.apple.com",
+                    "exchange": "NMS",
+                    "country": "United States",
+                    "currency": "USD",
+                    "marketCap": 3_000_000_000_000,
+                }
+            )
+
+        return FakeTicker()
+
+    monkeypatch.setattr(yfinance_service.yf, "Ticker", fake_ticker)
+
+    profile = await yfinance_service.fetch_company_profile("AAPL")
+    assert profile is not None
+    assert profile["longName"] == "Apple Inc."
+    assert profile["marketCap"] == 3_000_000_000_000

@@ -6,6 +6,7 @@ import {
   PORTFOLIO_STALE_TIMES,
   PORTFOLIO_NEWS_DAYS,
 } from "@/lib/portfolioQueries";
+import { ALERT_BANNER_CLASS } from "@/lib/uiClasses";
 import { finnhubUnavailableMessage } from "@/lib/finnhubMessages";
 
 interface Props {
@@ -89,7 +90,7 @@ export function NewsPanel({ portfolioId, priceUnavailableReason }: Props) {
   return (
     <div className="space-y-2">
       {unavailableMessage && (
-        <div className="text-xs text-amber-400/90 bg-amber-900/20 border border-amber-700/40 rounded-sm px-3 py-2">
+        <div className={ALERT_BANNER_CLASS}>
           {unavailableMessage}
         </div>
       )}
@@ -111,13 +112,13 @@ export function NewsPanel({ portfolioId, priceUnavailableReason }: Props) {
                 <img
                   src={a.image}
                   alt=""
-                  className="w-14 h-14 rounded-sm object-cover shrink-0 opacity-80"
+                  className="w-14 h-14 rounded-md object-cover shrink-0 opacity-80"
                   onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
                 />
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-sm border ${colorMap[a.ticker]}`}>
+                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${colorMap[a.ticker]}`}>
                     {a.ticker}
                   </span>
                   <span className="text-muted text-xs">{a.source}</span>

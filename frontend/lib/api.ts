@@ -573,7 +573,9 @@ export async function getPortfolioTrimSignals(
   portfolioId: string
 ): Promise<TrimSignalsResponse> {
   const r = await fetchWithAuth(`/portfolio/${portfolioId}/trim-signals`);
-  if (!r.ok) return { entries: [], computed_at: "" };
+  if (!r.ok) {
+    throw new Error(`Failed to fetch trim signals (${r.status})`);
+  }
   const data = await r.json();
   return data ?? { entries: [], computed_at: "" };
 }

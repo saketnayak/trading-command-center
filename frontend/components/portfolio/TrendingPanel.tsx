@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { getMarketTrending, getMarketMovers, getMarketSectors } from "@/lib/api";
 import { marketQueryKeys, MARKET_STALE_TIMES } from "@/lib/portfolioQueries";
 import type { MarketTicker, SectorData, PortfolioHolding } from "@/lib/types";
+import { CompanyLogo } from "@/components/ui/CompanyLogo";
 import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 
@@ -63,19 +64,7 @@ function TickerCard({
       <button onClick={() => onClick(item.ticker)} className="w-full text-left">
         <div className="flex items-start justify-between gap-2 mb-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            {item.logo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={item.logo}
-                alt={item.ticker}
-                className="w-8 h-8 rounded-sm object-contain bg-muted-surface p-0.5 shrink-0"
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-sm bg-muted-surface flex items-center justify-center shrink-0">
-                <span className="text-[9px] font-bold text-muted">{item.ticker.slice(0, 2)}</span>
-              </div>
-            )}
+            <CompanyLogo ticker={item.ticker} />
             <div className="min-w-0">
               <p className="text-sm font-bold text-fg font-mono leading-tight">{item.ticker}</p>
               {item.name && (
@@ -94,10 +83,10 @@ function TickerCard({
 
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-base font-semibold text-fg font-mono tabular-nums">
+            <p className="text-base font-semibold text-fg font-data">
               ${fmtPrice(item.price)}
             </p>
-            <p className={`text-xs tabular-nums ${up ? "text-green-400" : "text-red-400"}`}>
+            <p className={`text-xs font-data ${up ? "text-green-400" : "text-red-400"}`}>
               {item.change != null ? `${item.change >= 0 ? "+" : ""}${item.change.toFixed(2)}` : ""}
             </p>
           </div>
@@ -158,19 +147,7 @@ function MoverRow({
   return (
     <div className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-input/80 transition-colors group">
       <button onClick={() => onClick(item.ticker)} className="flex-1 flex items-center gap-3 text-left min-w-0">
-        {item.logo ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.logo}
-            alt={item.ticker}
-            className="w-7 h-7 rounded-sm object-contain bg-muted-surface p-0.5 shrink-0"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
-          />
-        ) : (
-          <div className="w-7 h-7 rounded-sm bg-muted-surface flex items-center justify-center shrink-0">
-            <span className="text-[9px] font-bold text-muted">{item.ticker.slice(0, 2)}</span>
-          </div>
-        )}
+        <CompanyLogo ticker={item.ticker} size="sm" />
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-fg font-mono leading-tight">{item.ticker}</p>
           {item.name && (
@@ -178,10 +155,10 @@ function MoverRow({
           )}
         </div>
         <div className="text-right shrink-0">
-          <p className="text-sm font-semibold text-fg font-mono tabular-nums">
+          <p className="text-sm font-semibold text-fg font-data">
             ${fmtPrice(item.price)}
           </p>
-          <p className={`text-xs font-semibold tabular-nums ${up ? "text-green-400" : "text-red-400"}`}>
+          <p className={`text-xs font-semibold font-data ${up ? "text-green-400" : "text-red-400"}`}>
             {fmtPct(item.change_pct)}
           </p>
         </div>

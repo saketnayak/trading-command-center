@@ -1,14 +1,18 @@
 "use client";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getTickerKalman } from "@/lib/api";
 import type { KalmanData } from "@/lib/types";
 import { fmtMoney, resolveQuoteCurrency } from "@/lib/currency";
+import { ChartQuickLook } from "@/components/ui/ChartQuickLook";
+import { KalmanChart } from "@/components/runs/confluence/KalmanChart";
 
 interface Props {
   ticker: string;
   verdict: "buy" | "sell" | "hold" | null | undefined;
   priceCurrency?: string | null;
   metadataCurrency?: string | null;
+  variant?: "default" | "compact";
 }
 
 function directionColor(direction: KalmanData["trend_direction"]): string {
@@ -17,42 +21,14 @@ function directionColor(direction: KalmanData["trend_direction"]): string {
   return "text-yellow-400";
 }
 
-function MiniKalmanChart({ chart, currency }: { chart: KalmanData["chart"]; currency: string }) {
-  const width = 420;
-  const height = 90;
-  const values = [...chart.price, ...chart.kalman_price];
-  const min = values.length ? Math.min(...values) : 0;
-  const max = values.length ? Math.max(...values) : 1;
-  const span = max - min || 1;
-
-  const scale = (series: number[]) =>
-    series
-      .map((value, idx) => {
-        const xStep = series.length > 1 ? width / (series.length - 1) : width;
-        const x = idx * xStep;
-        const y = height - ((value - min) / span) * height;
-        return `${x.toFixed(2)},${y.toFixed(2)}`;
-      })
-      .join(" ");
-
-  if (chart.price.length < 2 || chart.kalman_price.length < 2) return null;
-
-  return (
-    <div className="space-y-1">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Kalman smoothed price chart" className="w-full h-24">
-        <polyline points={scale(chart.price)} fill="none" stroke="rgb(100 116 139)" strokeWidth="1.5" opacity="0.65" />
-        <polyline points={scale(chart.kalman_price)} fill="none" stroke="rgb(59 130 246)" strokeWidth="2.5" />
-      </svg>
-      <div className="flex items-center justify-between text-[10px] text-muted font-mono">
-        <span>{fmtMoney(min, currency)}</span>
-        <span className="text-subtle">{currency}</span>
-        <span>{fmtMoney(max, currency)}</span>
-      </div>
-    </div>
-  );
-}
-
-export function KalmanConfirmation({ ticker, verdict, priceCurrency, metadataCurrency }: Props) {
+export function KalmanConfirmation({
+  ticker,
+  verdict,
+  priceCurrency,
+  metadataCurrency,
+  variant = "default",
+}: Props) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const { data: kalman, isLoading } = useQuery<KalmanData | null>({
     queryKey: ["ticker-kalman", ticker],
     queryFn: () => getTickerKalman(ticker),
@@ -78,6 +54,71 @@ export function KalmanConfirmation({ ticker, verdict, priceCurrency, metadataCur
   const isNeutral = !verdict || verdict === "hold" || kalman.trend_direction === "flat";
   const signalStr = kalman.signal >= 0 ? `+${kalman.signal.toFixed(2)}` : kalman.signal.toFixed(2);
   const borderColor = isConflict ? "border-amber-500/40" : !isNeutral ? "border-green-500/40" : "border-input-border";
+  const agreementLabel = isConflict ? "Conflicts" : isNeutral ? "Neutral" : "Confirms";
+  const agreementClass = isConflict ? "text-amber-400" : isNeutral ? "text-muted" : "text-green-400";
+
+  const chartThumbnail = (
+    <div className="rounded-md border border-input-border/60 bg-page px-2 py-1.5">
+      <KalmanChart chart={kalman.chart} currency={currency} height={48} showLegend={false} />
+    </div>
+  );
+
+  const chartPreviewExpanded = (
+    <KalmanChart
+      chart={kalman.chart}
+      currency={currency}
+      width={720}
+      height={180}
+      expanded
+    />
+  );
+
+  const chartPreviewInline = (
+    <KalmanChart chart={kalman.chart} currency={currency} width={420} height={90} />
+  );
+
+  if (variant === "compact") {
+    const chevron = (
+      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted-surface text-base leading-none text-fg-secondary group-open:rotate-180 transition-transform duration-200">
+        ▾
+      </span>
+    );
+
+    const compactBody = (
+      <div className="px-3 pb-3 pt-2 border-t border-input-border/50 space-y-2">
+        <p className={`font-semibold capitalize ${directionColor(kalman.trend_direction)}`}>
+          {kalman.trend_direction} · <span className="font-mono">{signalStr}</span>
+        </p>
+        <div className="flex flex-wrap gap-3 text-[10px] text-muted font-mono">
+          <span>{fmtMoney(kalman.latest_price, currency)}</span>
+          <span>Kalman {fmtMoney(kalman.kalman_price, currency)}</span>
+        </div>
+        <ChartQuickLook
+          label="Kalman price chart"
+          maxWidth={760}
+          thumbnail={chartThumbnail}
+          preview={chartPreviewExpanded}
+        />
+      </div>
+    );
+
+    return (
+      <details
+        open={detailsOpen}
+        onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
+        className={`bg-elevated border ${borderColor} rounded-lg text-xs group`}
+      >
+        <summary className="cursor-pointer list-none px-3 py-2 flex items-center justify-between gap-2">
+          <span className="font-medium text-fg">Kalman trend</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className={`font-semibold ${agreementClass}`}>{agreementLabel}</span>
+            {chevron}
+          </div>
+        </summary>
+        {compactBody}
+      </details>
+    );
+  }
 
   return (
     <div className={`bg-elevated border ${borderColor} rounded-lg p-4 space-y-3`}>
@@ -136,11 +177,7 @@ export function KalmanConfirmation({ ticker, verdict, priceCurrency, metadataCur
         </div>
 
         <div className="bg-page border border-input-border/60 rounded-md p-2">
-          <MiniKalmanChart chart={kalman.chart} currency={currency} />
-          <div className="flex items-center justify-between text-[10px] text-muted">
-            <span>Price</span>
-            <span className="text-blue-400">Kalman estimate</span>
-          </div>
+          {chartPreviewInline}
         </div>
       </div>
     </div>

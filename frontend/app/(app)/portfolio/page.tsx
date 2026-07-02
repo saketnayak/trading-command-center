@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { Suspense, useState, useEffect, useMemo, useCallback } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listPortfolios,
@@ -53,17 +54,35 @@ import { EarningsPanel } from "@/components/portfolio/EarningsPanel";
 import { NewsPanel } from "@/components/portfolio/NewsPanel";
 import { ChatPanel } from "@/components/portfolio/ChatPanel";
 import { ThesisPanel } from "@/components/portfolio/ThesisPanel";
-import { TrendingPanel } from "@/components/portfolio/TrendingPanel";
 import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
-import { DiscoverPanel } from "@/components/portfolio/DiscoverPanel";
 import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsModal";
 import { SellCandidatesPanel } from "@/components/portfolio/SellCandidatesPanel";
+import { MorningBriefStrip } from "@/components/portfolio/MorningBriefStrip";
+import { PortfolioTotalsSummary } from "@/components/portfolio/PortfolioTotalsSummary";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { Briefcase } from "lucide-react";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
 import type { ResponseLanguage } from "@/lib/responseLanguage";
+import {
+  ALERT_BANNER_CLASS,
+  BTN_AI_CLASS,
+  BTN_GHOST_CLASS,
+  BTN_SECONDARY_CLASS,
+  FIELD_INPUT_SM_CLASS,
+} from "@/lib/uiClasses";
 import { PageShell } from "@/components/layout/PageShell";
-import { PageTitle } from "@/components/layout/PageHeader";
+import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
+import { TabBar, type TabBarItem } from "@/components/layout/TabBar";
+import {
+  buildPortfolioTabGroups,
+  DEFAULT_PORTFOLIO_TAB,
+  legacyPortfolioTabRedirect,
+  resolvePortfolioTab,
+  type PortfolioTab,
+  type PortfolioTabDefinition,
+} from "@/lib/portfolioTabs";
 
-type Tab = "holdings" | "insights" | "earnings" | "news" | "trending" | "discover" | "chat" | "thesis";
+const BATCH_MODAL_INPUT = `${FIELD_INPUT_SM_CLASS} w-full`;
 
 function BatchAnalyzeModal({
   portfolioId,
@@ -112,16 +131,16 @@ function BatchAnalyzeModal({
                 value={llmConfig}
                 onChange={setLlmConfig}
                 showDepth
-                providerClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
-                modelClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
-                depthClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+                providerClassName={BATCH_MODAL_INPUT}
+                modelClassName={BATCH_MODAL_INPUT}
+                depthClassName={BATCH_MODAL_INPUT}
               />
               <div className="space-y-1">
                 <label className="text-xs text-muted">Response Language</label>
                 <select
                   value={responseLanguage}
                   onChange={(e) => setResponseLanguage(e.target.value as ResponseLanguage)}
-                  className="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+                  className={BATCH_MODAL_INPUT}
                 >
                   {RESPONSE_LANGUAGE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -138,7 +157,7 @@ function BatchAnalyzeModal({
                   max={90}
                   value={stalenessDays}
                   onChange={(e) => setStalenessDays(parseInt(e.target.value) || 7)}
-                  className="w-24 bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+                  className={`${FIELD_INPUT_SM_CLASS} w-24`}
                 />
               </div>
             </div>
@@ -148,13 +167,13 @@ function BatchAnalyzeModal({
               </p>
             )}
             <div className="flex gap-2 justify-end pt-2">
-              <button onClick={onClose} className="px-3 py-1.5 text-sm text-muted hover:text-fg">
+              <button onClick={onClose} className={BTN_GHOST_CLASS}>
                 Cancel
               </button>
               <button
                 onClick={() => analyzeMutation.mutate()}
                 disabled={analyzeMutation.isPending}
-                className="px-4 py-1.5 text-sm bg-purple-600 hover:bg-purple-500 text-fg rounded-sm disabled:opacity-50 transition-colors"
+                className={BTN_AI_CLASS}
               >
                 {analyzeMutation.isPending ? "Starting…" : "Start Batch Analysis"}
               </button>
@@ -179,13 +198,13 @@ function BatchAnalyzeModal({
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setResult(null)}
-                className="px-3 py-1.5 text-sm text-muted hover:text-fg"
+                className={BTN_GHOST_CLASS}
               >
                 Run Again
               </button>
               <button
                 onClick={onClose}
-                className="px-4 py-1.5 text-sm bg-muted-surface hover:bg-muted-surface text-fg rounded-sm transition-colors"
+                className={BTN_SECONDARY_CLASS}
               >
                 Close
               </button>
@@ -197,15 +216,31 @@ function BatchAnalyzeModal({
   );
 }
 
-export default function PortfolioPage() {
+function toTabBarItem(
+  def: PortfolioTabDefinition,
+  alertCount: number,
+): TabBarItem {
+  return {
+    id: def.id,
+    label: def.label,
+    shortLabel: def.shortLabel,
+    badge: def.badge,
+    alertCount: def.showAlertCount && alertCount > 0 ? alertCount : undefined,
+  };
+}
+
+function PortfolioPageContent() {
   const queryClient = useQueryClient();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [preferredId, setPreferredId] = useState<string | null>(() => getLastPortfolioId());
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [tab, setTab] = useState<Tab>("holdings");
   const [batchOpen, setBatchOpen] = useState(false);
   const [deliveryOpen, setDeliveryOpen] = useState(false);
   const [drawerHolding, setDrawerHolding] = useState<PortfolioHolding | null>(null);
   const [metadataForceToken, setMetadataForceToken] = useState(0);
+  const [requestPortfolioCreate, setRequestPortfolioCreate] = useState(false);
 
   const { data: portfolios = [], isLoading: loadingPortfolios } = useQuery({
     queryKey: portfolioQueryKeys.list,
@@ -226,6 +261,41 @@ export default function PortfolioPage() {
 
   const hasHoldings = (current?.holdings?.length ?? 0) > 0;
   const allCrypto = hasHoldings && (current?.holdings ?? []).every((h) => isCrypto(h.ticker));
+
+  const tab = useMemo(
+    () => resolvePortfolioTab(searchParams.get("tab"), { allCrypto }),
+    [searchParams, allCrypto],
+  );
+
+  // Redirect legacy Market / Discover portfolio tabs to /market.
+  useEffect(() => {
+    const redirect = legacyPortfolioTabRedirect(searchParams.get("tab"));
+    if (redirect) {
+      router.replace(redirect);
+    }
+  }, [router, searchParams]);
+
+  const setTab = useCallback(
+    (next: PortfolioTab) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (next === DEFAULT_PORTFOLIO_TAB) {
+        params.delete("tab");
+      } else {
+        params.set("tab", next);
+      }
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  // Drop invalid tab query params (e.g. earnings on an all-crypto portfolio).
+  useEffect(() => {
+    const fromUrl = searchParams.get("tab");
+    if (legacyPortfolioTabRedirect(fromUrl)) return;
+    if (!fromUrl || fromUrl === tab) return;
+    setTab(tab);
+  }, [searchParams, setTab, tab]);
   const tickers = useMemo(
     () => (current?.holdings ?? []).map((h) => h.ticker),
     [current?.holdings]
@@ -262,7 +332,7 @@ export default function PortfolioPage() {
     staleTime: PORTFOLIO_STALE_TIMES.wave,
   });
 
-  const { data: trimSignals, isFetching: fetchingTrimSignals } = useQuery<TrimSignalsResponse>({
+  const { data: trimSignals, isFetching: fetchingTrimSignals, isError: trimSignalsError, refetch: refetchTrimSignals } = useQuery<TrimSignalsResponse>({
     queryKey: portfolioQueryKeys.trimSignals(selectedId ?? ""),
     queryFn: () => getPortfolioTrimSignals(selectedId!),
     enabled: selectedId != null && markovEnabled,
@@ -354,7 +424,7 @@ export default function PortfolioPage() {
   function handleSelectPortfolio(id: string) {
     setPreferredId(id);
     setLastPortfolioId(id);
-    setTab("holdings");
+    setTab(DEFAULT_PORTFOLIO_TAB);
   }
 
   useEffect(() => {
@@ -362,13 +432,6 @@ export default function PortfolioPage() {
       setLastPortfolioId(selectedId);
     }
   }, [selectedId]);
-
-  // Open upload drawer when selected portfolio has no snapshot yet
-  useEffect(() => {
-    if (selectedId != null && !loadingCurrent && current !== undefined && current.snapshot === null) {
-      setUploadOpen(true);
-    }
-  }, [selectedId, current, loadingCurrent]);
 
   const createMutation = useMutation({
     mutationFn: (name: string) => createPortfolio(name),
@@ -414,33 +477,54 @@ export default function PortfolioPage() {
     (h) => h.current_price == null && current?.price_unavailable_reason !== "no_finnhub_key"
   );
 
-  const TABS: Array<{ id: Tab; label: string; badge?: string; alertCount?: number }> = [
-    { id: "holdings", label: "Holdings" },
-    { id: "insights", label: "AI Insights", badge: "✦", alertCount: alertCount > 0 ? alertCount : undefined },
-    ...(!allCrypto ? [{ id: "earnings" as Tab, label: "Earnings" }] : []),
-    { id: "news", label: "News" },
-    { id: "chat", label: "Chat" },
-    { id: "thesis", label: "Thesis" },
-    { id: "trending", label: "Market", badge: "↑" },
-  ];
+  const tabGroups = useMemo(
+    () => buildPortfolioTabGroups({ allCrypto }),
+    [allCrypto],
+  );
+  const primaryTabs = useMemo(
+    () => tabGroups.primary.map((def) => toTabBarItem(def, alertCount)),
+    [tabGroups.primary, alertCount],
+  );
+  const overflowTabs = useMemo(
+    () => tabGroups.overflow.map((def) => toTabBarItem(def, alertCount)),
+    [tabGroups.overflow, alertCount],
+  );
+
+  const hasTotals =
+    current?.totals != null &&
+    current.totals_currency != null &&
+    current.totals.market_value != null;
 
   return (
     <>
-    <PageShell width="none" gap="4">
-        <PageTitle>Portfolio</PageTitle>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-          <PortfolioSwitcher
-            portfolios={portfolios}
-            selectedId={selectedId}
-            onSelect={handleSelectPortfolio}
-            onCreate={(name) => createMutation.mutate(name)}
-            onDelete={(id) => deleteMutation.mutate(id)}
-          />
-          {selectedPortfolio && (
-            <>
-              <div className="hidden sm:block h-6 w-px shrink-0 bg-border" aria-hidden="true" />
-              <PortfolioActions
+    <PageShell gap="4">
+        <PageHeader
+          title={
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+              <PageTitle className="shrink-0 text-xl sm:text-2xl font-semibold tracking-tight text-fg">
+                Portfolio
+              </PageTitle>
+              <PortfolioSwitcher
+                portfolios={portfolios}
+                selectedId={selectedId}
+                onSelect={handleSelectPortfolio}
+                onCreate={(name) => createMutation.mutate(name)}
+                onDelete={(id) => deleteMutation.mutate(id)}
+                requestCreate={requestPortfolioCreate}
+                onRequestCreateHandled={() => setRequestPortfolioCreate(false)}
+              />
+            </div>
+          }
+          actions={
+            selectedPortfolio ? (
+              <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
+                {hasTotals && current?.totals && current.totals_currency && (
+                  <PortfolioTotalsSummary
+                    totals={current.totals}
+                    totalsCurrency={current.totals_currency}
+                  />
+                )}
+                <PortfolioActions
                 freshnessLabel={
                   <PortfolioFreshnessLabel
                     portfolioId={selectedId}
@@ -458,19 +542,19 @@ export default function PortfolioPage() {
                 onExportClick={handleExport}
                 onDeliveryClick={() => setDeliveryOpen(true)}
               />
-            </>
-          )}
-        </div>
+              </div>
+            ) : undefined
+          }
+        />
 
         {selectedPortfolio && (
           <PortfolioHeader
             portfolio={selectedPortfolio}
-            totals={current?.totals ?? null}
-            totalsCurrency={current?.totals_currency ?? null}
             preferredCurrency={current?.display_currency ?? "USD"}
             portfolioCurrencies={current?.portfolio_currencies ?? []}
             snapshotDate={current?.snapshot?.uploaded_at ?? null}
             broker={current?.snapshot?.broker ?? null}
+            totalsUnavailable={!hasTotals && current?.totals != null}
           />
         )}
 
@@ -489,75 +573,46 @@ export default function PortfolioPage() {
         )}
 
         {selectedId === null && portfolios.length === 0 && !loadingPortfolios && (
-          <p className="text-muted text-sm text-center py-10">
-            No portfolios yet. Create one above to get started.
-          </p>
+          <EmptyState
+            icon={Briefcase}
+            title="No portfolios yet"
+            description="Create a portfolio to upload holdings, run AI analysis, and get your morning briefing."
+            action={{
+              label: "Create portfolio",
+              onClick: () => setRequestPortfolioCreate(true),
+            }}
+          />
         )}
 
-        {selectedId && loadingCurrent && tab !== "trending" && (
+        {selectedId && loadingCurrent && (
           <div className="text-muted text-sm">Loading portfolio…</div>
         )}
 
-        {/* Tab bar — Market tab is always accessible; portfolio tabs require a loaded portfolio */}
         {!loadingPortfolios && (
-          <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-thin">
-            {selectedId && current && TABS.filter((t) => t.id !== "trending").map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
-                  tab === t.id
-                    ? "border-purple-500 text-fg"
-                    : "border-transparent text-muted hover:text-fg"
-                }`}
-              >
-                <span>{t.label}</span>
-                {t.alertCount != null && (
-                  <span className="text-xs px-1 py-0.5 bg-red-500 text-fg rounded-sm font-mono leading-none min-w-[16px] text-center">
-                    {t.alertCount}
-                  </span>
-                )}
-                {!t.alertCount && t.badge && <span className="text-purple-400 text-xs">{t.badge}</span>}
-              </button>
-            ))}
-            <button
-              onClick={() => setTab("trending")}
-              className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px flex items-center gap-1.5 ${
-                tab === "trending"
-                  ? "border-purple-500 text-fg"
-                  : "border-transparent text-muted hover:text-fg"
-              }`}
-            >
-              <span>Market</span>
-              <span className="text-purple-400 text-xs">↑</span>
-            </button>
-            {selectedId && current && (
-              <button
-                onClick={() => setTab("discover")}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  tab === "discover"
-                    ? "border-violet-500 text-violet-400"
-                    : "border-transparent text-muted hover:text-fg"
-                }`}
-              >
-                Discover 🔍
-              </button>
-            )}
-          </div>
+          <TabBar
+            primaryTabs={primaryTabs}
+            overflowTabs={overflowTabs}
+            activeId={tab}
+            tabIdPrefix="portfolio-tab"
+            onChange={(id) => setTab(id as PortfolioTab)}
+          />
         )}
 
         {/* Tab panels — fixed-width container prevents layout shift between tabs */}
         <div className="min-w-0 w-full overflow-x-hidden">
-        {tab === "trending" && <TrendingPanel />}
-
-        {tab === "discover" && selectedPortfolio && (
-          <DiscoverPanel portfolioId={selectedPortfolio.id} />
-        )}
-
-        {selectedId && !loadingCurrent && current && tab !== "trending" && tab !== "discover" && (
+        {selectedId && !loadingCurrent && current && (
           <>
             {tab === "holdings" && (
-              <div className="space-y-3">
+              <div
+                id="portfolio-panel-holdings"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-holdings"
+                className="space-y-3"
+              >
+                <MorningBriefStrip
+                  portfolioId={selectedId}
+                  onOpenInsights={() => setTab("insights")}
+                />
                 {hasHoldings && (
                   <PortfolioStatsBar
                     holdings={current.holdings}
@@ -566,6 +621,18 @@ export default function PortfolioPage() {
                     regime={markovEnabled ? regime : undefined}
                     trimSignals={markovEnabled ? trimByHoldingId : undefined}
                   />
+                )}
+                {markovEnabled && trimSignalsError && (
+                  <div className={ALERT_BANNER_CLASS}>
+                    Trim signals could not be loaded. Sell-candidate flags may be incomplete.{" "}
+                    <button
+                      type="button"
+                      onClick={() => refetchTrimSignals()}
+                      className="text-blue-400 hover:text-blue-300 underline"
+                    >
+                      Retry
+                    </button>
+                  </div>
                 )}
                 {markovEnabled && (
                   <SellCandidatesPanel
@@ -585,39 +652,70 @@ export default function PortfolioPage() {
                   trimSignals={markovEnabled ? trimByHoldingId : undefined}
                   tickerMetadata={tickerMetadata}
                   onTickerClick={setDrawerHolding}
+                  onUploadClick={() => setUploadOpen(true)}
                 />
               </div>
             )}
 
             {tab === "insights" && (
+              <div
+                id="portfolio-panel-insights"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-insights"
+              >
               <InsightsDashboard
                 portfolioId={selectedId}
                 hasHoldings={hasHoldings}
                 portfolioName={selectedPortfolio?.name}
               />
+              </div>
             )}
 
             {tab === "earnings" && (
+              <div
+                id="portfolio-panel-earnings"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-earnings"
+              >
               <EarningsPanel
                 portfolioId={selectedId}
                 holdings={current.holdings}
                 priceUnavailableReason={current.price_unavailable_reason}
               />
+              </div>
             )}
 
             {tab === "news" && (
+              <div
+                id="portfolio-panel-news"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-news"
+              >
               <NewsPanel
                 portfolioId={selectedId}
                 priceUnavailableReason={current.price_unavailable_reason}
               />
+              </div>
             )}
 
             {tab === "chat" && selectedId && (
+              <div
+                id="portfolio-panel-chat"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-chat"
+              >
               <ChatPanel portfolioId={selectedId} />
+              </div>
             )}
 
             {tab === "thesis" && selectedId && (
+              <div
+                id="portfolio-panel-thesis"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-thesis"
+              >
               <ThesisPanel portfolioId={selectedId} />
+              </div>
             )}
           </>
         )}
@@ -638,5 +736,18 @@ export default function PortfolioPage() {
         waveEnabled={waveEnabled}
       />
     </>
+  );
+}
+
+export default function PortfolioPage() {
+  return (
+    <Suspense fallback={
+      <PageShell gap="4">
+        <PageHeader title={<PageTitle>Portfolio</PageTitle>} />
+        <div className="text-muted text-sm">Loading…</div>
+      </PageShell>
+    }>
+      <PortfolioPageContent />
+    </Suspense>
   );
 }

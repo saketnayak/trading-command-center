@@ -52,7 +52,7 @@ export function UploadDrawer({ open, onClose, onUpload, uploading }: UploadDrawe
   if (!open) return null;
 
   return (
-    <div className="bg-[#181825] border border-input-border rounded-sm mt-2 p-4 transition-all relative">
+    <div className="bg-input border border-input-border rounded-lg mt-2 p-4 transition-all relative">
       <div className="flex items-center justify-between mb-3">
         <span className="text-fg-secondary text-sm font-medium">Upload broker CSV</span>
         <button
@@ -70,7 +70,7 @@ export function UploadDrawer({ open, onClose, onUpload, uploading }: UploadDrawe
         normalized snapshot to the server.
       </p>
 
-      <div className="upload-drawer-csv-importer relative rounded-sm overflow-hidden">
+      <div className="upload-drawer-csv-importer relative rounded-lg overflow-hidden">
         <Importer<MappedImportRow>
           dataHandler={dataHandler}
           onStart={handleStart}
@@ -84,7 +84,7 @@ export function UploadDrawer({ open, onClose, onUpload, uploading }: UploadDrawe
         </Importer>
 
         {uploading ? (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#181825]/85 backdrop-blur-[2px] rounded-sm">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-input/90 backdrop-blur-[2px] rounded-lg">
             <span className="text-fg text-sm font-medium">Uploading snapshot…</span>
           </div>
         ) : null}

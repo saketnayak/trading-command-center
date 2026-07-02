@@ -101,6 +101,13 @@
   --color-on-accent: var(--af-on-accent);
 
   /*
+    Accent usage (layout / actions):
+    - blue / link tokens: primary navigation actions (New Run, Save, links)
+    - purple / accent: AI generation flows (insights, batch analyze)
+    - green / red / yellow: verdict and P&L semantics only
+  */
+
+  /*
     Existing components still use Tailwind palette utilities such as
     text-blue-400 and text-green-400. Remap the common accent steps to
     readable semantic colors so those utilities remain contrast-aware.
@@ -138,6 +145,38 @@
   --color-navy-900: var(--af-page);
 
   --font-mono: var(--font-geist-mono, ui-monospace, monospace);
+  --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+}
+
+@utility font-data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/** Readable line length for AI report / markdown bodies. */
+@utility prose-report {
+  width: 100%;
+  max-width: min(65ch, 100%);
+  min-width: 0;
+}
+
+@layer components {
+  /* ponytail: table-layout:fixed wraps cells; upgrade = horizontal scroll only on wide tables */
+  .prose-report div:has(> table) {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .prose-report table {
+    width: 100%;
+    max-width: 100%;
+    table-layout: fixed;
+  }
+
+  .prose-report :is(th, td) {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
 }
 
 @layer utilities {
@@ -161,6 +200,7 @@
 
   body {
     overflow-x: clip;
+    font-family: var(--font-sans);
   }
 
   *,
@@ -218,11 +258,11 @@
 .upload-drawer-csv-importer .CSVImporter_ColumnDragCard {
   background: var(--af-input);
   color: var(--af-fg);
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--af-fg) 12%, transparent);
 }
 
 .dark .upload-drawer-csv-importer .CSVImporter_ColumnDragCard {
-  box-shadow: 0 1px 2px rgb(0 0 0 / 0.35);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--af-fg) 35%, transparent);
 }
 
 .upload-drawer-csv-importer .CSVImporter_ColumnDragCard__cardHeader {
@@ -262,21 +302,135 @@
   background: rgb(168 85 247);
 }
 
-/* react-js-cron on watchlist page */
+/* react-js-cron on watchlist — antd v6 Select + horizontal layout */
 .watchlist-cron-builder .react-js-cron {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 0.375rem 0.625rem;
   color: var(--af-fg);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
 }
 
-.watchlist-cron-builder .react-js-cron-field {
-  margin-bottom: 0.5rem;
+.watchlist-cron-builder .react-js-cron-field,
+.watchlist-cron-builder .react-js-cron-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.375rem;
+  margin: 0;
 }
 
-.watchlist-cron-builder .react-js-cron-select .ant-select-selector {
-  background: var(--af-page) !important;
+.watchlist-cron-builder .react-js-cron-field > span,
+.watchlist-cron-builder .react-js-cron-period > span:first-child {
+  font-size: 0.75rem;
+  color: var(--af-muted);
+  margin-left: 0 !important;
+}
+
+.watchlist-cron-builder div.react-js-cron-select {
+  margin-left: 0.25rem;
+}
+
+.watchlist-cron-builder .react-js-cron-select.react-js-cron-select-no-prefix {
+  margin-left: 0;
+}
+
+.watchlist-cron-builder .react-js-cron-select.ant-select {
+  min-width: 5.5rem;
+  width: auto;
+  flex: none;
+  background: var(--af-input) !important;
   border-color: var(--af-input-border) !important;
   color: var(--af-fg) !important;
+  border-radius: 0.125rem;
+  box-shadow: none !important;
 }
 
-.watchlist-cron-builder .react-js-cron-select .ant-select-selection-item {
+.watchlist-cron-builder .react-js-cron-select.ant-select:hover {
+  border-color: var(--af-link) !important;
+}
+
+.watchlist-cron-builder .react-js-cron-select.ant-select-focused {
+  border-color: var(--af-link) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--af-link) 35%, transparent) !important;
+}
+
+.watchlist-cron-builder .react-js-cron-select .ant-select-placeholder {
+  color: var(--af-muted) !important;
+}
+
+.watchlist-cron-builder .react-js-cron-select .ant-select-suffix {
+  color: var(--af-muted) !important;
+}
+
+.watchlist-cron-builder div.react-js-cron-error .react-js-cron-select.ant-select {
+  border-color: var(--af-danger) !important;
+  background: var(--af-danger-soft) !important;
+}
+
+.watchlist-cron-builder .react-js-cron-disabled .react-js-cron-select.ant-select-disabled {
+  background: var(--af-muted-surface) !important;
+  opacity: 0.7;
+}
+
+.watchlist-cron-builder-compact .react-js-cron {
+  gap: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+.watchlist-cron-builder-compact .react-js-cron-field > span,
+.watchlist-cron-builder-compact .react-js-cron-period > span:first-child {
+  font-size: 0.6875rem;
+}
+
+.watchlist-cron-builder-compact .react-js-cron-select.ant-select {
+  min-width: 4.75rem;
+  min-height: 2rem;
+  font-size: 0.75rem;
+}
+
+/* Portaled dropdown panels (react-js-cron class names) */
+.react-js-cron-custom-select-dropdown.ant-select-dropdown,
+.react-js-cron-select-dropdown-period.ant-select-dropdown {
+  background: var(--af-surface) !important;
+  border: 1px solid var(--af-input-border) !important;
+  border-radius: 0.125rem !important;
+  padding: 0.25rem !important;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--af-fg) 12%, transparent) !important;
+}
+
+.react-js-cron-custom-select-dropdown .ant-select-item,
+.react-js-cron-select-dropdown-period .ant-select-item {
   color: var(--af-fg) !important;
+  border-radius: 0.125rem;
+  font-size: 0.8125rem;
+}
+
+.react-js-cron-custom-select-dropdown .ant-select-item-option-active,
+.react-js-cron-select-dropdown-period .ant-select-item-option-active {
+  background: color-mix(in srgb, var(--af-link) 12%, var(--af-surface)) !important;
+}
+
+.react-js-cron-custom-select-dropdown .ant-select-item-option-selected,
+.react-js-cron-select-dropdown-period .ant-select-item-option-selected {
+  background: color-mix(in srgb, var(--af-link) 20%, var(--af-surface)) !important;
+  color: var(--af-fg) !important;
+  font-weight: 500;
+}
+
+@keyframes chart-quicklook-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.chart-quicklook-panel {
+  animation: chart-quicklook-in 0.18s ease-out;
 }

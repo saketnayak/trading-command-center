@@ -437,6 +437,8 @@ export interface WaveSummary {
   confidence: number | null;
   zone_low: number | null;
   zone_high: number | null;
+  /** Recent daily closes for compact sparkline thumbnails (newest last). */
+  sparkline?: number[];
   currency: string | null;
   warnings: string[];
   computed_at: string;

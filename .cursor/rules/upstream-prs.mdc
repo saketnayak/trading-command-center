@@ -1,0 +1,12 @@
+---
+description: Fork-to-upstream PR workflow when user says "Create PRs for upstream"
+alwaysApply: false
+---
+
+# Upstream PRs trigger
+
+When the user says **"Create PRs for upstream"** (or equivalent: open upstream PRs, PR fork branches to parent):
+
+1. Read and follow `.cursor/skills/upstream-prs/SKILL.md` immediately.
+2. Do not skip the confirmation step before creating PRs.
+3. Use `gh` for all GitHub operations; one PR per solution branch.

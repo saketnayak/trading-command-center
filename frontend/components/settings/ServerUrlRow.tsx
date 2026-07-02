@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { upsertApiKey } from "@/lib/api";
 import { LLM_SERVER_URL_PLACEHOLDERS, type LocalLlmProvider } from "@/lib/llmConfig";
+import { BTN_PRIMARY_SM_CLASS, FIELD_INPUT_SM_CLASS } from "@/lib/uiClasses";
 
 interface ServerUrlRowProps {
   provider: LocalLlmProvider;
@@ -35,12 +36,12 @@ export function ServerUrlRow({ provider, label, isValid, onSaved }: ServerUrlRow
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder={LLM_SERVER_URL_PLACEHOLDERS[provider]}
-        className="bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg w-full sm:max-w-xs focus:outline-hidden focus:border-blue-500"
+        className={`${FIELD_INPUT_SM_CLASS} w-full sm:max-w-xs`}
       />
       <button
         onClick={() => mutation.mutate()}
         disabled={mutation.isPending || !value}
-        className="bg-blue-600 hover:bg-blue-700 text-fg rounded-sm px-3 py-1 text-xs disabled:opacity-50"
+        className={BTN_PRIMARY_SM_CLASS}
       >
         {mutation.isPending ? "Saving…" : "Save"}
       </button>

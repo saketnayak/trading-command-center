@@ -258,6 +258,37 @@ async def fetch_history_period(
     return data.copy()
 
 
+def _sync_fetch_company_profile(ticker: str) -> dict | None:
+    """Return selected company profile fields from yfinance .info, or None if unavailable."""
+    try:
+        info = yf.Ticker(ticker).info
+        if not isinstance(info, dict) or not info:
+            return None
+        name = info.get("longName") or info.get("shortName")
+        if not name or not str(name).strip():
+            return None
+        return {
+            "longName": info.get("longName"),
+            "shortName": info.get("shortName"),
+            "sector": info.get("sector"),
+            "industry": info.get("industry"),
+            "website": info.get("website"),
+            "exchange": info.get("exchange"),
+            "country": info.get("country"),
+            "currency": info.get("currency"),
+            "marketCap": info.get("marketCap"),
+        }
+    except Exception:
+        logger.debug("yfinance company profile fetch failed for %s", ticker)
+        return None
+
+
+async def fetch_company_profile(ticker: str) -> dict | None:
+    """Async wrapper: fetches company profile metadata via Yahoo Finance."""
+    async with _get_yf_semaphore():
+        return await asyncio.to_thread(_sync_fetch_company_profile, ticker)
+
+
 async def fetch_historical_close(symbol: str, target_date: date) -> Optional[float]:
     """Return the latest available close in a 7-day window ending at target_date."""
     try:

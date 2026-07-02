@@ -1,6 +1,7 @@
 "use client";
 
 import type { WaveSummary } from "@/lib/types";
+import { signalToneBadgeClass } from "@/lib/uiClasses";
 
 export function WaveBadge({ data }: { data: WaveSummary | undefined | null }) {
   if (!data?.top_scenario) return null;
@@ -8,10 +9,10 @@ export function WaveBadge({ data }: { data: WaveSummary | undefined | null }) {
   const dir = data.top_direction;
   const color =
     dir === "long"
-      ? "text-green-400 bg-green-900/30"
+      ? signalToneBadgeClass("success")
       : dir === "short"
-        ? "text-red-400 bg-red-900/30"
-        : "text-yellow-400 bg-yellow-900/30";
+        ? signalToneBadgeClass("danger")
+        : signalToneBadgeClass("warning");
 
   return (
     <span

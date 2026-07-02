@@ -4,10 +4,13 @@ import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { generateInsight, getLatestInsight, listInsights } from "@/lib/api";
 import { WatchButton } from "@/components/portfolio/WatchButton";
-import type { PortfolioInsight, InsightActionItem, InsightRiskAlert } from "@/lib/types";
+import type { PortfolioInsight, InsightActionItem, InsightRiskAlert, TickerMetadata } from "@/lib/types";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import { BehavioralAlerts } from "@/components/portfolio/BehavioralAlerts";
 import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
+import { BTN_AI_CLASS, BTN_AI_SM_CLASS, BTN_SECONDARY_CLASS, FIELD_INPUT_CLASS } from "@/lib/uiClasses";
 
 const ACTION_COLORS: Record<string, string> = {
   BUY_MORE: "bg-green-500/20 text-green-300 border-green-500/30",
@@ -91,7 +94,7 @@ function HealthScoreRing({ score }: { score: number }) {
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className={`text-2xl font-bold tabular-nums ${healthColor(score)}`}>{score}</span>
+          <span className={`text-2xl font-bold font-data ${healthColor(score)}`}>{score}</span>
           <span className="text-muted text-xs leading-none">/ 10</span>
         </div>
       </div>
@@ -100,28 +103,36 @@ function HealthScoreRing({ score }: { score: number }) {
   );
 }
 
-function ActionItemCard({ item }: { item: InsightActionItem }) {
+function ActionItemCard({
+  item,
+  metadata,
+}: {
+  item: InsightActionItem;
+  metadata?: TickerMetadata;
+}) {
   const router = useRouter();
 
   return (
-    <div className="flex items-start gap-3 bg-input/50 rounded-sm p-3 border border-input-border/50">
+    <div className="flex items-start gap-3 bg-input/50 rounded-lg p-3 border border-input-border/50">
       <div className="flex items-center gap-2 mt-0.5 shrink-0">
         <span className={`w-2 h-2 rounded-full ${PRIORITY_DOT[item.priority] ?? "bg-subtle"}`} />
-        <span className={`text-xs font-medium px-2 py-0.5 rounded-sm border ${ACTION_COLORS[item.action] ?? "bg-muted-surface text-fg-secondary border-input-border"}`}>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-md border ${ACTION_COLORS[item.action] ?? "bg-muted-surface text-fg-secondary border-input-border"}`}>
           {item.action.replace("_", " ")}
         </span>
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
-            <span className="text-fg text-sm font-semibold">{item.ticker}</span>
+            {item.ticker ? (
+              <TickerLabel ticker={item.ticker} metadata={metadata} />
+            ) : null}
             <p className="text-muted text-xs mt-0.5 leading-relaxed">{item.rationale}</p>
           </div>
           {item.ticker && (
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={() => router.push(`/runs/new?ticker=${encodeURIComponent(item.ticker!)}`)}
-                className="text-xs font-semibold px-2 py-0.5 rounded-sm bg-violet-700 hover:bg-violet-600 text-fg transition-colors"
+                className={BTN_AI_SM_CLASS}
               >
                 ⚡ Analyze
               </button>
@@ -136,14 +147,14 @@ function ActionItemCard({ item }: { item: InsightActionItem }) {
 
 function RiskAlertCard({ alert }: { alert: InsightRiskAlert }) {
   return (
-    <div className="flex items-start gap-2 bg-input/30 rounded-sm p-2.5 border border-input-border/30">
+    <div className="flex items-start gap-2 bg-input/30 rounded-lg p-2.5 border border-input-border/30">
       <span className="text-base leading-none mt-0.5">{SEVERITY_ICON[alert.severity] ?? "🔵"}</span>
       <div className="flex-1 min-w-0">
         <p className="text-fg-secondary text-xs leading-relaxed">{alert.description}</p>
         {alert.affected_tickers?.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1">
             {alert.affected_tickers.map((t) => (
-              <span key={t} className="text-xs bg-muted-surface text-fg-secondary px-1.5 py-0.5 rounded-sm">{t}</span>
+              <span key={t} className="text-xs bg-muted-surface text-fg-secondary px-1.5 py-0.5 rounded-md">{t}</span>
             ))}
           </div>
         )}
@@ -159,16 +170,16 @@ function SectorChart({ data }: { data: Record<string, number> }) {
       {entries.map(([sector, pct], i) => (
         <div key={sector} className="flex items-center gap-2">
           <div className="w-24 text-muted text-xs text-right shrink-0 truncate" title={sector}>{sector}</div>
-          <div className="flex-1 h-4 bg-input rounded-sm overflow-hidden">
+          <div className="flex-1 h-4 bg-input rounded-md overflow-hidden">
             <div
-              className="h-full rounded-sm transition-all duration-500"
+              className="h-full rounded-md transition-all duration-500"
               style={{
                 width: `${Math.min(100, pct)}%`,
                 backgroundColor: SECTOR_COLORS[i % SECTOR_COLORS.length],
               }}
             />
           </div>
-          <div className="w-10 text-muted text-xs tabular-nums text-right shrink-0">
+          <div className="w-10 text-muted text-xs font-data text-right shrink-0">
             {typeof pct === "number" ? pct.toFixed(1) : pct}%
           </div>
         </div>
@@ -195,7 +206,7 @@ function InsightHistoryRow({ insight, onSelect, selected }: { insight: Portfolio
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           {insight.overall_stance && (
-            <span className={`text-xs px-1.5 py-0.5 rounded-sm border ${stanceColor(insight.overall_stance)}`}>
+            <span className={`text-xs px-1.5 py-0.5 rounded-md border ${stanceColor(insight.overall_stance)}`}>
               {insight.overall_stance}
             </span>
           )}
@@ -252,13 +263,13 @@ function GenerateForm({
           layout="inline"
           value={llmConfig}
           onChange={setLlmConfig}
-          providerClassName="bg-page border border-input-border rounded-sm px-3 py-1.5 text-fg text-sm focus:outline-hidden focus:border-blue-600"
-          modelClassName="bg-page border border-input-border rounded-sm px-3 py-1.5 text-fg text-sm focus:outline-hidden focus:border-blue-600 w-48"
+          providerClassName={FIELD_INPUT_CLASS}
+          modelClassName={`${FIELD_INPUT_CLASS} w-48`}
         />
         <button
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending}
-          className="px-4 py-1.5 rounded-sm text-sm font-medium bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-fg transition-colors"
+          className={BTN_AI_CLASS}
         >
           {mutation.isPending ? "Starting…" : "Generate Insights"}
         </button>
@@ -283,6 +294,12 @@ function triggerDownload(blob: Blob, filename: string) {
 
 function InsightView({ insight, portfolioName }: { insight: PortfolioInsight; portfolioName?: string }) {
   const [pdfLoading, setPdfLoading] = useState(false);
+  const actionTickers = (insight.action_items ?? [])
+    .map((item) => item.ticker)
+    .filter((ticker): ticker is string => Boolean(ticker));
+  const { data: tickerMetadata = {} } = useTickerMetadata(actionTickers, {
+    enabled: actionTickers.length > 0,
+  });
 
   async function handleExportPdf() {
     setPdfLoading(true);
@@ -336,7 +353,7 @@ function InsightView({ insight, portfolioName }: { insight: PortfolioInsight; po
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-2">
             {insight.overall_stance && (
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-sm border capitalize ${stanceColor(insight.overall_stance)}`}>
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-md border capitalize ${stanceColor(insight.overall_stance)}`}>
                 {insight.overall_stance}
               </span>
             )}
@@ -347,7 +364,7 @@ function InsightView({ insight, portfolioName }: { insight: PortfolioInsight; po
             <button
               onClick={handleExportPdf}
               disabled={pdfLoading}
-              className="text-xs text-muted hover:text-fg border border-input-border rounded-sm px-2.5 py-1 disabled:opacity-40 flex items-center gap-1.5 transition-colors"
+              className={`${BTN_SECONDARY_CLASS} disabled:opacity-40 gap-1.5`}
             >
               {pdfLoading ? (
                 <>
@@ -378,7 +395,11 @@ function InsightView({ insight, portfolioName }: { insight: PortfolioInsight; po
             </h3>
             <div className="space-y-2">
               {insight.action_items.map((item, i) => (
-                <ActionItemCard key={i} item={item} />
+                <ActionItemCard
+                  key={i}
+                  item={item}
+                  metadata={item.ticker ? tickerMetadata[item.ticker.toUpperCase()] : undefined}
+                />
               ))}
             </div>
           </div>
@@ -523,7 +544,7 @@ export function InsightsDashboard({ portfolioId, hasHoldings, portfolioName }: I
         <button
           onClick={() => setShowGenerate((v) => !v)}
           disabled={isRunning}
-          className="w-full px-3 py-2 rounded-sm text-sm font-medium bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-fg transition-colors flex items-center justify-center gap-2"
+          className={`w-full ${BTN_AI_CLASS} gap-2`}
         >
           {isRunning ? (
             <>

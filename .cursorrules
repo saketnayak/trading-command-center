@@ -1,0 +1,9 @@
+## Design Context
+
+AgentFloor UI work should follow the Impeccable design context at the repo root. Read these before frontend or visual changes:
+
+- **PRODUCT.md** — register: **product**; audience: self-directed retail investors doing morning portfolio checks; personality: sharp, modern, accessible (Robinhood/Wealthfront lane); anti-references: legacy enterprise admin, gamified trading, generic AI slop, crypto meme UI.
+- **DESIGN.md** — visual system: "The Morning Desk"; slate neutrals + blue (actions) + purple (AI only) + green/red/yellow (verdicts & P&L only); Geist Sans + Geist Mono tabular nums; tonal layering over shadows; soft consumer fintech radius (8–12px).
+- **`.impeccable/design.json`** — component snippets and sidecar tokens for live/critique tooling.
+
+Frontend tokens live in `frontend/app/globals.css` (`--af-*` / Tailwind semantic classes). Shared button/input class strings: `frontend/lib/uiClasses.ts`. Use `/impeccable` commands for design iteration; run live mode from the monorepo root with `--target frontend`.

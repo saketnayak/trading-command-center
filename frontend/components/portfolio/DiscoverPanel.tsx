@@ -8,7 +8,10 @@ import {
   type SectorGap,
   type StockRecommendation,
 } from "@/lib/api";
+import type { TickerMetadata } from "@/lib/types";
 import { WatchButton } from "@/components/portfolio/WatchButton";
+import { TickerLabel } from "@/components/ui/TickerLabel";
+import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
 
@@ -54,6 +57,11 @@ export function DiscoverPanel({ portfolioId }: { portfolioId: string }) {
   const filtered = filter === "All"
     ? recommendations
     : recommendations.filter((r) => r.tag === filter);
+
+  const { data: tickerMetadata = {} } = useTickerMetadata(
+    recommendations.map((rec) => rec.ticker),
+    { enabled: recommendations.length > 0 },
+  );
 
   const maxWeight = Math.max(...gaps.map((g) => Math.max(g.your_weight, g.sp500_weight)), 0.01);
 
@@ -137,6 +145,7 @@ export function DiscoverPanel({ portfolioId }: { portfolioId: string }) {
             <RecommendationCard
               key={rec.ticker}
               rec={rec}
+              metadata={tickerMetadata[rec.ticker.toUpperCase()]}
               onAnalyze={() => router.push(`/runs/new?ticker=${encodeURIComponent(rec.ticker)}`)}
             />
           ))}
@@ -177,16 +186,18 @@ function SectorRow({ gap, maxWeight }: { gap: SectorGap; maxWeight: number }) {
 
 function RecommendationCard({
   rec,
+  metadata,
   onAnalyze,
 }: {
   rec: StockRecommendation;
+  metadata?: TickerMetadata;
   onAnalyze: () => void;
 }) {
   return (
     <div className="bg-input border border-input-border rounded-lg p-3">
-      <div className="flex items-center justify-between mb-1.5">
-        <div className="flex items-center gap-2">
-          <span className="text-fg font-bold text-sm">{rec.ticker}</span>
+      <div className="flex items-center justify-between mb-1.5 gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <TickerLabel ticker={rec.ticker} metadata={metadata} />
           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-sm ${TAG_COLORS[rec.tag] ?? "bg-muted-surface text-fg-secondary"}`}>
             {rec.tag}
           </span>

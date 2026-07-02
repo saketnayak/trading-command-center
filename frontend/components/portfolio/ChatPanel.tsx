@@ -5,6 +5,7 @@ import { sendPortfolioChat } from "@/lib/api";
 import type { ChatMessage } from "@/lib/api";
 import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
+import { BTN_AI_CLASS, FIELD_INPUT_CLASS } from "@/lib/uiClasses";
 
 const SUGGESTED = [
   "Where am I most overexposed?",
@@ -72,8 +73,8 @@ export function ChatPanel({ portfolioId }: { portfolioId: string }) {
           layout="stacked"
           value={llmConfig}
           onChange={setLlmConfig}
-          providerClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
-          modelClassName="w-full bg-input border border-input-border rounded-sm px-2 py-1.5 text-sm text-fg focus:outline-hidden focus:border-blue-500"
+          providerClassName={FIELD_INPUT_CLASS}
+          modelClassName={FIELD_INPUT_CLASS}
         />
 
         {messages.length > 0 && (
@@ -133,7 +134,7 @@ export function ChatPanel({ portfolioId }: { portfolioId: string }) {
             <button
               onClick={() => submit(input)}
               disabled={!input.trim() || sendMutation.isPending}
-              className="self-end px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-fg text-sm rounded-lg transition-colors"
+              className={`self-end ${BTN_AI_CLASS}`}
             >
               {sendMutation.isPending ? "…" : "Send"}
             </button>

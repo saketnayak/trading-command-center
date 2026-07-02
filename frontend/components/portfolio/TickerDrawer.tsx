@@ -6,6 +6,7 @@ import { getTickerSnapshot } from "@/lib/api";
 import { getClosesForDays } from "@/lib/chartWindow";
 import { fmtMoney } from "@/lib/currency";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
+import { CompanyLogo } from "@/components/ui/CompanyLogo";
 import { WavePanel } from "@/components/wave/WavePanel";
 import type { PortfolioHolding, TickerChart } from "@/lib/types";
 
@@ -133,7 +134,6 @@ function DrawerContent({
   const name = metadata?.company_name ?? metadata?.display_name ?? snap?.name ?? ticker;
   const sector = metadata?.sector ?? snap?.sector;
   const website = metadata?.website ?? snap?.website;
-  const logo = metadata?.logo_url ?? snap?.logo;
   const exchange = metadata?.exchange ?? snap?.exchange;
   const country = metadata?.country ?? snap?.country;
   const hasChart = (snap?.chart?.c?.length ?? 0) >= 2;
@@ -154,10 +154,7 @@ function DrawerContent({
             {country && <span className="text-[10px] text-muted bg-input rounded-sm px-1.5 py-0.5">{country}</span>}
           </div>
         </div>
-        {logo && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={logo} alt={name} className="h-10 w-10 rounded-sm object-contain bg-input p-1 shrink-0" />
-        )}
+        <CompanyLogo ticker={ticker} size="lg" className="bg-input p-1" />
       </div>
 
       {/* Price change badges */}

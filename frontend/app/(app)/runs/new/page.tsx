@@ -35,7 +35,7 @@ function NewRunContent() {
 export default function NewRunPage() {
   return (
     <PageShell>
-      <PageTitle className="text-fg text-lg font-semibold mb-6">New Run</PageTitle>
+      <PageTitle className="text-fg mb-6">New Run</PageTitle>
       <Suspense fallback={<div className="text-muted text-sm">Loading…</div>}>
         <NewRunContent />
       </Suspense>

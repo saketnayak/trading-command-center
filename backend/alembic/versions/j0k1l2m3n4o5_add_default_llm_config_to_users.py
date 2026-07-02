@@ -1,14 +1,14 @@
 """add default llm config to users
 
 Revision ID: j0k1l2m3n4o5
-Revises: g7h8i9j0k1l2
+Revises: i9j0k1l2m3n4
 Create Date: 2026-06-19
 """
 from alembic import op
 import sqlalchemy as sa
 
 revision = "j0k1l2m3n4o5"
-down_revision = "g7h8i9j0k1l2"
+down_revision = "i9j0k1l2m3n4"
 branch_labels = None
 depends_on = None
 

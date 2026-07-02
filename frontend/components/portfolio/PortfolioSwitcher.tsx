@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import type { Portfolio } from "@/lib/types";
+import { BTN_AI_SM_CLASS, FIELD_INPUT_SM_CLASS } from "@/lib/uiClasses";
 
 interface PortfolioSwitcherProps {
   portfolios: Portfolio[];
@@ -8,6 +9,9 @@ interface PortfolioSwitcherProps {
   onSelect: (id: string) => void;
   onCreate: (name: string) => void;
   onDelete: (id: string) => void;
+  /** When true, opens the dropdown in create mode (e.g. from EmptyState CTA). */
+  requestCreate?: boolean;
+  onRequestCreateHandled?: () => void;
 }
 
 export function PortfolioSwitcher({
@@ -16,6 +20,8 @@ export function PortfolioSwitcher({
   onSelect,
   onCreate,
   onDelete,
+  requestCreate = false,
+  onRequestCreateHandled,
 }: PortfolioSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -36,6 +42,13 @@ export function PortfolioSwitcher({
     document.addEventListener("mousedown", handleMouseDown);
     return () => document.removeEventListener("mousedown", handleMouseDown);
   }, []);
+
+  useEffect(() => {
+    if (!requestCreate) return;
+    setOpen(true);
+    setCreating(true);
+    onRequestCreateHandled?.();
+  }, [requestCreate, onRequestCreateHandled]);
 
   function handleSelect(id: string) {
     onSelect(id);
@@ -64,7 +77,7 @@ export function PortfolioSwitcher({
       {/* Trigger */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 bg-input border border-input-border hover:border-input-border rounded-sm px-3 py-2 text-sm text-fg focus:outline-hidden transition-colors"
+        className="flex items-center gap-2 rounded-md border border-input-border bg-input px-3 py-2 text-sm text-fg transition-colors hover:border-border-strong focus:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500/30"
       >
         <span className="truncate max-w-[160px]">
           {selected ? selected.name : <span className="text-muted">Select portfolio</span>}
@@ -74,7 +87,7 @@ export function PortfolioSwitcher({
 
       {/* Dropdown */}
       {open && (
-        <div className="absolute left-0 top-full mt-1 z-50 min-w-[220px] bg-input border border-input-border rounded-sm shadow-xl py-1">
+        <div className="absolute left-0 top-full z-50 mt-1 min-w-[220px] rounded-lg border border-input-border bg-input py-1 shadow-xl">
           {portfolios.length === 0 && (
             <div className="px-3 py-2 text-muted text-xs">No portfolios yet</div>
           )}
@@ -118,12 +131,12 @@ export function PortfolioSwitcher({
                     }
                   }}
                   placeholder="Portfolio name"
-                  className="flex-1 bg-page border border-input-border rounded-sm px-2 py-1 text-xs text-fg focus:outline-hidden focus:border-purple-500 min-w-0"
+                  className={`${FIELD_INPUT_SM_CLASS} min-w-0 flex-1 text-xs`}
                 />
                 <button
                   onClick={handleConfirmCreate}
                   disabled={!newName.trim()}
-                  className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-fg rounded-sm px-2 py-1 text-xs shrink-0"
+                  className={`${BTN_AI_SM_CLASS} shrink-0`}
                 >
                   Add
                 </button>
