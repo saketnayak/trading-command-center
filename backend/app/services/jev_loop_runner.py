@@ -205,7 +205,8 @@ class JevLoop:
         except Exception as exc:  # noqa: BLE001 - any crash must still pull quotes
             logger.exception("jev session %s crashed", self.cfg.session_id)
             await self._cancel_resting()
-            await self.sink.on_status("failed", str(exc)[:500], self.summary(self._last_mid))
+            reason = f"{type(exc).__name__}: {exc}" if str(exc) else type(exc).__name__
+            await self.sink.on_status("failed", f"unexpected error: {reason}"[:500], self.summary(self._last_mid))
             return "failed"
 
     async def _finish(self, status: str, reason: str) -> str:
@@ -225,10 +226,13 @@ class JevLoop:
 
     async def _startup(self, now: float) -> None:
         equity = 0.0
-        try:
-            equity = float((await self.market.get_account()).get("equity") or 0.0)
-        except AlpacaAPIError:
-            pass
+        for attempt in range(3):  # a transient network blip must not change how drawdown is measured
+            try:
+                equity = float((await self.market.get_account()).get("equity") or 0.0)
+                break
+            except AlpacaAPIError:
+                if attempt < 2:
+                    await self._sleep(1.0)
         if equity <= 0:
             equity = self.cfg.limits.max_position_usd  # the most this loop can ever put at risk
         self.inv.equity_usd = equity

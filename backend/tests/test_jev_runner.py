@@ -398,3 +398,35 @@ async def test_threshold_overrides_reach_the_policy():
                            thresholds=StrategyThresholds(toxic_flow_pull_threshold=0.1))
     await loop.run()
     assert sink.ticks[0]["action"] == "PULL_QUOTES"
+
+
+async def test_a_transient_account_read_failure_is_retried_at_startup():
+    clock = Clock()
+    market = FakeMarket(clock)
+    real = market.get_account
+    calls = {"n": 0}
+
+    async def flaky():
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise AlpacaAPIError(0, "network error: ReadTimeout")
+        return await real()
+
+    market.get_account = flaky
+    loop, sink = make_loop(market, Decider(answers()), max_ticks=1, mode="shadow")
+    assert await loop.run() == "completed"
+    assert sink.summaries[-1]["start_equity_usd"] == 100000.0
+
+
+async def test_a_crash_always_records_a_readable_reason():
+    # Regression: ReadTimeout has an empty message, so the session failed with a blank reason.
+    clock = Clock()
+    market = FakeMarket(clock)
+
+    async def boom():
+        raise RuntimeError()
+
+    market.read_top_of_book = boom
+    loop, sink = make_loop(market, Decider(answers()), max_ticks=1, mode="shadow")
+    assert await loop.run() == "failed"
+    assert "RuntimeError" in sink.statuses[-1][1]

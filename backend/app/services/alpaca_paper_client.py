@@ -91,7 +91,11 @@ class AlpacaPaperClient:
 
     async def _request(self, method: str, url: str, **kwargs):
         await self._limiter.acquire()
-        resp = await self._http.request(method, url, headers=self._headers, **kwargs)
+        try:
+            resp = await self._http.request(method, url, headers=self._headers, **kwargs)
+        except httpx.HTTPError as exc:
+            # Timeouts and dropped connections are data errors for the loop, never crashes.
+            raise AlpacaAPIError(0, f"network error: {type(exc).__name__}: {exc}") from exc
         if resp.status_code == 401:
             raise AlpacaAPIError(
                 401,

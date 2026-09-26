@@ -153,7 +153,11 @@ export default function JevSessionPage() {
           <p className="mt-1 text-xs text-muted">
             decider {session.decision_route ?? "—"} {session.decision_model ? `(${session.decision_model})` : ""}
           </p>
-          {session.stop_reason && <p className="mt-1 text-xs text-fg-secondary">Ended: {session.stop_reason}</p>}
+          {(session.stop_reason || session.status === "failed") && (
+            <p className={`mt-1 text-xs ${session.status === "failed" ? "text-red-500 dark:text-red-400" : "text-fg-secondary"}`}>
+              Ended: {session.stop_reason || "failed without a recorded reason (see the backend log)"}
+            </p>
+          )}
           {session.status === "interrupted" && session.mode === "paper" && session.inventory !== 0 && (
             <p className="mt-1 text-xs text-amber-600 dark:text-amber-300">
               The backend restarted while this session held a position. Resting orders were cancelled; flatten to close the position.

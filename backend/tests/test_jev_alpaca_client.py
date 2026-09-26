@@ -2,6 +2,8 @@ import inspect
 import json
 import re
 
+import httpx
+
 import pytest
 
 import app.services.alpaca_paper_client as alpaca_module
@@ -192,3 +194,14 @@ async def test_an_id_namespace_keeps_client_order_ids_unique_across_clients(http
     async with c:
         await c.submit_market_order("sell", 0.0001)
     assert json.loads(httpx_mock.get_requests()[0].content)["client_order_id"] == "jevlab-test-f1a2-1"
+
+
+@pytest.mark.parametrize("exc", [httpx.ReadTimeout("slow"), httpx.ConnectError("refused")])
+async def test_network_failures_become_alpaca_errors_not_crashes(httpx_mock, exc):
+    # Regression: a ReadTimeout on GET /v2/account escaped as a raw httpx error
+    # and crashed a paper session before its first tick.
+    httpx_mock.add_exception(exc, url=f"{PAPER_TRADING_BASE_URL}/v2/account")
+    async with _client() as c:
+        with pytest.raises(AlpacaAPIError) as err:
+            await c.get_account()
+    assert type(exc).__name__ in str(err.value)
