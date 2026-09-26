@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-AgentFloor is a web UI wrapping the [TradingAgents](https://github.com/TauricResearch/TradingAgents) Python multi-agent LLM framework. It is **research-only** — no order execution. The stack is FastAPI + async SQLAlchemy 2 + PostgreSQL (backend) and Next.js 16 App Router + NextAuth v4 + TanStack Query v5 + Tailwind CSS v4 (frontend).
+AgentFloor is a web UI wrapping the [TradingAgents](https://github.com/TauricResearch/TradingAgents) Python multi-agent LLM framework. It is **research-only** — no order execution, with one fenced exception: the opt-in JEV Lab module can place Alpaca *paper* orders (never live; see JEV Lab below). The stack is FastAPI + async SQLAlchemy 2 + PostgreSQL (backend) and Next.js 16 App Router + NextAuth v4 + TanStack Query v5 + Tailwind CSS v4 (frontend).
 
 ---
 
@@ -77,11 +77,14 @@ Local Postgres from `docker compose -f docker-compose.dev.yml up db` is mapped t
 | `/regime` | `regime.py` | Markov regime detection — `GET /regime/{ticker}` returns current regime (Bull/Sideways/Bear), signal, Sharpe, max drawdown, and 3×3 transition matrix |
 | (none) | `wave.py` | Elliott Wave + Fibonacci analysis — `GET /wave/{ticker}` (compact summary), `POST /wave/{ticker}/analyze` (full chart payload), `GET /portfolio/{id}/wave` (batch for all holdings) |
 | (none) | `market.py` | Market-wide data — `GET /market/trending`, `GET /market/movers`. Sources Yahoo Finance trending list + Finnhub quotes. Requires Finnhub key; returns empty gracefully without one. |
+| (none) | `jev.py` | JEV Lab (experimental, behind `settings.enable_jev_loop`, 404 while off) — `/jev/meta`, `/jev/symbols/validate`, `/jev/sessions` CRUD + `/ticks` (`?tail=N` for the latest N) + `/calibration` + `/stop` + `/flatten`, and `WS /ws/jev/{id}` |
 | (none) | `tickers.py` | Batch ticker metadata — `GET /tickers/metadata?symbols=AAPL,MSFT`. Returns company name, sector, logo, exchange, market cap, etc. from Finnhub with a DB cache (`ticker_metadata` table, TTL-based). Up to 50 symbols per request. |
 
 CORS is restricted to `settings.frontend_url`.
 
 **Markov regime analysis:** `services/markov_service.py` fits a 3-state (Bull/Sideways/Bear) Gaussian HMM on 2 years of daily returns via `hmmlearn` (optional dependency — install with `pip install -e ".[markov-hmm]"`). Returns current regime, directional signal (`bull_prob − bear_prob`, range −1 to +1), walk-forward Sharpe, max drawdown, and the 3×3 transition probability matrix. Results are cached in-process for 1 hour. The endpoint is authenticated (`Depends(get_current_user)`).
+
+**JEV Lab (`backend/jev_loop/` + `services/jev_*.py`):** The one exception to "no order execution", fenced hard. A market-making loop ported from Roan's jev-loop blueprint (spec: `docs/superpowers/specs/2026-09-26-jev-lab-design.md`). `jev_loop/` is a pure package (no I/O): state snapshot, the seven-question Jev battery + arithmetic guard (`split.py`), policy, strategy thresholds, Avellaneda-Stoikov pricing, nine hard risk limits, fallback ladder, order planner, calibration. `services/jev_loop_runner.py` runs the tick loop; `jev_session_manager.py` owns tasks (max 2 running, 1 paper session per symbol), the DB sink + WebSocket broadcast, startup recovery (running → `interrupted`, paper orders cancelled; never blocks boot) and nightly tick retention (14 days). `jev_client.py` resolves the decider: valid `typesafe` key → valid `ai_gateway` key (Vercel AI Gateway, `typesafe-ai/jev`) → labelled mock. `alpaca_paper_client.py` is paper-only by construction (no live URL, no base-URL parameter); all Alpaca calls share one ~180/min limiter per key. Modes: `shadow` (default; real data, never orders; forced for any mock decider) and `paper` (admin-only, needs a real Jev key). Session risk limits may only be lowered (`validate_limit_overrides`). Keys: `alpaca_paper` is stored as encrypted JSON `{"key_id","secret"}`; non-`PK` (live) key IDs are rejected.
 
 **Auth flow:** `POST /auth/register` — first user gets `admin` role automatically. Subsequent registrations require a valid invite token. `POST /auth/login` returns a JWT. All other routes use `get_current_user` (dependency in `app/dependencies.py`) which validates the Bearer token and loads the `User` row. `POST /auth/invite` generates a signed invite token and emails the link; when SMTP is not configured the invite URL is returned in the response body (`invite_url` field) so the admin can copy-paste it.
 
@@ -129,7 +132,9 @@ CORS is restricted to `settings.frontend_url`.
 - `/runs/performance` — accuracy stats (7d/14d/30d/90d) and outcomes table across all completed runs
 - `/watchlist` — ticker watchlist with visual schedule builder; per-item manual run trigger
 - `/portfolio` — portfolio manager with four tabs: **Holdings** (CSV upload, live prices via Finnhub, unrealized P&L, inline row editing, CSV export; stats bar with best/worst performer and stale count; per-row "Watch" button to add to watchlist; expandable ▸ fundamentals strip per holding), **AI Insights** (generate / view AI-powered portfolio briefings — health score, action items, risk alerts, sector exposure), **Earnings** (upcoming earnings calendar for portfolio tickers, 60-day window), and **News** (merged company news feed). Multiple portfolios per user; each portfolio holds versioned snapshots.
-- `/settings` — API key management (Finnhub for portfolio prices + outcome tracking; LLM providers including IONOS) + team admin (admin-only). Invite URL is shown inline when SMTP is not configured.
+- `/settings` — API key management (Finnhub for portfolio prices + outcome tracking; LLM providers including IONOS; JEV Lab keys: Alpaca paper Key ID + Secret, Vercel AI Gateway, TypeSafe) + team admin (admin-only). Invite URL is shown inline when SMTP is not configured.
+- `/jev` — JEV Lab (nav link only when `enable_jev_loop` is on): split explainer, start form (symbol check, shadow/paper, duration, threshold/limit overrides), session list
+- `/jev/[id]` — live session: price/action chart, latest Jev battery vs thresholds, tick log, position vs limits, Stop / Flatten, calibration tab. Streams via `useJevStream` (`lib/jev/`)
 - `/wave/[ticker]` — Elliott Wave + Fibonacci analysis page for a single ticker. Renders the `WavePanel` Plotly chart, `WaveConfirmation` badge, scenario/trade-region panels, and a projection overlay.
 
 **Export (`lib/export/`):** Three client-side utilities used by `DownloadMenu`:
@@ -140,6 +145,8 @@ CORS is restricted to `settings.frontend_url`.
 **Data fetching:** TanStack Query v5 (`useQuery` / `useMutation`). `QueryClient` and `SessionProvider` are set up in `app/providers.tsx`, which wraps `app/layout.tsx`.
 
 **Components (`components/runs/`):** `TraderDecision`, `AnalystReports`, `BullBearDebate`, `DownloadMenu` (JSON/Markdown/PDF dropdown), `ComparisonPanel` (side-by-side run columns with agreement badge), `OutcomeCard` (price grid at +7/14/30/90d, sourced from Finnhub), `PipelinePanel`, `AgentFeed`, `AgentSidebar`, `RunTable` (accepts optional `selectedIds`/`onSelectionChange` for checkbox multi-select; caps at 2 with FIFO replacement; only completed runs are selectable), `RunFilters`, `RunForm` (default provider: `openai`), `StatsBar`, `MarkovConfirmation` (shown on the holdings row — compares AI verdict with Markov regime and renders an agreement/conflict/neutral badge; neutral when verdict is hold or regime is Sideways), `WaveConfirmation` (compact Elliott/Fib badge shown next to ticker — calls `GET /wave/{ticker}` and renders scenario + trade zone).
+
+**Components (`components/jev/`):** `NewSessionForm`, `SessionTable`, `PriceActionChart` (inline SVG), `BatteryPanel`, `RiskPanel`, `TickFeed`, `CalibrationPanel`, `SplitExplainer`, `JevBadges`, `JevDisabled`. Types in `lib/jev/types.ts`; API functions live in `lib/api.ts` with the rest.
 
 **Components (`components/wave/`):** `WavePanel` (Plotly chart with OHLCV, swing pivots, wave labels, Fibonacci levels, projection overlay; profile selector), `OverviewBanner` (top-scenario + direction summary), `ScenarioPanel` (ranked scenario list), `TradeRegionsPanel` (entry zones), `ToolOutcomesPanel`, `WaveBadge` (inline pill for use in tables), `WaveConfirmation`, `AnalysisChart`.
 
