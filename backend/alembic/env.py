@@ -18,6 +18,7 @@ from app.models import portfolio, portfolio_insight, watchlist, investor_profile
 from app.models import portfolio_delivery_settings  # noqa: F401, E402
 from app.models import ticker_metadata  # noqa: F401, E402
 from app.models import settings  # noqa: F401, E402
+from app.models import jev  # noqa: F401, E402
 
 _DEFAULT_DATABASE_URL = "postgresql://agentfloor:agentfloor@localhost:5433/agentfloor"
 _PLACEHOLDER_INI_URL = "driver://user:pass@localhost/dbname"
