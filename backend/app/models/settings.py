@@ -14,4 +14,5 @@ class AppSettings(Base):
     enable_kalman_filter: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     enable_elliott_wave: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     enable_markov_regime: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    enable_jev_loop: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     updated_at = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

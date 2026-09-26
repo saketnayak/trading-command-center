@@ -24,6 +24,7 @@ class AppSettingsUpdate(BaseModel):
     enable_kalman_filter: bool = True
     enable_elliott_wave: bool = True
     enable_markov_regime: bool = True
+    enable_jev_loop: bool | None = None  # None = leave unchanged
 
 
 @router.get("/settings")
@@ -60,6 +61,7 @@ async def put_app_settings(
             enable_kalman_filter=body.enable_kalman_filter,
             enable_elliott_wave=body.enable_elliott_wave,
             enable_markov_regime=body.enable_markov_regime,
+            enable_jev_loop=body.enable_jev_loop,
         )
     except SettingsDataError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
