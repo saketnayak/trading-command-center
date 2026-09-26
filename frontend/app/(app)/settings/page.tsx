@@ -31,6 +31,7 @@ import {
 } from "@/lib/llmConfig";
 import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { ApiKeyRow } from "@/components/settings/ApiKeyRow";
+import { AlpacaPaperKeyRow } from "@/components/settings/AlpacaPaperKeyRow";
 import { InfoPopover } from "@/components/settings/InfoPopover";
 import { ServerUrlRow } from "@/components/settings/ServerUrlRow";
 import { TeamMemberRow } from "@/components/settings/TeamMemberRow";
@@ -89,6 +90,7 @@ interface AppSettingsDraft {
   enableKalmanFilter: boolean;
   enableElliottWave: boolean;
   enableMarkovRegime: boolean;
+  enableJevLoop: boolean;
 }
 
 function toDraft(settings: AppSettings): AppSettingsDraft {
@@ -99,6 +101,7 @@ function toDraft(settings: AppSettings): AppSettingsDraft {
     enableKalmanFilter: settings.enableKalmanFilter,
     enableElliottWave: settings.enableElliottWave,
     enableMarkovRegime: settings.enableMarkovRegime,
+    enableJevLoop: settings.enableJevLoop,
   };
 }
 
@@ -148,6 +151,7 @@ function StrategySettingsPanel({ isAdmin }: { isAdmin: boolean }) {
       enableKalmanFilter: values.enableKalmanFilter,
       enableElliottWave: values.enableElliottWave,
       enableMarkovRegime: values.enableMarkovRegime,
+      enableJevLoop: values.enableJevLoop,
     };
   }
 
@@ -307,6 +311,15 @@ function StrategySettingsPanel({ isAdmin }: { isAdmin: boolean }) {
               disabled={disabled}
               onChange={(checked) => {
                 setDraft({ ...values, enableMarkovRegime: checked });
+                setStatus("idle");
+              }}
+            />
+            <ModuleToggle
+              label="Enable JEV Lab (experimental, paper only)"
+              checked={values.enableJevLoop}
+              disabled={disabled}
+              onChange={(checked) => {
+                setDraft({ ...values, enableJevLoop: checked });
                 setStatus("idle");
               }}
             />
@@ -681,6 +694,41 @@ export default function SettingsPage() {
               isSet={apiKeys.find((k) => k.provider === "finnhub")?.is_valid ?? false}
               capabilities={apiKeys.find((k) => k.provider === "finnhub")?.capabilities}
               capabilityWarning={apiKeys.find((k) => k.provider === "finnhub")?.last_error_message ?? null}
+              onSaved={refetchKeys}
+            />
+          </SectionCard>
+        )}
+
+        {/* JEV Lab */}
+        {isAdmin && (
+          <SectionCard
+            id="jev-lab"
+            title="JEV Lab"
+            description="Keys for the experimental Jev decision loop. Alpaca is paper-only; live keys are refused."
+          >
+            <AlpacaPaperKeyRow
+              isSet={apiKeys.find((k) => k.provider === "alpaca_paper")?.is_valid ?? false}
+              lastError={apiKeys.find((k) => k.provider === "alpaca_paper")?.last_error_message ?? null}
+              onSaved={refetchKeys}
+            />
+            <Divider />
+            <ApiKeyRow
+              provider="ai_gateway"
+              label="Vercel AI Gateway"
+              description="Routes to Jev (typesafe-ai/jev); no waitlist"
+              placeholder="Your AI Gateway API key"
+              docsUrl="https://vercel.com/docs/ai-gateway/sdks-and-apis/typesafe"
+              isSet={apiKeys.find((k) => k.provider === "ai_gateway")?.is_valid ?? false}
+              onSaved={refetchKeys}
+            />
+            <Divider />
+            <ApiKeyRow
+              provider="typesafe"
+              label="TypeSafe (direct)"
+              description="Optional: one fewer hop, waitlist access"
+              placeholder="Your TypeSafe API key"
+              docsUrl="https://docs.typesafe.ai/introduction"
+              isSet={apiKeys.find((k) => k.provider === "typesafe")?.is_valid ?? false}
               onSaved={refetchKeys}
             />
           </SectionCard>

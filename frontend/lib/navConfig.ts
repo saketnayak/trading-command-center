@@ -11,6 +11,9 @@ export const RESEARCH_NAV: NavItem[] = [
   { href: "/runs/compare", label: "Compare" },
 ];
 
+/** Appended to Research only while the JEV Lab module is enabled in Settings. */
+export const JEV_NAV_ITEM: NavItem = { href: "/jev", label: "JEV Lab" };
+
 export const PRIMARY_NAV: NavItem[] = [
   { href: "/portfolio", label: "Portfolio", prefetchPortfolio: true },
   { href: "/watchlist", label: "Watchlist" },
