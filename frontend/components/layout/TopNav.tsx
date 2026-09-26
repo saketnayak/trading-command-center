@@ -12,10 +12,13 @@ import { usePortfolioPrefetch } from "@/lib/usePortfolioPrefetch";
 import {
   isNavItemActive,
   isResearchActive,
+  JEV_NAV_ITEM,
   MOBILE_NAV_SECTIONS,
   PRIMARY_NAV,
   RESEARCH_NAV,
 } from "@/lib/navConfig";
+import { useQuery } from "@tanstack/react-query";
+import { getAppSettings } from "@/lib/api";
 
 function navLinkClass(active: boolean) {
   return active
@@ -61,7 +64,14 @@ export function TopNav() {
   const [menuOpen, setMenuOpen] = useState(false);
   const prefetchPortfolio = usePortfolioPrefetch();
 
-  const researchActive = isResearchActive(path);
+  const { data: appSettings } = useQuery({ queryKey: ["app-settings"], queryFn: getAppSettings, retry: false });
+  const jevEnabled = appSettings?.enableJevLoop === true;
+  const researchNav = jevEnabled ? [...RESEARCH_NAV, JEV_NAV_ITEM] : RESEARCH_NAV;
+  const mobileSections = jevEnabled
+    ? MOBILE_NAV_SECTIONS.map((section) => (section.title === "Research" ? { ...section, items: researchNav } : section))
+    : MOBILE_NAV_SECTIONS;
+
+  const researchActive = isResearchActive(path) || (jevEnabled && isNavItemActive(path, JEV_NAV_ITEM.href));
 
   useEffect(() => {
     setMenuOpen(false);
@@ -93,7 +103,7 @@ export function TopNav() {
             <NavDropdown
               label="Research"
               active={researchActive}
-              items={RESEARCH_NAV.map((item) => ({
+              items={researchNav.map((item) => ({
                 href: item.href,
                 label: item.label,
                 active: isNavItemActive(path, item.href),
@@ -160,7 +170,7 @@ export function TopNav() {
               maxHeight: `calc(100vh - ${TOP_NAV_OFFSET_PX}px)`,
             }}
           >
-            {MOBILE_NAV_SECTIONS.map((section, index) => (
+            {mobileSections.map((section, index) => (
               <div key={section.title ?? `section-${index}`} className="flex flex-col gap-1">
                 {section.title && (
                   <p className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted">

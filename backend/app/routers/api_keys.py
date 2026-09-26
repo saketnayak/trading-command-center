@@ -9,6 +9,7 @@ from app.models.api_key import ApiKey
 from app.models.user import User
 from app.schemas.api_key import ApiKeyUpsertRequest, ApiKeyResponse
 from app.services.encryption import encrypt_key, decrypt_key
+from app.services.alpaca_paper_client import parse_alpaca_key
 from app.services.llm_provider_registry import is_local_provider, validate_local_provider_url
 from app.services.finnhub_client import (
     FinnhubCapability,
@@ -23,8 +24,21 @@ import httpx
 router = APIRouter()
 
 
+ALPACA_PAPER_ACCOUNT_URL = "https://paper-api.alpaca.markets/v2/account"
+AI_GATEWAY_SYSTEMONE_URL = "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
+TYPESAFE_SYSTEMONE_URL = "https://api.typesafe.ai/v1/systemone"
+
+
 def _mask(key: str) -> str:
     return key[:4] + "•" * (len(key) - 8) + key[-4:] if len(key) > 8 else "•" * len(key)
+
+
+def _displayable(provider: str, plain: str) -> str:
+    """The part of a stored key that is safe to mask and show (never an Alpaca secret)."""
+    if provider == "alpaca_paper":
+        parsed = parse_alpaca_key(plain)
+        return parsed[0] if parsed else ""
+    return plain
 
 
 def _serialize_capabilities(raw: dict[str, Any] | None) -> dict[str, dict[str, Any]] | None:
@@ -45,7 +59,7 @@ def _to_response(key: ApiKey, plain: str | None = None) -> ApiKeyResponse:
         provider=key.provider,
         is_valid=key.is_valid,
         validated_at=key.validated_at,
-        masked_key=_mask(plain) if plain else None,
+        masked_key=_mask(_displayable(key.provider, plain)) if plain else None,
         capabilities=_serialize_capabilities(key.capabilities),
         last_error_code=key.last_error_code,
         last_error_message=key.last_error_message,
@@ -187,6 +201,72 @@ async def _validate_key(provider: str, key: str) -> dict[str, Any]:
                     "last_error_code": code,
                     "last_error_message": message,
                 }
+            if provider == "alpaca_paper":
+                parsed = parse_alpaca_key(key)
+                if parsed is None:
+                    return {
+                        "is_valid": False,
+                        "last_error_code": "invalid_format",
+                        "last_error_message": "Expected both the Alpaca paper Key ID and Secret.",
+                    }
+                key_id, secret = parsed
+                if not key_id.startswith("PK"):
+                    return {
+                        "is_valid": False,
+                        "last_error_code": "not_paper_key",
+                        "last_error_message": (
+                            "This is not an Alpaca paper key (paper Key IDs start with PK). "
+                            "Generate one on the paper dashboard; live keys are never accepted."
+                        ),
+                    }
+                r = await client.get(
+                    ALPACA_PAPER_ACCOUNT_URL,
+                    headers={"APCA-API-KEY-ID": key_id, "APCA-API-SECRET-KEY": secret},
+                    timeout=5,
+                )
+                return {"is_valid": r.status_code == 200}
+            if provider == "ai_gateway":
+                # One single-question decision (a fraction of a cent). The free models
+                # listing accepts a key even when the team cannot be billed.
+                r = await client.post(
+                    AI_GATEWAY_SYSTEMONE_URL,
+                    headers={"Authorization": f"Bearer {key}"},
+                    json={
+                        "model": "typesafe-ai/jev",
+                        "state": "key validation",
+                        "questions": {"ok": {"type": "noul", "instructions": "Is this a test?"}},
+                    },
+                    timeout=10,
+                )
+                if r.status_code == 200:
+                    return {"is_valid": True}
+                if r.status_code == 403 and "customer_verification_required" in r.text:
+                    return {
+                        "is_valid": False,
+                        "last_error_code": "card_required",
+                        "last_error_message": "Vercel needs a card on file (or credits) before AI Gateway serves Jev.",
+                    }
+                if r.status_code == 429 or r.status_code >= 500:
+                    return {
+                        "is_valid": True,
+                        "last_error_code": "provider_busy",
+                        "last_error_message": f"Key accepted, but Jev's provider is busy right now (HTTP {r.status_code}).",
+                    }
+                return {"is_valid": False}
+            if provider == "typesafe":
+                # No free listing endpoint is documented for the direct API, so
+                # validate with one single-question decision (a fraction of a cent).
+                r = await client.post(
+                    TYPESAFE_SYSTEMONE_URL,
+                    headers={"Authorization": f"Bearer {key}"},
+                    json={
+                        "model": "jev-latest",
+                        "state": "key validation",
+                        "questions": {"ok": {"type": "noul", "instructions": "Is this a test?"}},
+                    },
+                    timeout=10,
+                )
+                return {"is_valid": r.status_code == 200}
             if is_local_provider(provider):
                 return {"is_valid": await validate_local_provider_url(provider, key, client)}
         return {"is_valid": True}

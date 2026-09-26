@@ -5,7 +5,7 @@ import type { AgentEventPayload } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-function getWebSocketBase() {
+export function getWebSocketBase() {
   const url = new URL(API_BASE, window.location.origin);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 
