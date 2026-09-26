@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getJevCalibration } from "@/lib/api";
+import { FIELD_INPUT_SM_CLASS } from "@/lib/uiClasses";
 
 /** Does 80% mean 80%? Brier score and reliability of Jev's up/down calls. */
 export function CalibrationPanel({ sessionId, tickCount }: { sessionId: string; tickCount: number }) {
@@ -19,7 +20,7 @@ export function CalibrationPanel({ sessionId, tickCount }: { sessionId: string; 
           <select
             value={horizon}
             onChange={(e) => setHorizon(Number(e.target.value))}
-            className="bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg"
+            className={FIELD_INPUT_SM_CLASS.replace("w-full", "w-auto")}
           >
             {[1, 5, 10, 30].map((h) => (
               <option key={h} value={h}>

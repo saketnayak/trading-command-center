@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { upsertApiKey } from "@/lib/api";
+import { BTN_PRIMARY_SM_CLASS, FIELD_INPUT_SM_CLASS } from "@/lib/uiClasses";
 
 interface AlpacaPaperKeyRowProps {
   isSet: boolean;
@@ -29,8 +30,7 @@ export function AlpacaPaperKeyRow({ isSet, lastError, onSaved }: AlpacaPaperKeyR
     onError: () => setSavedResult(null),
   });
 
-  const inputClass =
-    "bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg w-full sm:w-36 focus:outline-hidden focus:border-blue-500";
+  const inputClass = `${FIELD_INPUT_SM_CLASS} sm:w-36`;
   const warning = savedResult === "invalid" ? savedError : isSet ? null : lastError;
 
   return (
@@ -73,7 +73,7 @@ export function AlpacaPaperKeyRow({ isSet, lastError, onSaved }: AlpacaPaperKeyR
         <button
           onClick={() => mutation.mutate()}
           disabled={mutation.isPending || !keyId.trim() || !secret.trim()}
-          className="bg-blue-600 hover:bg-blue-700 text-fg rounded-sm px-3 py-1 text-xs disabled:opacity-50 shrink-0"
+          className={`${BTN_PRIMARY_SM_CLASS} shrink-0`}
         >
           {mutation.isPending ? "Saving…" : "Save"}
         </button>

@@ -3,9 +3,10 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { createJevSession, validateJevSymbol } from "@/lib/api";
 import type { JevMeta, JevMode, JevSession, JevSymbolSpec } from "@/lib/jev/types";
+import { BTN_PRIMARY_SM_CLASS, FIELD_INPUT_SM_CLASS } from "@/lib/uiClasses";
 
-const inputClass =
-  "bg-input border border-input-border rounded-sm px-2 py-1 text-xs text-fg focus:outline-hidden focus:border-blue-500";
+// Sized per field below, so drop the shared full-width default.
+const inputClass = FIELD_INPUT_SM_CLASS.replace("w-full", "").trim();
 
 function OverrideGrid({
   names,
@@ -198,7 +199,7 @@ export function NewSessionForm({
         <button
           type="submit"
           disabled={mutation.isPending || !symbol.trim()}
-          className="rounded-sm bg-blue-600 px-4 py-1.5 text-xs text-white hover:bg-blue-700 disabled:opacity-50"
+          className={BTN_PRIMARY_SM_CLASS}
         >
           {mutation.isPending ? "Starting…" : mode === "paper" ? "Start paper session" : "Start shadow session"}
         </button>

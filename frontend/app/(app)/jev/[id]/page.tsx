@@ -23,6 +23,7 @@ import { ModeBadge, StatusBadge } from "@/components/jev/JevBadges";
 import { PriceActionChart } from "@/components/jev/PriceActionChart";
 import { RiskPanel } from "@/components/jev/RiskPanel";
 import { TickFeed } from "@/components/jev/TickFeed";
+import { BTN_DANGER_CLASS, BTN_SECONDARY_CLASS } from "@/lib/uiClasses";
 
 const WINDOW = 300; // ticks kept on screen (10 minutes at 2 s)
 
@@ -141,7 +142,7 @@ export default function JevSessionPage() {
             <button
               onClick={() => stop.mutate()}
               disabled={stop.isPending || session.status === "stopping"}
-              className="rounded-sm border border-border px-3 py-1.5 text-xs text-fg hover:bg-elevated disabled:opacity-50"
+              className={BTN_SECONDARY_CLASS}
             >
               {session.status === "stopping" ? "Stopping…" : "Stop session"}
             </button>
@@ -152,7 +153,7 @@ export default function JevSessionPage() {
                 if (window.confirm(`Send a market order to close ${session.inventory} ${session.symbol} on the Alpaca paper account?`)) flatten.mutate();
               }}
               disabled={flatten.isPending}
-              className="rounded-sm bg-red-600 px-3 py-1.5 text-xs text-white hover:bg-red-700 disabled:opacity-50"
+              className={BTN_DANGER_CLASS}
             >
               {flatten.isPending ? "Flattening…" : "Flatten position"}
             </button>
