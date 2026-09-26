@@ -43,7 +43,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["app", "elliott_wave"]
+packages = ["app", "elliott_wave", "jev_loop"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
