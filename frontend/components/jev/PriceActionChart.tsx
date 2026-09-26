@@ -19,14 +19,24 @@ export function PriceActionChart({ ticks, finished = false }: { ticks: JevTick[]
   if (pts.length < 2) {
     return <div className="flex h-[220px] items-center justify-center text-xs text-muted">{finished ? "No prices were recorded in this session." : "Waiting for ticks…"}</div>;
   }
-  const lo = Math.min(...pts.map((p) => p.mid));
+  // Resting bids and directional trades, drawn over the price so "why no fill" is visible.
+  const bids = pts.flatMap((p) =>
+    p.orders.filter((o) => o.purpose === "quote_bid" && o.limit_price).map((o) => ({ tick: p.tick, price: o.limit_price as number })),
+  );
+  const trades = pts.flatMap((p) =>
+    p.orders.filter((o) => o.purpose === "leg" && o.status !== "rejected").map((o) => ({ tick: p.tick, mid: p.mid, side: o.side })),
+  );
+  const lo = Math.min(...pts.map((p) => p.mid), ...bids.map((b) => b.price));
   const hi = Math.max(...pts.map((p) => p.mid));
   const span = Math.max(hi - lo, hi * 0.0001);
   const first = pts[0].tick;
   const last = pts[pts.length - 1].tick;
   const x = (tick: number) => PAD.left + ((tick - first) / Math.max(1, last - first)) * (W - PAD.left - PAD.right);
   const y = (v: number) => PAD.top + (1 - (v - lo) / span) * (H - PAD.top - PAD.bottom);
-  const path = pts.map((p, i) => `${i ? "L" : "M"}${x(p.tick).toFixed(1)} ${y(p.mid).toFixed(1)}`).join(" ");
+  // step line: the price holds until the next tick moves it
+  const path = pts
+    .map((p, i) => (i ? `H${x(p.tick).toFixed(1)} V${y(p.mid).toFixed(1)}` : `M${x(p.tick).toFixed(1)} ${y(p.mid).toFixed(1)}`))
+    .join(" ");
   const grid = [0, 1, 2, 3].map((k) => lo + (span * k) / 3);
   const lastPt = pts[pts.length - 1];
 
@@ -47,6 +57,22 @@ export function PriceActionChart({ ticks, finished = false }: { ticks: JevTick[]
           </g>
         ))}
         <path d={path} fill="none" stroke="currentColor" strokeOpacity={0.7} strokeWidth={1.4} />
+        {bids.map((b) => (
+          <line key={`bid-${b.tick}`} x1={x(b.tick) - 5} x2={x(b.tick) + 5} y1={y(b.price)} y2={y(b.price)} stroke="#22c55e" strokeWidth={2}>
+            <title>{`bid placed at ${fmtPrice(b.price)} (tick ${b.tick})`}</title>
+          </line>
+        ))}
+        {trades.map((t) => (
+          <path
+            key={`trade-${t.tick}`}
+            d={t.side === "buy"
+              ? `M${x(t.tick)} ${y(t.mid) - 12} l-5 8 h10 z`
+              : `M${x(t.tick)} ${y(t.mid) + 12} l-5 -8 h10 z`}
+            fill={t.side === "buy" ? "#22c55e" : "#ef4444"}
+          >
+            <title>{`directional ${t.side} at tick ${t.tick}`}</title>
+          </path>
+        ))}
         {pts.map((p) => (
           <circle key={p.tick} cx={x(p.tick)} cy={y(p.mid)} r={2.6} fill={TONE_FILL[tickTone(p)]}>
             <title>{`#${p.tick} ${p.action} @ ${fmtPrice(p.mid)}`}</title>
@@ -60,6 +86,8 @@ export function PriceActionChart({ ticks, finished = false }: { ticks: JevTick[]
         </text>
       </svg>
       <figcaption className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-muted">
+        <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-3 bg-green-500" />bid placed</span>
+        <span className="flex items-center gap-1"><span className="text-green-500">▲</span>/<span className="text-red-500">▼</span> directional trade</span>
         {LEGEND.map(([tone, label]) => (
           <span key={tone} className="flex items-center gap-1">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: TONE_FILL[tone] }} />

@@ -24,13 +24,25 @@ function Meter({ label, value, max, threshold, hint }: { label: string; value: n
 }
 
 /** The seven judgments Jev returned on the latest tick, against this session's thresholds. */
-export function BatteryPanel({ answers, thresholds }: { answers: JevAnswers | null | undefined; thresholds: Record<string, number> }) {
+export function BatteryPanel({
+  answers,
+  thresholds,
+  ageS,
+}: {
+  answers: JevAnswers | null | undefined;
+  thresholds: Record<string, number>;
+  /** seconds since Jev gave these answers; 0 = this tick */
+  ageS?: number | null;
+}) {
   if (!answers) {
-    return <p className="text-xs text-muted">No Jev answer on the latest tick (late, rules-only, or market closed).</p>;
+    return <p className="text-xs text-muted">No Jev answer yet in this session (or none recent enough to use).</p>;
   }
   const q = answers.quote_environment;
   return (
     <div className="space-y-3">
+      <p className="text-[10px] text-muted">
+        {ageS == null || ageS < 1 ? "Answered this tick." : `From Jev's answer ${ageS.toFixed(0)} s ago; Jev is paced to stay inside its provider's rate limit.`}
+      </p>
       <div className="grid grid-cols-2 gap-3 text-xs">
         <div>
           <p className="text-[10px] uppercase tracking-wide text-muted">Regime</p>

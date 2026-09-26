@@ -10,6 +10,14 @@ export function StatusBadge({ status }: { status: string }) {
 }
 
 export function ModeBadge({ mode, mock }: { mode: JevMode; mock?: boolean }) {
+  if (mock && mode === "paper") {
+    // Older sessions could fall back to the mock mid-run; say so rather than "shadow".
+    return (
+      <span className="inline-block rounded border border-amber-500/40 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-300">
+        Paper · fell back to mock (no orders)
+      </span>
+    );
+  }
   if (mock) {
     return (
       <span className="inline-block rounded border border-amber-500/40 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-600 dark:text-amber-300">

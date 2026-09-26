@@ -84,6 +84,11 @@ export interface JevTick {
   latency_ms: number | null;
   route: string | null;
   model: string | null;
+  /** What happened to the Jev call this tick. `paced` = not called, deciding on the last answer. */
+  jev_status?: "answered" | "paced" | "rate_limited" | "late" | "error" | "mock" | null;
+  jev_provider?: string | null;
+  /** 0 for a fresh answer, seconds old when the last answer was reused, null when there was none. */
+  answer_age_s?: number | null;
   inventory: number;
   unrealised_pnl_usd: number | null;
   realised_pnl_usd: number | null;

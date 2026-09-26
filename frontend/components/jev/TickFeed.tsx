@@ -8,6 +8,24 @@ function ordersText(t: JevTick): string {
     .join(", ");
 }
 
+function jevCell(t: JevTick): { text: string; tone: string } {
+  switch (t.jev_status) {
+    case "answered":
+    case "mock":
+      return { text: t.latency_ms != null ? `${Math.round(t.latency_ms)} ms` : "answered", tone: "text-fg-secondary" };
+    case "paced":
+      return { text: t.answer_age_s != null ? `reused ${t.answer_age_s.toFixed(0)} s` : "paced", tone: "text-muted" };
+    case "rate_limited":
+      return { text: "429", tone: "text-amber-600 dark:text-amber-300" };
+    case "late":
+      return { text: "late", tone: "text-amber-600 dark:text-amber-300" };
+    case "error":
+      return { text: "error", tone: "text-red-500 dark:text-red-400" };
+    default:
+      return { text: t.latency_ms != null ? `${Math.round(t.latency_ms)} ms` : "—", tone: "text-muted" };
+  }
+}
+
 /** Newest-first log of what each tick decided and did. */
 export function TickFeed({ ticks }: { ticks: JevTick[] }) {
   const rows = [...ticks].reverse().slice(0, 40);
@@ -23,7 +41,7 @@ export function TickFeed({ ticks }: { ticks: JevTick[] }) {
             <th className="px-2 py-1.5 font-medium">Why</th>
             <th className="px-2 py-1.5 font-medium">Orders</th>
             <th className="px-2 py-1.5 font-medium">Fills / notes</th>
-            <th className="px-2 py-1.5 text-right font-medium">Jev ms</th>
+            <th className="px-2 py-1.5 text-right font-medium">Jev</th>
           </tr>
         </thead>
         <tbody>
@@ -43,13 +61,13 @@ export function TickFeed({ ticks }: { ticks: JevTick[] }) {
               </td>
               <td className="px-2 py-1.5 font-mono text-fg-secondary">{t.rung}</td>
               <td className="max-w-[15rem] px-2 py-1.5 text-fg-secondary">
-                <span className="line-clamp-2" title={t.action_reason ?? undefined}>{t.action_reason ?? "—"}</span>
+                <span className="line-clamp-1" title={t.action_reason ?? undefined}>{t.action_reason ?? "—"}</span>
               </td>
               <td className="min-w-[6rem] px-2 py-1.5 text-fg-secondary">{ordersText(t)}</td>
               <td className="min-w-[7rem] max-w-[12rem] px-2 py-1.5 text-fg-secondary">
-                <span className="line-clamp-2" title={t.fill && t.fill !== "-" ? t.fill : undefined}>{t.fill && t.fill !== "-" ? t.fill : "—"}</span>
+                <span className="line-clamp-1" title={t.fill && t.fill !== "-" ? t.fill : undefined}>{t.fill && t.fill !== "-" ? t.fill : "—"}</span>
               </td>
-              <td className="px-2 py-1.5 text-right tabular-nums text-muted">{t.latency_ms != null ? Math.round(t.latency_ms) : "late"}</td>
+              <td className={`px-2 py-1.5 text-right tabular-nums whitespace-nowrap ${jevCell(t).tone}`}>{jevCell(t).text}</td>
             </tr>
           ))}
         </tbody>

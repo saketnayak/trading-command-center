@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,7 +11,8 @@ import {
   getJevTicks,
   stopJevSession,
 } from "@/lib/api";
-import { effectiveValues, fmtPrice, fmtUsd, isFinished } from "@/lib/jev/format";
+import { effectiveValues, isFinished } from "@/lib/jev/format";
+import { jevHealth, jevWindowStats, uptime } from "@/lib/jev/insights";
 import type { JevAnswers, JevSession, JevStreamMessage, JevTick } from "@/lib/jev/types";
 import { useJevStream } from "@/lib/jev/useJevStream";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -23,6 +24,10 @@ import { ModeBadge, StatusBadge } from "@/components/jev/JevBadges";
 import { PriceActionChart } from "@/components/jev/PriceActionChart";
 import { RiskPanel } from "@/components/jev/RiskPanel";
 import { TickFeed } from "@/components/jev/TickFeed";
+import { JevHealthBanner } from "@/components/jev/JevHealthBanner";
+import { NowCard } from "@/components/jev/NowCard";
+import { SessionStatsBar } from "@/components/jev/SessionStatsBar";
+import { TickStrip } from "@/components/jev/TickStrip";
 import { BTN_DANGER_CLASS, BTN_SECONDARY_CLASS } from "@/lib/uiClasses";
 
 const WINDOW = 300; // ticks kept on screen (10 minutes at 2 s)
@@ -35,7 +40,7 @@ function mergeTicks(prev: JevTick[], incoming: JevTick[]): JevTick[] {
 
 function Card({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <section className={`rounded-lg border border-border bg-surface p-4 ${className}`}>
+    <section className={`min-w-0 rounded-lg border border-border bg-surface p-4 ${className}`}>
       <h2 className="mb-3 text-[10px] font-medium uppercase tracking-wide text-muted">{title}</h2>
       {children}
     </section>
@@ -71,12 +76,28 @@ export default function JevSessionPage() {
   });
   const { data: latestFull } = useQuery({
     queryKey: ["jev-latest-tick", id],
-    queryFn: () => getJevTicks(id, { tail: 1, full: true }),
+    queryFn: () => getJevTicks(id, { tail: 30, full: true }),
     enabled,
   });
 
   const ticks = useMemo(() => mergeTicks(initialTicks ?? [], streamTicks), [initialTicks, streamTicks]);
-  const latestAnswers = streamAnswers !== undefined ? streamAnswers : (latestFull?.[0]?.answers ?? null);
+  // Most recent tick that carried Jev answers (fresh or reused), from the stream or the initial fetch.
+  const answered = useMemo(() => {
+    const pool = mergeTicks(latestFull ?? [], streamTicks);
+    return [...pool].reverse().find((t) => t.answers) ?? null;
+  }, [latestFull, streamTicks]);
+  const latestAnswers = streamAnswers !== undefined ? streamAnswers ?? answered?.answers ?? null : (answered?.answers ?? null);
+  const bookAgeS = useMemo(() => {
+    const pool = mergeTicks(latestFull ?? [], streamTicks);
+    const withSnap = [...pool].reverse().find((t) => t.snapshot);
+    const age = withSnap?.snapshot?.["book_age_s"];
+    return typeof age === "number" ? age : null;
+  }, [latestFull, streamTicks]);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const onMessage = useCallback(
     (m: JevStreamMessage) => {
@@ -108,6 +129,9 @@ export default function JevSessionPage() {
   const thresholds = useMemo(() => effectiveValues(meta?.thresholds ?? {}, session?.thresholds ?? {}), [meta, session]);
   const limits = useMemo(() => effectiveValues(meta?.limits ?? {}, session?.limits ?? {}), [meta, session]);
   const latest = ticks[ticks.length - 1];
+  const stats = useMemo(() => jevWindowStats(ticks), [ticks]);
+  const health = jevHealth(stats);
+  const answersAgeS = answered && latest ? Math.max(0, latest.ts - answered.ts) + (answered.answer_age_s ?? 0) : null;
 
   if (settingsLoading) return <PageShell><p className="text-sm text-muted">Loading…</p></PageShell>;
   if (!enabled) return <PageShell><JevDisabled /></PageShell>;
@@ -127,8 +151,7 @@ export default function JevSessionPage() {
             <StatusBadge status={session.status} />
           </div>
           <p className="mt-1 text-xs text-muted">
-            mid <span className="font-mono text-fg">{fmtPrice(latest?.mid ?? session.last_mid)}</span> · {session.tick_count.toLocaleString()} ticks ·
-            decider {session.decision_route ?? "—"} {session.decision_model ? `(${session.decision_model})` : ""} · Jev cost {fmtUsd(session.cost_usd, 4)}
+            decider {session.decision_route ?? "—"} {session.decision_model ? `(${session.decision_model})` : ""}
           </p>
           {session.stop_reason && <p className="mt-1 text-xs text-fg-secondary">Ended: {session.stop_reason}</p>}
           {session.status === "interrupted" && session.mode === "paper" && session.inventory !== 0 && (
@@ -165,6 +188,14 @@ export default function JevSessionPage() {
       )}
       {notice && <p className="text-xs text-fg-secondary">{notice}</p>}
 
+      <SessionStatsBar
+        uptime={uptime(session.started_at, isFinished(session) ? session.stopped_at : null, nowMs)}
+        ticks={session.tick_count}
+        stats={stats}
+        costUsd={session.cost_usd}
+      />
+      {health && running && <JevHealthBanner health={health} />}
+
       <div role="tablist" className="flex gap-4 border-b border-border text-xs">
         {(["live", "calibration"] as const).map((t) => (
           <button
@@ -181,17 +212,23 @@ export default function JevSessionPage() {
 
       {tab === "live" ? (
         <div className="grid gap-4 lg:grid-cols-3">
+          <Card title="Now" className="lg:col-span-2">
+            <NowCard tick={latest} thresholds={thresholds} bookAgeS={bookAgeS} />
+          </Card>
+          <Card title="Jev's answers">
+            <BatteryPanel answers={latestAnswers} thresholds={thresholds} ageS={answersAgeS} />
+          </Card>
           <Card title="Price and actions" className="lg:col-span-2">
             <PriceActionChart ticks={ticks} finished={!running} />
-          </Card>
-          <Card title="Jev battery (latest tick)">
-            <BatteryPanel answers={latestAnswers} thresholds={thresholds} />
-          </Card>
-          <Card title="Tick log" className="lg:col-span-2">
-            <TickFeed ticks={ticks} />
+            <div className="mt-3">
+              <TickStrip ticks={ticks} />
+            </div>
           </Card>
           <Card title="Position and limits">
             <RiskPanel session={session} latest={latest} limits={limits} />
+          </Card>
+          <Card title="Tick log" className="lg:col-span-3">
+            <TickFeed ticks={ticks} />
           </Card>
         </div>
       ) : (
