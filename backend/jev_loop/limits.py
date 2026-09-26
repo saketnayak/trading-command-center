@@ -13,7 +13,9 @@ class Limits:
     max_drawdown_pct: float = 0.05
     max_order_notional_usd: float = 25.0
     max_inventory_age_s: float = 900.0
-    max_stale_data_age_s: float = 5.0
+    # Age of the venue's last book update. Catches a frozen or halted feed, not
+    # a quiet book: Alpaca's crypto book often goes 5-25 s without changing.
+    max_stale_data_age_s: float = 60.0
     max_api_errors: int = 5
     max_decision_latency_ms: float = 2000.0
     max_leverage: float = 1.0  # spot/cash only, never overridable

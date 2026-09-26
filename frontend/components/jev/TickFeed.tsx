@@ -1,4 +1,4 @@
-import { actionTone, fmtPrice, TONE_FILL } from "@/lib/jev/format";
+import { fmtPrice, isVetoed, tickTone, TONE_FILL } from "@/lib/jev/format";
 import type { JevTick } from "@/lib/jev/types";
 
 function ordersText(t: JevTick): string {
@@ -32,9 +32,14 @@ export function TickFeed({ ticks }: { ticks: JevTick[] }) {
               <td className="px-2 py-1.5 tabular-nums text-muted">{t.tick}</td>
               <td className="px-2 py-1.5 whitespace-nowrap text-muted">{new Date(t.ts * 1000).toLocaleTimeString()}</td>
               <td className="px-2 py-1.5 whitespace-nowrap">
-                <span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: TONE_FILL[actionTone(t.action)] }} aria-hidden />
-                <span className="font-mono text-fg">{t.action}</span>
+                <span className="mr-1 inline-block h-2 w-2 rounded-full" style={{ background: TONE_FILL[tickTone(t)] }} aria-hidden />
+                <span className={`font-mono ${isVetoed(t) ? "text-muted line-through" : "text-fg"}`}>{t.action}</span>
                 {t.direction_leg && <span className="ml-1 text-muted">+{t.direction_leg} leg</span>}
+                {isVetoed(t) && (
+                  <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-medium uppercase text-amber-700 dark:bg-amber-900/50 dark:text-amber-300">
+                    vetoed
+                  </span>
+                )}
               </td>
               <td className="px-2 py-1.5 font-mono text-fg-secondary">{t.rung}</td>
               <td className="max-w-[15rem] px-2 py-1.5 text-fg-secondary">

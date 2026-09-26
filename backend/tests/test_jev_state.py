@@ -117,11 +117,21 @@ def test_microprice_falls_back_without_a_two_sided_book():
 
 def test_stale_venue_timestamp_trips_the_stale_data_veto():
     now = time.time()
-    snap = _snap(now=now, data_timestamp=now - 30.0)
-    assert snap["data_age_s"] == pytest.approx(30.0)
+    snap = _snap(now=now, data_timestamp=now - 90.0)
+    assert snap["data_age_s"] == pytest.approx(90.0)
     snap.update(mid=100.0, inventory=0.0, daily_loss_usd=0.0, position_age_s=0.0)
     verdict = check(snap, 10.0, Limits(), 0, 50.0)
     assert not verdict.ok and "stale" in verdict.veto
+
+
+def test_a_quiet_book_is_not_stale_data():
+    # Regression: Alpaca's thin crypto book often goes 5-25 s without a change
+    # (observed median 5.2 s, max 26 s on BTC/USD); the 5 s default vetoed half
+    # of all ticks although the data was current. Only a frozen feed is stale.
+    now = time.time()
+    snap = _snap(now=now, data_timestamp=now - 26.0)
+    snap.update(mid=100.0, inventory=0.0, daily_loss_usd=0.0, position_age_s=0.0)
+    assert check(snap, 10.0, Limits(), 0, 50.0).ok
 
 
 def test_parse_venue_ts_keeps_nanosecond_venue_time():

@@ -44,6 +44,16 @@ export function actionTone(action: string): "quote" | "wide" | "hold" | "kill" |
   return "idle"; // PULL_QUOTES, STAND_DOWN
 }
 
+/** True when the risk engine vetoed this tick, so nothing was quoted or sent. */
+export function isVetoed(t: { action_reason: string | null }): boolean {
+  return t.action_reason?.startsWith("vetoed") ?? false;
+}
+
+/** Tone for a tick: a vetoed tick reads as a hold, whatever action was proposed. */
+export function tickTone(t: { action: string; action_reason: string | null }): ReturnType<typeof actionTone> {
+  return isVetoed(t) ? "hold" : actionTone(t.action);
+}
+
 export const TONE_FILL: Record<ReturnType<typeof actionTone>, string> = {
   quote: "#3b82f6",
   wide: "#8b5cf6",

@@ -234,11 +234,20 @@ async def test_gateway_card_403_switches_to_the_mock_and_stops_trading():
 
 async def test_stale_venue_data_is_vetoed():
     clock = Clock()
-    market = FakeMarket(clock, venue_lag=30.0)
+    market = FakeMarket(clock, venue_lag=90.0)
     loop, sink = make_loop(market, Decider(answers()), max_ticks=1)
     await loop.run()
     assert market.orders == []
     assert "stale" in sink.ticks[0]["action_reason"]
+
+
+async def test_a_quiet_but_current_book_still_trades():
+    clock = Clock()
+    market = FakeMarket(clock, venue_lag=26.0)
+    loop, sink = make_loop(market, Decider(answers()), max_ticks=1)
+    await loop.run()
+    assert [o["side"] for o in market.orders] == ["buy"]
+    assert not sink.ticks[0]["action_reason"].startswith("vetoed")
 
 
 async def test_drawdown_kills_and_flattens_what_the_session_bought():

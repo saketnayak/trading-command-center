@@ -1,4 +1,4 @@
-import { actionTone, fmtPrice, TONE_FILL } from "@/lib/jev/format";
+import { fmtPrice, tickTone, TONE_FILL } from "@/lib/jev/format";
 import type { JevTick } from "@/lib/jev/types";
 
 const W = 800;
@@ -9,7 +9,7 @@ const LEGEND: [keyof typeof TONE_FILL, string][] = [
   ["quote", "Quote both sides"],
   ["wide", "Quote wide / widen"],
   ["idle", "Pull / stand down"],
-  ["hold", "Hold (late, closed, data error)"],
+  ["hold", "Hold or vetoed (late, closed, data error, risk veto)"],
   ["kill", "Kill"],
 ];
 
@@ -48,7 +48,7 @@ export function PriceActionChart({ ticks, finished = false }: { ticks: JevTick[]
         ))}
         <path d={path} fill="none" stroke="currentColor" strokeOpacity={0.7} strokeWidth={1.4} />
         {pts.map((p) => (
-          <circle key={p.tick} cx={x(p.tick)} cy={y(p.mid)} r={2.6} fill={TONE_FILL[actionTone(p.action)]}>
+          <circle key={p.tick} cx={x(p.tick)} cy={y(p.mid)} r={2.6} fill={TONE_FILL[tickTone(p)]}>
             <title>{`#${p.tick} ${p.action} @ ${fmtPrice(p.mid)}`}</title>
           </circle>
         ))}
