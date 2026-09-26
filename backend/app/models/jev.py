@@ -83,6 +83,9 @@ class JevTick(Base):
     latency_ms: Mapped[float | None] = mapped_column(Float, nullable=True)
     route: Mapped[str | None] = mapped_column(String, nullable=True)
     model: Mapped[str | None] = mapped_column(String, nullable=True)
+    jev_status: Mapped[str | None] = mapped_column(String(16), nullable=True)  # answered|paced|rate_limited|late|error|mock
+    jev_provider: Mapped[str | None] = mapped_column(String, nullable=True)
+    answer_age_s: Mapped[float | None] = mapped_column(Float, nullable=True)
     inventory: Mapped[float] = mapped_column(Float, default=0.0)
     unrealised_pnl_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     realised_pnl_usd: Mapped[float | None] = mapped_column(Float, nullable=True)

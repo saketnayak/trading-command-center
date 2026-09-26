@@ -25,7 +25,7 @@ router = APIRouter()
 
 
 ALPACA_PAPER_ACCOUNT_URL = "https://paper-api.alpaca.markets/v2/account"
-AI_GATEWAY_MODELS_URL = "https://ai-gateway.vercel.sh/typesafe/v1/models"
+AI_GATEWAY_SYSTEMONE_URL = "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
 TYPESAFE_SYSTEMONE_URL = "https://api.typesafe.ai/v1/systemone"
 
 
@@ -226,12 +226,33 @@ async def _validate_key(provider: str, key: str) -> dict[str, Any]:
                 )
                 return {"is_valid": r.status_code == 200}
             if provider == "ai_gateway":
-                r = await client.get(
-                    AI_GATEWAY_MODELS_URL,
+                # One single-question decision (a fraction of a cent). The free models
+                # listing accepts a key even when the team cannot be billed.
+                r = await client.post(
+                    AI_GATEWAY_SYSTEMONE_URL,
                     headers={"Authorization": f"Bearer {key}"},
-                    timeout=5,
+                    json={
+                        "model": "typesafe-ai/jev",
+                        "state": "key validation",
+                        "questions": {"ok": {"type": "noul", "instructions": "Is this a test?"}},
+                    },
+                    timeout=10,
                 )
-                return {"is_valid": r.status_code == 200}
+                if r.status_code == 200:
+                    return {"is_valid": True}
+                if r.status_code == 403 and "customer_verification_required" in r.text:
+                    return {
+                        "is_valid": False,
+                        "last_error_code": "card_required",
+                        "last_error_message": "Vercel needs a card on file (or credits) before AI Gateway serves Jev.",
+                    }
+                if r.status_code == 429 or r.status_code >= 500:
+                    return {
+                        "is_valid": True,
+                        "last_error_code": "provider_busy",
+                        "last_error_message": f"Key accepted, but Jev's provider is busy right now (HTTP {r.status_code}).",
+                    }
+                return {"is_valid": False}
             if provider == "typesafe":
                 # No free listing endpoint is documented for the direct API, so
                 # validate with one single-question decision (a fraction of a cent).

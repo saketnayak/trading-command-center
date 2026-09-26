@@ -102,6 +102,9 @@ def _tick_dict(t: JevTick, full: bool = True) -> dict:
         "latency_ms": t.latency_ms,
         "route": t.route,
         "model": t.model,
+        "jev_status": t.jev_status,
+        "jev_provider": t.jev_provider,
+        "answer_age_s": t.answer_age_s,
         "inventory": t.inventory,
         "unrealised_pnl_usd": t.unrealised_pnl_usd,
         "realised_pnl_usd": t.realised_pnl_usd,
@@ -139,7 +142,7 @@ async def jev_meta(user: User = Depends(get_current_user)):
     return {
         "split": split_rows(),
         "limits": asdict(Limits()),
-        "lowerable_limits": sorted(LOWERABLE_LIMITS | {"tick_seconds"}),
+        "lowerable_limits": sorted(LOWERABLE_LIMITS | {"tick_seconds", "jev_interval_s"}),
         "thresholds": asdict(StrategyThresholds()),
         "threshold_names": [f.name for f in fields(StrategyThresholds)],
         "max_active_sessions": MAX_ACTIVE_SESSIONS,

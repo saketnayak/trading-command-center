@@ -10,6 +10,7 @@ from app.services.jev_client import (
     JevDeadlineExceeded,
     JevDecisionError,
     JevGatewayVerificationRequired,
+    JevRateLimited,
     MockJevClient,
     run_battery,
 )
@@ -26,7 +27,7 @@ def _valid_answers() -> dict:
 
 
 def _gateway() -> JevClient:
-    return JevClient.gateway("vck_test", backoff_base_s=0.0)
+    return JevClient.gateway("vck_test")
 
 
 async def test_gateway_request_shape_and_meta(httpx_mock):
@@ -57,18 +58,56 @@ async def test_gateway_request_shape_and_meta(httpx_mock):
 
 async def test_direct_route_pins_jev_latest(httpx_mock):
     httpx_mock.add_response(url=TYPESAFE_DIRECT_URL, method="POST", json={"model": "jev-latest", "answers": _valid_answers()})
-    async with JevClient.direct("ts_test", backoff_base_s=0.0) as client:
+    async with JevClient.direct("ts_test") as client:
         _, meta = await run_battery(client, STATE, timeout=2.0)
-    assert json.loads(httpx_mock.get_requests()[0].content)["model"] == "jev-latest"
+    sent = json.loads(httpx_mock.get_requests()[0].content)
+    assert sent["model"] == "jev-latest" and "providerOptions" not in sent
     assert meta["route"] == "TypeSafe direct"
 
 
-async def test_retries_a_429_then_succeeds(httpx_mock):
-    httpx_mock.add_response(url=GATEWAY_URL, method="POST", status_code=429)
-    httpx_mock.add_response(url=GATEWAY_URL, method="POST", json={"model": "typesafe-ai/jev", "answers": _valid_answers()})
+async def test_a_429_is_reported_once_and_never_retried_inside_the_tick(httpx_mock):
+    # Regression: retrying a provider 429 within the same tick tripled the load
+    # (Vercel logs showed paired 429s in the same second).
+    httpx_mock.add_response(url=GATEWAY_URL, method="POST", status_code=429, headers={"retry-after": "7"})
     async with _gateway() as client:
-        answers, _ = await run_battery(client, STATE, timeout=2.0)
-    assert len(httpx_mock.get_requests()) == 2 and answers
+        with pytest.raises(JevRateLimited) as exc:
+            await run_battery(client, STATE, timeout=2.0)
+    assert len(httpx_mock.get_requests()) == 1
+    assert exc.value.retry_after_s == 7.0
+
+
+async def test_a_429_without_retry_after_has_no_hint(httpx_mock):
+    httpx_mock.add_response(url=GATEWAY_URL, method="POST", status_code=429, json={"error": {"type": "rate_limit_exceeded"}})
+    async with _gateway() as client:
+        with pytest.raises(JevRateLimited) as exc:
+            await run_battery(client, STATE, timeout=2.0)
+    assert exc.value.retry_after_s is None
+
+
+async def test_a_503_is_not_retried_inside_the_tick(httpx_mock):
+    httpx_mock.add_response(url=GATEWAY_URL, method="POST", status_code=503, text="Service temporarily unavailable")
+    async with _gateway() as client:
+        with pytest.raises(JevDecisionError) as exc:
+            await run_battery(client, STATE, timeout=2.0)
+    assert not isinstance(exc.value, (JevRateLimited, JevDeadlineExceeded))
+    assert len(httpx_mock.get_requests()) == 1
+
+
+async def test_the_gateway_prefers_typesafe_and_reports_the_provider(httpx_mock):
+    httpx_mock.add_response(
+        url=GATEWAY_URL,
+        method="POST",
+        json={
+            "model": "typesafe-ai/jev",
+            "answers": _valid_answers(),
+            "provider_metadata": {"gateway": {"routing": {"finalProvider": "digitalocean"}}},
+        },
+    )
+    async with _gateway() as client:
+        _, meta = await run_battery(client, STATE, timeout=2.0)
+    body = json.loads(httpx_mock.get_requests()[0].content)
+    assert body["providerOptions"] == {"gateway": {"order": ["typesafe-ai", "digitalocean"]}}
+    assert meta["provider"] == "digitalocean"
 
 
 @pytest.mark.parametrize(

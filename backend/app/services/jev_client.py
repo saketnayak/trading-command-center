@@ -8,8 +8,6 @@ calibrated to one model and a silent upgrade breaks them quietly.
 
 from __future__ import annotations
 
-import asyncio
-import random
 import time
 
 import httpx
@@ -24,8 +22,8 @@ from jev_loop.mock import MockDecisionModel
 TYPESAFE_DIRECT_URL = "https://api.typesafe.ai/v1/systemone"
 GATEWAY_URL = "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
 
-_RETRYABLE_STATUS = {429, 529}
-_MAX_RETRIES = 2
+# Ask Vercel to try TypeSafe's own endpoint first and fall back to the other host.
+GATEWAY_PROVIDER_ORDER = ["typesafe-ai", "digitalocean"]
 
 
 class JevDecisionError(Exception):
@@ -38,6 +36,23 @@ class JevDeadlineExceeded(JevDecisionError):
 
 class JevGatewayVerificationRequired(JevDecisionError):
     """Vercel wants a card on file before the gateway serves requests."""
+
+
+class JevRateLimited(JevDecisionError):
+    """HTTP 429 from the gateway or the upstream provider. Never retried inside
+    a tick: retrying keeps the limit tripped. The pacer backs off instead."""
+
+    def __init__(self, message: str, retry_after_s: float | None = None):
+        super().__init__(message)
+        self.retry_after_s = retry_after_s
+
+
+def _retry_after_s(resp: httpx.Response) -> float | None:
+    raw = resp.headers.get("retry-after")
+    try:
+        return max(0.0, float(raw)) if raw is not None else None
+    except ValueError:
+        return None  # an HTTP-date form: fall back to the pacer's own back-off
 
 
 def _error_type(resp: httpx.Response) -> tuple[str | None, str]:
@@ -56,12 +71,12 @@ def _error_type(resp: httpx.Response) -> tuple[str | None, str]:
 class JevClient:
     is_mock = False
 
-    def __init__(self, name: str, url: str, model: str, api_key: str, backoff_base_s: float = 0.35):
+    def __init__(self, name: str, url: str, model: str, api_key: str, provider_order: list[str] | None = None):
         self.name = name
         self.model = model
         self._url = url
         self._headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        self._backoff_base_s = backoff_base_s
+        self._provider_order = provider_order
         self._http = httpx.AsyncClient()
 
     @classmethod
@@ -70,7 +85,8 @@ class JevClient:
 
     @classmethod
     def gateway(cls, api_key: str, **kw) -> "JevClient":
-        return cls("Vercel AI Gateway", GATEWAY_URL, "typesafe-ai/jev", api_key, **kw)
+        return cls("Vercel AI Gateway", GATEWAY_URL, "typesafe-ai/jev", api_key,
+                   provider_order=GATEWAY_PROVIDER_ORDER, **kw)
 
     async def __aenter__(self) -> "JevClient":
         return self
@@ -82,48 +98,36 @@ class JevClient:
         await self._http.aclose()
 
     async def ask(self, state: dict, questions: dict, timeout: float) -> tuple[dict, dict]:
+        """One request, no retries: the runner's pacer decides when to ask again."""
         started = time.monotonic()
-        deadline = started + timeout
         body = {"model": self.model, "state": state, "questions": questions}
-        attempt = 0
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                raise JevDeadlineExceeded("tick budget spent before Jev answered")
-            try:
-                resp = await self._http.post(self._url, headers=self._headers, json=body, timeout=remaining)
-            except httpx.TimeoutException as exc:
-                raise JevDeadlineExceeded(f"Jev timed out: {exc}") from exc
-            except httpx.HTTPError as exc:
-                resp, error = None, exc
-            else:
-                error = None
+        if self._provider_order:
+            body["providerOptions"] = {"gateway": {"order": self._provider_order}}
+        try:
+            resp = await self._http.post(self._url, headers=self._headers, json=body, timeout=timeout)
+        except httpx.TimeoutException as exc:
+            raise JevDeadlineExceeded(f"Jev timed out: {exc}") from exc
+        except httpx.HTTPError as exc:
+            raise JevDecisionError(f"network error: {exc}") from exc
 
-            if resp is not None:
-                if resp.status_code == 200:
-                    data = resp.json()
-                    gateway_meta = (data.get("provider_metadata") or {}).get("gateway") or {}
-                    cost = gateway_meta.get("cost")
-                    return data.get("answers") or {}, {
-                        "route": self.name,
-                        "model": data.get("model", self.model),
-                        "latency_ms": round((time.monotonic() - started) * 1000, 1),
-                        "usage": data.get("usage") or {},
-                        "cost_usd": float(cost) if cost is not None else None,
-                    }
-                err_type, message = _error_type(resp)
-                if resp.status_code == 403 and err_type == "customer_verification_required":
-                    raise JevGatewayVerificationRequired(message or "add a card on file in Vercel")
-                if resp.status_code not in _RETRYABLE_STATUS:
-                    raise JevDecisionError(f"HTTP {resp.status_code}: {message}")
-
-            attempt += 1
-            if attempt > _MAX_RETRIES:
-                raise JevDecisionError(f"gave up after {_MAX_RETRIES} retries: {error or resp.status_code}")
-            backoff = self._backoff_base_s * (2 ** (attempt - 1)) + random.uniform(0, 0.1 * self._backoff_base_s)
-            if backoff >= deadline - time.monotonic():
-                raise JevDeadlineExceeded("tick budget spent during retry backoff")
-            await asyncio.sleep(backoff)
+        if resp.status_code == 200:
+            data = resp.json()
+            gateway_meta = (data.get("provider_metadata") or {}).get("gateway") or {}
+            cost = gateway_meta.get("cost")
+            return data.get("answers") or {}, {
+                "route": self.name,
+                "model": data.get("model", self.model),
+                "provider": (gateway_meta.get("routing") or {}).get("finalProvider"),
+                "latency_ms": round((time.monotonic() - started) * 1000, 1),
+                "usage": data.get("usage") or {},
+                "cost_usd": float(cost) if cost is not None else None,
+            }
+        err_type, message = _error_type(resp)
+        if resp.status_code == 403 and err_type == "customer_verification_required":
+            raise JevGatewayVerificationRequired(message or "add a card on file in Vercel")
+        if resp.status_code == 429:
+            raise JevRateLimited(f"HTTP 429: {message or 'rate limited'}", retry_after_s=_retry_after_s(resp))
+        raise JevDecisionError(f"HTTP {resp.status_code}: {message}")
 
 
 class MockJevClient:

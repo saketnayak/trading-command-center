@@ -80,6 +80,7 @@ async def test_meta_describes_the_split_and_the_defaults():
     assert body["split"]["deterministic"] and body["split"]["probabilistic"]
     assert body["limits"]["max_position_usd"] == 50.0
     assert "max_position_usd" in body["lowerable_limits"]
+    assert "jev_interval_s" in body["lowerable_limits"] and body["limits"]["jev_interval_s"] == 6.0
     assert body["thresholds"]["toxic_flow_pull_threshold"] == 0.6
 
 
@@ -224,6 +225,7 @@ async def test_the_db_sink_persists_ticks_and_status(monkeypatch):
     record = {"tick": 1, "ts": 1_790_000_000.0, "mid": 100.0, "spread_bps": 1.0, "action": "QUOTE_WIDE",
               "action_reason": "x", "rung": "run", "direction_leg": None, "direction": "up", "direction_conf": 0.7,
               "latency_ms": 80.0, "route": "MOCK", "model": "mock-jev-0.1", "inventory": 0.5,
+              "jev_status": "answered", "jev_provider": "typesafe-ai", "answer_age_s": 0.0,
               "unrealised_pnl_usd": 0.0, "realised_pnl_usd": 1.5, "drawdown_pct": 0.0, "fill": "-",
               "orders": [], "answers": {"a": 1}, "snapshot": {"mid": 100.0}}
     await sink.on_tick(record, summary)
@@ -234,6 +236,7 @@ async def test_the_db_sink_persists_ticks_and_status(monkeypatch):
     assert s.status == JevSessionStatus.completed and s.stop_reason == "tick limit reached"
     assert s.tick_count == 1 and s.inventory == 0.5 and s.stopped_at is not None
     assert len(ticks) == 1 and ticks[0].answers == {"a": 1}
+    assert (ticks[0].jev_status, ticks[0].jev_provider, ticks[0].answer_age_s) == ("answered", "typesafe-ai", 0.0)
     assert sent == [(f"jev:{sid}", "tick"), (f"jev:{sid}", "status")]
 
 

@@ -66,11 +66,28 @@ def test_up_leg_is_a_market_buy():
     assert leg.side == "buy" and leg.type == "market"
 
 
+def _touch_plan(kind, bid=99_999.0, ask=100_001.0, best_bid=99_985.0, best_ask=100_015.0, inventory=0.001):
+    return {o.purpose: o.limit_price for o in plan_orders(
+        Action(kind, reason="t"), inventory=inventory, bid_px=bid, ask_px=ask, quote_notional=20.0,
+        directional_notional=20.0, spec=BTC, best_bid=best_bid, best_ask=best_ask)}
+
+
+def test_normal_quotes_sit_inside_the_spread():
+    p = _touch_plan(QUOTE_BOTH_SIDES)
+    assert 99_985.0 < p["quote_bid"] < p["quote_ask"] < 100_015.0
+
+
 @pytest.mark.parametrize("kind", [WIDEN, QUOTE_WIDE])
-def test_wide_actions_quote_outside_the_normal_prices(kind):
-    normal = _plan(QUOTE_BOTH_SIDES)[0].limit_price
-    wide = _plan(kind)[0].limit_price
-    assert wide < normal
+def test_wide_quotes_join_the_best_bid_and_ask(kind):
+    # Regression: "wide" sat 10 bps below mid while the spread was 3 bps, so
+    # the bid never filled.
+    p = _touch_plan(kind)
+    assert p["quote_bid"] == 99_985.0 and p["quote_ask"] == 100_015.0
+
+
+def test_quotes_never_cross_the_book():
+    p = _touch_plan(QUOTE_BOTH_SIDES, bid=100_020.0, ask=99_980.0)
+    assert p["quote_bid"] < 100_015.0 and p["quote_ask"] > 99_985.0
 
 
 def test_every_order_meets_the_venue_minimum():

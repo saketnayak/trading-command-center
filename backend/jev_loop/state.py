@@ -161,6 +161,7 @@ def build_snapshot(
     inv: InventoryState,
     data_timestamp: float,
     has_depth: bool = True,
+    book_timestamp: float | None = None,
 ) -> dict:
     bid_sz = sum(sz for _, sz in bid_depth[:3])
     ask_sz = sum(sz for _, sz in ask_depth[:3])
@@ -208,6 +209,8 @@ def build_snapshot(
         "last_10_latencies_ms": inv.recent_latencies_ms[-10:],
         "last_10_slippage_bps": inv.recent_slippage_bps[-10:],
         "data_age_s": round(max(0.0, as_of - data_timestamp), 3),
+        # when the venue's book last changed; information, not a veto
+        "book_age_s": round(max(0.0, as_of - book_timestamp), 1) if book_timestamp is not None else None,
         "leverage": 1.0,
     }
 

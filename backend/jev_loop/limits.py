@@ -13,9 +13,11 @@ class Limits:
     max_drawdown_pct: float = 0.05
     max_order_notional_usd: float = 25.0
     max_inventory_age_s: float = 900.0
-    # Age of the venue's last book update. Catches a frozen or halted feed, not
-    # a quiet book: Alpaca's crypto book often goes 5-25 s without changing.
-    max_stale_data_age_s: float = 60.0
+    # Age of the market data we decide on, measured when the decision is made
+    # (fetch time plus the Jev round trip). How long ago the venue's book last
+    # changed is reported separately as book_age_s and never vetoed: a quiet
+    # book (Alpaca's crypto book can sit unchanged for minutes) is not stale data.
+    max_stale_data_age_s: float = 5.0
     max_api_errors: int = 5
     max_decision_latency_ms: float = 2000.0
     max_leverage: float = 1.0  # spot/cash only, never overridable
@@ -31,6 +33,8 @@ class Limits:
 
     # --- execution ---
     tick_seconds: float = 2.0
+    jev_interval_s: float = 6.0  # minimum spacing between Jev calls; the pacer widens it on 429s
+    jev_answer_ttl_s: float = 12.0  # decide on the last Jev answer for at most this long
     rest_ticks: int = 3
     quote_notional_usd: float = 20.0
     directional_notional_usd: float = 20.0
@@ -52,8 +56,10 @@ LOWERABLE_LIMITS = {
     "max_decision_latency_ms",
     "quote_notional_usd",
     "directional_notional_usd",
+    "jev_answer_ttl_s",
 }
 _MAX_TICK_SECONDS = 60.0
+_JEV_INTERVAL_RANGE = (2.0, 60.0)
 
 
 def validate_limit_overrides(overrides: dict | None) -> Limits:
@@ -74,6 +80,10 @@ def validate_limit_overrides(overrides: dict | None) -> Limits:
                 raise LimitOverrideError(
                     f"tick_seconds must be between {defaults.tick_seconds} and {_MAX_TICK_SECONDS}"
                 )
+        elif name == "jev_interval_s":
+            lo, hi = _JEV_INTERVAL_RANGE
+            if not lo <= value <= hi:
+                raise LimitOverrideError(f"jev_interval_s must be between {lo} and {hi}")
         elif name not in LOWERABLE_LIMITS:
             raise LimitOverrideError(f"'{name}' is fixed and cannot be overridden")
         elif value > getattr(defaults, name):

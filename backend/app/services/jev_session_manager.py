@@ -77,7 +77,8 @@ class DbSink:
                 ts=datetime.fromtimestamp(record["ts"], tz=timezone.utc),
                 **{k: record.get(k) for k in (
                     "mid", "spread_bps", "action", "action_reason", "rung", "direction_leg", "direction",
-                    "direction_conf", "latency_ms", "route", "model", "inventory", "unrealised_pnl_usd",
+                    "direction_conf", "latency_ms", "route", "model", "jev_status", "jev_provider",
+                    "answer_age_s", "inventory", "unrealised_pnl_usd",
                     "realised_pnl_usd", "drawdown_pct", "fill", "answers", "snapshot")},
                 orders=record.get("orders") or [],
             ))

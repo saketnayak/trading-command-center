@@ -36,6 +36,13 @@ def test_tick_seconds_can_only_slow_down():
         validate_limit_overrides({"tick_seconds": 0.5})
 
 
+def test_jev_interval_can_be_tuned_within_bounds():
+    assert validate_limit_overrides({"jev_interval_s": 10}).jev_interval_s == 10.0
+    assert validate_limit_overrides({"jev_interval_s": 2}).jev_interval_s == 2.0
+    with pytest.raises(LimitOverrideError):
+        validate_limit_overrides({"jev_interval_s": 1})
+
+
 def test_non_positive_cap_is_rejected():
     with pytest.raises(LimitOverrideError):
         validate_limit_overrides({"max_daily_loss_usd": 0})

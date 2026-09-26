@@ -115,23 +115,22 @@ def test_microprice_falls_back_without_a_two_sided_book():
 # -- regression: upstream stamped data_timestamp = now, so stale data never vetoed --
 
 
-def test_stale_venue_timestamp_trips_the_stale_data_veto():
+def test_data_older_than_the_limit_trips_the_stale_data_veto():
     now = time.time()
-    snap = _snap(now=now, data_timestamp=now - 90.0)
-    assert snap["data_age_s"] == pytest.approx(90.0)
+    snap = _snap(now=now, data_timestamp=now - 6.0)
+    assert snap["data_age_s"] == pytest.approx(6.0)
     snap.update(mid=100.0, inventory=0.0, daily_loss_usd=0.0, position_age_s=0.0)
     verdict = check(snap, 10.0, Limits(), 0, 50.0)
     assert not verdict.ok and "stale" in verdict.veto
 
 
-def test_a_quiet_book_is_not_stale_data():
-    # Regression: Alpaca's thin crypto book often goes 5-25 s without a change
-    # (observed median 5.2 s, max 26 s on BTC/USD); the 5 s default vetoed half
-    # of all ticks although the data was current. Only a frozen feed is stale.
+def test_book_age_is_reported_separately_from_data_age():
     now = time.time()
-    snap = _snap(now=now, data_timestamp=now - 26.0)
-    snap.update(mid=100.0, inventory=0.0, daily_loss_usd=0.0, position_age_s=0.0)
-    assert check(snap, 10.0, Limits(), 0, 50.0).ok
+    inv = InventoryState(equity_usd=1000.0, high_water_mark_usd=1000.0)
+    snap = build_snapshot(as_of=now, mid=100.0, microprice=100.0, spread_bps=1.0, bid_depth=[(99.9, 1)],
+                          ask_depth=[(100.1, 1)], trade_prices=[(now, 100.0)], trade_sides=[], inv=inv,
+                          data_timestamp=now, book_timestamp=now - 150.0)
+    assert snap["data_age_s"] == 0.0 and snap["book_age_s"] == pytest.approx(150.0)
 
 
 def test_parse_venue_ts_keeps_nanosecond_venue_time():

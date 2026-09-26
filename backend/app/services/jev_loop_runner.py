@@ -27,6 +27,7 @@ from app.services.jev_client import (
     JevDeadlineExceeded,
     JevDecisionError,
     JevGatewayVerificationRequired,
+    JevRateLimited,
     MockJevClient,
     run_battery,
 )
@@ -34,6 +35,7 @@ from jev_loop.assets import AssetSpec, floor_qty
 from jev_loop.ladder import Rung, select_rung
 from jev_loop.limits import Limits
 from jev_loop.order_plan import plan_orders
+from jev_loop.pacing import JevPacer
 from jev_loop.policy import KILL, PULL_QUOTES, STAND_DOWN, compose_action, fallback_action
 from jev_loop.pricing import quote_prices
 from jev_loop.risk import check as risk_check
@@ -150,6 +152,9 @@ class JevLoop:
         self.model = getattr(decider, "model", None)
         self.cost_usd = 0.0
         self._last_mid: float | None = None
+        self.pacer = JevPacer(cfg.limits.jev_interval_s, cfg.limits.jev_answer_ttl_s)
+        self.provider: str | None = None
+        self.fatal_reason: str | None = None
         self.session_start_iso = ""
         self.trades_since_iso = ""
 
@@ -185,6 +190,8 @@ class JevLoop:
                     return await self._finish("completed", "max duration reached")
                 tick_start = self._monotonic()
                 killed_reason = await self.tick()
+                if self.fatal_reason:
+                    return await self._finish("failed", self.fatal_reason)
                 if killed_reason:
                     await self.sink.on_status("killed", killed_reason, self.summary(self._last_mid))
                     return "killed"
@@ -251,6 +258,7 @@ class JevLoop:
         try:
             bids, asks, venue_ts = await self.market.read_top_of_book()
             recent = await self.market.get_recent_trades(self.trades_since_iso)
+            fetched_at = self._clock()
             self.api_error_streak = 0
         except AlpacaAPIError as exc:
             self.api_error_streak += 1
@@ -293,35 +301,69 @@ class JevLoop:
             trade_prices=self.price_hist,
             trade_sides=[(ts, side) for ts, _, _, side in self.trade_tape],
             inv=self.inv,
-            data_timestamp=venue_ts if venue_ts is not None else now,
+            data_timestamp=max(now, fetched_at),
             has_depth=self.cfg.spec.has_depth,
+            book_timestamp=venue_ts,
         )
         equity_now = self.inv.equity_usd + self.inv.realised_pnl_usd + snapshot["unrealised_pnl_usd"]
         self.inv.high_water_mark_usd = max(self.inv.high_water_mark_usd, equity_now)
 
-        # 4. battery, inside the tick budget
+        # 4. battery: paced, with the last answer reused while it is fresh
         budget = max(0.05, limits.tick_seconds - 0.15)
-        answers, meta = None, {}
-        late = jev_down = False
-        try:
-            answers, meta = await run_battery(self.decider, snapshot, timeout=budget)
-        except JevGatewayVerificationRequired as exc:
-            jev_down = True
-            fill_notes.append(f"gateway needs a card on file ({exc}); switched to the mock, no more orders")
-            self.decider = MockJevClient(max_position_usd=limits.max_position_usd)
-            self.dry = True
-        except JevDeadlineExceeded:
-            late = True
-        except JevDecisionError as exc:
-            jev_down = True
-            fill_notes.append(f"decision error: {exc}")
-        if answers is not None:
+        answers, meta, answer_age = None, {}, None
+        fresh = late = jev_down = False
+        is_mock = getattr(self.decider, "is_mock", False)
+        if is_mock or self.pacer.should_call(now):
+            try:
+                answers, meta = await run_battery(self.decider, snapshot, timeout=budget)
+                fresh = True
+                jev_status = "mock" if is_mock else "answered"
+                if not is_mock:
+                    self.pacer.on_success(now, answers)
+            except JevGatewayVerificationRequired as exc:
+                jev_status = "error"
+                if self.cfg.mode == "paper" and not self.dry:
+                    # Never keep a paper session running on the mock: it cannot trade.
+                    self.fatal_reason = (
+                        f"Vercel AI Gateway refused the request ({exc}). Add a card or credits "
+                        "in Vercel, then start a new session."
+                    )
+                else:
+                    fill_notes.append(f"gateway needs a card on file ({exc}); switched to the mock")
+                    self.decider = MockJevClient(max_position_usd=limits.max_position_usd)
+                    self.dry = True
+            except JevRateLimited as exc:
+                self.pacer.on_rate_limited(now, exc.retry_after_s)
+                jev_status = "rate_limited"
+                fill_notes.append(f"Jev rate limited; next call in {self.pacer.cooldown_remaining(now):.0f} s")
+            except JevDeadlineExceeded:
+                self.pacer.on_error(now)
+                jev_status = "late"
+            except JevDecisionError as exc:
+                self.pacer.on_error(now)
+                jev_status = "error"
+                fill_notes.append(f"decision error: {exc}")
+        else:
+            jev_status = "paced"
+
+        if fresh:
+            answer_age = 0.0
             self.route, self.model = meta.get("route"), meta.get("model")
+            self.provider = meta.get("provider") or self.provider
             self.cost_usd += meta.get("cost_usd") or 0.0
             if meta.get("latency_ms") is not None:
                 self.inv.recent_latencies_ms = (self.inv.recent_latencies_ms + [meta["latency_ms"]])[-10:]
-        elif jev_down:
-            self.route, self.model = getattr(self.decider, "name", None), getattr(self.decider, "model", None)
+        elif not is_mock and (reused := self.pacer.usable_answer(now)) is not None:
+            answers, age = reused
+            answer_age = round(age, 1)
+        if answers is None:
+            late = jev_status == "late"
+            jev_down = not late
+            if jev_down:
+                self.route, self.model = getattr(self.decider, "name", None), getattr(self.decider, "model", None)
+
+        # How old is the data we are about to act on? Fetch time plus the Jev round trip.
+        snapshot["data_age_s"] = round(max(0.0, self._clock() - fetched_at), 3)
 
         # 5. policy
         if late:
@@ -330,6 +372,8 @@ class JevLoop:
             action = fallback_action(snapshot, limits)
         else:
             action = compose_action(answers, snapshot, limits, thresholds=self.cfg.thresholds)
+            if not fresh:
+                action.direction_leg = None  # one directional trade per fresh Jev answer, never per reuse
 
         rung = select_rung(
             risk_kill=snapshot["drawdown_pct"] > limits.max_drawdown_pct,
@@ -344,7 +388,9 @@ class JevLoop:
         orders: list[dict] = []
         reason = action.reason if action else "block deadline exceeded"
         killed = None
-        if rung == Rung.HOLD_LATE:
+        if self.fatal_reason:
+            await self._cancel_resting()
+        elif rung == Rung.HOLD_LATE:
             await self._cancel_resting()  # never leave quotes resting on stale state
         elif rung == Rung.KILL or action.kind == KILL:
             rung = Rung.KILL
@@ -376,12 +422,15 @@ class JevLoop:
                     action, inventory=self.inv.inventory, bid_px=bid_px, ask_px=ask_px,
                     quote_notional=quote_usd, directional_notional=leg_usd, spec=self.cfg.spec,
                     max_buy_usd=max(0.0, limits.max_position_usd - position_usd - self.resting_bid_usd),
+                    best_bid=bids[0][0] if bids else None,
+                    best_ask=asks[0][0] if asks else None,
                 )
                 orders = await self._execute(plan, action.kind, mid)
 
         await self._emit(now, snapshot, action=action.kind if action else "HOLD_LATE", reason=reason,
                          rung=rung.value, fill="; ".join(fill_notes) or "-", answers=answers, meta=meta,
-                         orders=orders, direction_leg=action.direction_leg if action else None)
+                         orders=orders, direction_leg=action.direction_leg if action else None,
+                         jev_status=jev_status, answer_age_s=answer_age, fresh=fresh)
         return killed
 
     def _ingest_trades(self, recent: list[dict], now: float) -> None:
@@ -463,7 +512,8 @@ class JevLoop:
 
     async def _emit(self, now: float, snapshot: dict | None, *, action: str, reason: str, rung: str, fill: str,
                     answers: dict | None = None, meta: dict | None = None, orders: list | None = None,
-                    direction_leg: str | None = None) -> None:
+                    direction_leg: str | None = None, jev_status: str | None = None,
+                    answer_age_s: float | None = None, fresh: bool = False) -> None:
         meta = meta or {}
         record = {
             "tick": self.tick_no,
@@ -474,11 +524,15 @@ class JevLoop:
             "action_reason": reason,
             "rung": rung,
             "direction_leg": direction_leg,
-            "direction": answers["direction"]["choice"] if answers else None,
-            "direction_conf": answers["direction"]["confidence"] if answers else None,
+            # only fresh answers count as calls (calibration must not score a reuse twice)
+            "direction": answers["direction"]["choice"] if answers and fresh else None,
+            "direction_conf": answers["direction"]["confidence"] if answers and fresh else None,
             "latency_ms": meta.get("latency_ms"),
             "route": self.route,
             "model": self.model,
+            "jev_status": jev_status,
+            "jev_provider": self.provider if fresh else None,
+            "answer_age_s": answer_age_s,
             "inventory": self.inv.inventory,
             "unrealised_pnl_usd": snapshot["unrealised_pnl_usd"] if snapshot else None,
             "realised_pnl_usd": round(self.inv.realised_pnl_usd, 6),

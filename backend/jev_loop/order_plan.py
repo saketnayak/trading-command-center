@@ -13,7 +13,6 @@ from dataclasses import dataclass
 from .assets import AssetSpec, floor_qty, size_order
 from .policy import QUOTE_BOTH_SIDES, QUOTE_WIDE, WIDEN, Action
 
-WIDE_FACTOR = 0.001  # WIDEN / QUOTE_WIDE quote 10 bps outside the A-S prices
 
 
 @dataclass(frozen=True)
@@ -35,16 +34,22 @@ def plan_orders(
     directional_notional: float,
     spec: AssetSpec,
     max_buy_usd: float | None = None,
+    best_bid: float | None = None,
+    best_ask: float | None = None,
 ) -> list[PlannedOrder]:
     """`max_buy_usd` is the room left under the position cap; buys that would
     not fit are dropped (the quote first gets the room, then the leg)."""
     if action.kind not in (QUOTE_BOTH_SIDES, QUOTE_WIDE, WIDEN):
         return []
 
-    if action.kind in (QUOTE_WIDE, WIDEN):
-        q_bid, q_ask = bid_px * (1 - WIDE_FACTOR), ask_px * (1 + WIDE_FACTOR)
-    else:
-        q_bid, q_ask = bid_px, ask_px
+    q_bid, q_ask = bid_px, ask_px
+    if best_bid and best_ask:
+        if action.kind in (QUOTE_WIDE, WIDEN):
+            # wide: join the best bid and ask rather than quoting inside the spread
+            q_bid, q_ask = min(q_bid, best_bid), max(q_ask, best_ask)
+        # never cross the book: a quote that would take liquidity is not a quote
+        q_bid = min(q_bid, best_ask - spec.tick_size)
+        q_ask = max(q_ask, best_bid + spec.tick_size)
 
     available = max(inventory, 0.0)
     plan: list[PlannedOrder] = []

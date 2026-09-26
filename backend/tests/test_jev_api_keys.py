@@ -6,7 +6,7 @@ from httpx import ASGITransport, AsyncClient
 from main import app
 
 ALPACA_ACCOUNT_URL = "https://paper-api.alpaca.markets/v2/account"
-GATEWAY_MODELS_URL = "https://ai-gateway.vercel.sh/typesafe/v1/models"
+GATEWAY_SYSTEMONE_URL = "https://ai-gateway.vercel.sh/typesafe/v1/systemone"
 TYPESAFE_SYSTEMONE_URL = "https://api.typesafe.ai/v1/systemone"
 
 ALPACA_SECRET = "s3cr3t-value-that-must-never-leak"
@@ -65,16 +65,36 @@ async def test_alpaca_401_is_invalid(httpx_mock):
 
 
 @pytest.mark.asyncio
-async def test_ai_gateway_key_is_validated_with_the_free_models_listing(httpx_mock):
-    httpx_mock.add_response(url=GATEWAY_MODELS_URL, status_code=200, json={"data": []})
+async def test_ai_gateway_key_is_validated_with_one_tiny_jev_decision(httpx_mock):
+    # Regression: the free models listing accepted a key whose team had no card,
+    # so the problem only surfaced once a paper session was running.
+    httpx_mock.add_response(url=GATEWAY_SYSTEMONE_URL, method="POST", status_code=200,
+                            json={"model": "typesafe-ai/jev", "answers": {"ok": {"type": "noul", "noul": 0.9}}})
     body = await _upsert("ai_gateway", "vck_testkey_123456")
-    assert body["is_valid"] is True
-    assert httpx_mock.get_requests()[0].headers["Authorization"] == "Bearer vck_testkey_123456"
+    assert body["is_valid"] is True and not body["last_error_message"]
+    sent = httpx_mock.get_requests()[0]
+    assert sent.headers["Authorization"] == "Bearer vck_testkey_123456"
+    assert json.loads(sent.content)["model"] == "typesafe-ai/jev"
+
+
+@pytest.mark.asyncio
+async def test_ai_gateway_key_without_a_card_is_invalid_with_the_reason(httpx_mock):
+    httpx_mock.add_response(url=GATEWAY_SYSTEMONE_URL, method="POST", status_code=403,
+                            json={"error": {"type": "customer_verification_required", "message": "add a card"}})
+    body = await _upsert("ai_gateway", "vck_nocard_123456")
+    assert body["is_valid"] is False and "card" in body["last_error_message"].lower()
+
+
+@pytest.mark.asyncio
+async def test_a_busy_jev_provider_does_not_reject_a_good_key(httpx_mock):
+    httpx_mock.add_response(url=GATEWAY_SYSTEMONE_URL, method="POST", status_code=429)
+    body = await _upsert("ai_gateway", "vck_busy_123456")
+    assert body["is_valid"] is True and "busy" in body["last_error_message"].lower()
 
 
 @pytest.mark.asyncio
 async def test_ai_gateway_bad_key_is_invalid(httpx_mock):
-    httpx_mock.add_response(url=GATEWAY_MODELS_URL, status_code=401)
+    httpx_mock.add_response(url=GATEWAY_SYSTEMONE_URL, method="POST", status_code=401)
     assert (await _upsert("ai_gateway", "vck_bad_key_123456"))["is_valid"] is False
 
 

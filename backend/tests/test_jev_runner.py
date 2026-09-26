@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from app.services.alpaca_paper_client import AlpacaAPIError
-from app.services.jev_client import JevDeadlineExceeded, JevDecisionError, JevGatewayVerificationRequired
+from app.services.jev_client import JevDeadlineExceeded, JevDecisionError, JevGatewayVerificationRequired, JevRateLimited
 from app.services.jev_loop_runner import JevLoop, LoopConfig
 from jev_loop.assets import resolve_symbol
 from jev_loop.limits import Limits
@@ -117,10 +117,15 @@ class Decider:
     name = "Scripted"
     model = "jev-test"
 
-    def __init__(self, *script):
+    def __init__(self, *script, clock=None, delay_s=0.0):
         self.script = list(script)
+        self.calls = 0
+        self.clock, self.delay_s = clock, delay_s
 
     async def ask(self, state, questions, timeout):
+        self.calls += 1
+        if self.clock is not None:
+            self.clock.now += self.delay_s  # a slow Jev ages the data we decide on
         item = self.script.pop(0) if len(self.script) > 1 else self.script[0]
         if isinstance(item, Exception):
             raise item
@@ -208,7 +213,8 @@ async def test_late_answer_holds_and_pulls_resting_quotes():
     # Regression: upstream left stale quotes on the book while holding late.
     clock = Clock()
     market = FakeMarket(clock)
-    loop, sink = make_loop(market, Decider(answers(), JevDeadlineExceeded("slow")), max_ticks=2)
+    loop, sink = make_loop(market, Decider(answers(), JevDeadlineExceeded("slow")), max_ticks=2,
+                           limits=Limits(jev_interval_s=2.0, jev_answer_ttl_s=0.5))
     await loop.run()
     assert sink.ticks[1]["rung"] == "hold_late"
     assert market.open_orders() == []
@@ -223,31 +229,97 @@ async def test_jev_outage_falls_back_to_rules_only():
     assert sink.ticks[0]["action"] == "QUOTE_WIDE"
 
 
-async def test_gateway_card_403_switches_to_the_mock_and_stops_trading():
+async def test_gateway_card_403_in_shadow_mode_switches_to_the_mock():
     clock = Clock()
     market = FakeMarket(clock)
-    loop, sink = make_loop(market, Decider(JevGatewayVerificationRequired("add a card")), max_ticks=3)
+    loop, sink = make_loop(market, Decider(JevGatewayVerificationRequired("add a card")), max_ticks=3, mode="shadow")
     await loop.run()
     assert market.orders == []
     assert sink.ticks[-1]["route"] == "MOCK"
 
 
-async def test_stale_venue_data_is_vetoed():
+async def test_gateway_card_403_fails_a_paper_session_instead_of_trading_on_the_mock():
+    # Regression: a paper session silently ran on the mock for 56 minutes.
     clock = Clock()
-    market = FakeMarket(clock, venue_lag=90.0)
-    loop, sink = make_loop(market, Decider(answers()), max_ticks=1)
+    market = FakeMarket(clock)
+    loop, sink = make_loop(market, Decider(JevGatewayVerificationRequired("add a card")), max_ticks=5)
+    assert await loop.run() == "failed"
+    assert market.orders == []
+    status, reason = sink.statuses[-1]
+    assert status == "failed" and "card" in reason.lower()
+    assert len(sink.ticks) == 1
+
+
+async def test_jev_is_called_on_its_own_slower_schedule_and_answers_are_reused():
+    clock = Clock()
+    market = FakeMarket(clock)
+    decider = Decider(answers())
+    loop, sink = make_loop(market, decider, max_ticks=4, mode="shadow")  # 2 s ticks, 6 s Jev interval
+    await loop.run()
+    assert decider.calls == 2  # t=0 and t=6
+    assert [t["jev_status"] for t in sink.ticks] == ["answered", "paced", "paced", "answered"]
+    assert [t["answer_age_s"] for t in sink.ticks] == [0.0, 2.0, 4.0, 0.0]
+
+
+async def test_a_rate_limit_backs_off_and_keeps_deciding_on_the_last_answer():
+    clock = Clock()
+    market = FakeMarket(clock)
+    decider = Decider(answers(), JevRateLimited("429", retry_after_s=None), answers())
+    loop, sink = make_loop(market, decider, max_ticks=4, mode="shadow", limits=Limits(jev_interval_s=2.0))
+    await loop.run()
+    # t=0 answered; t=2 429 (interval 2 -> 4); t=4 paced; t=6 answered
+    assert [t["jev_status"] for t in sink.ticks] == ["answered", "rate_limited", "paced", "answered"]
+    assert decider.calls == 3
+    assert sink.ticks[1]["rung"] != "rules_only"  # reused the t=0 answer
+    assert sink.ticks[1]["answer_age_s"] == 2.0
+
+
+async def test_rules_only_once_the_last_answer_is_too_old():
+    clock = Clock()
+    market = FakeMarket(clock)
+    decider = Decider(answers(), JevRateLimited("429", retry_after_s=60))
+    loop, sink = make_loop(market, decider, max_ticks=9, mode="shadow")
+    await loop.run()
+    assert sink.ticks[-1]["rung"] == "rules_only"  # 16 s later, past the 12 s answer TTL
+    assert decider.calls == 2  # the 60 s retry-after is honoured
+
+
+async def test_a_reused_answer_never_repeats_the_directional_leg():
+    clock = Clock()
+    market = FakeMarket(clock)
+    loop, _ = make_loop(market, Decider(answers(direction="up", dconf=0.9)), max_ticks=3)
+    await loop.run()
+    assert sum(1 for o in market.orders if o["type"] == "market") == 1
+
+
+async def test_reused_answers_are_not_counted_for_calibration():
+    clock = Clock()
+    market = FakeMarket(clock)
+    loop, sink = make_loop(market, Decider(answers(direction="up", dconf=0.9)), max_ticks=2, mode="shadow")
+    await loop.run()
+    assert sink.ticks[0]["direction"] == "up" and sink.ticks[1]["direction"] is None
+
+
+async def test_a_slow_jev_answer_makes_the_market_data_stale():
+    clock = Clock()
+    market = FakeMarket(clock)
+    loop, sink = make_loop(market, Decider(answers(), clock=clock, delay_s=6.0), max_ticks=1,
+                           limits=Limits(max_decision_latency_ms=10_000_000))
     await loop.run()
     assert market.orders == []
     assert "stale" in sink.ticks[0]["action_reason"]
 
 
 async def test_a_quiet_but_current_book_still_trades():
+    # Regression: book-update age reached 156 s on a quiet Saturday; that is a
+    # quiet venue, not stale data. It is reported (book_age_s), never vetoed.
     clock = Clock()
-    market = FakeMarket(clock, venue_lag=26.0)
+    market = FakeMarket(clock, venue_lag=150.0)
     loop, sink = make_loop(market, Decider(answers()), max_ticks=1)
     await loop.run()
     assert [o["side"] for o in market.orders] == ["buy"]
     assert not sink.ticks[0]["action_reason"].startswith("vetoed")
+    assert sink.ticks[0]["snapshot"]["book_age_s"] == pytest.approx(150.0)
 
 
 async def test_drawdown_kills_and_flattens_what_the_session_bought():
