@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultParams, deliveryIssues, describeRule, timeAgo, toApiParams } from "./alerts";
+import { ALERT_KINDS, defaultParams, deliveryIssues, describeRule, timeAgo, toApiParams } from "./alerts";
 
 describe("alerts helpers", () => {
   it("describes each kind in one sentence", () => {
@@ -39,5 +39,19 @@ describe("alerts helpers", () => {
     expect(timeAgo("2026-11-04T09:00:00Z", now)).toBe("3 h ago");
     expect(timeAgo("2026-11-02T12:00:00Z", now)).toBe("2 d ago");
     expect(timeAgo("2026-10-01T12:00:00Z", now)).toBe("2026-10-01");
+  });
+
+  it("every numeric default passes the browser's min/step validation", () => {
+    // A default off the min + n×step grid makes the browser block the form silently.
+    for (const k of ALERT_KINDS) {
+      for (const f of k.fields) {
+        if (f.type !== "number" || f.default === undefined) continue;
+        if (f.min !== undefined) expect(f.default).toBeGreaterThanOrEqual(f.min);
+        if (f.step !== undefined) {
+          const n = (f.default - (f.min ?? 0)) / f.step;
+          expect(Math.abs(n - Math.round(n))).toBeLessThan(1e-9);
+        }
+      }
+    }
   });
 });

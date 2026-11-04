@@ -90,7 +90,7 @@ export const ALERT_KINDS: KindOption[] = [
   },
   {
     kind: "daily_move", label: "Big daily move", scope: "ticker", group: "Price",
-    fields: [{ name: "pct", label: "Move of at least", type: "number", min: 0.1, max: 100, step: 0.5, suffix: "%", default: 5 }],
+    fields: [{ name: "pct", label: "Move of at least", type: "number", min: 0.1, max: 100, suffix: "%", default: 5 }],
     hint: "Up or down versus the previous close. At most once per day.",
   },
   {
