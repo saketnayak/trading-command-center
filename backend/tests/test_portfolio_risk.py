@@ -91,12 +91,13 @@ async def test_young_and_unknown_holdings_are_reported(noisy_prices):
         body = (await client.get(f"/portfolio/{pid}/risk?lookback=6m", headers=headers)).json()
     w = " ".join(body["warnings"])
     assert "No price for NOPE" in w
-    # YOUNG has ~28 trading days: enough to be included over 6m.
-    assert {h["ticker"] for h in body["risk"]["holdings"]} == {"CALM", "YOUNG"}
-    young_2022 = next(s for s in body["stress"] if s["id"] == "rates_2022")
-    methods = {leg["ticker"]: leg["method"] for leg in young_2022["worst"]}
-    assert methods["YOUNG"] in ("beta", "market")  # did not trade in 2022
-    assert methods["CALM"] == "actual"
+    # YOUNG listed ~40 days ago: ~22% of a 6-month window. Counting the days before it
+    # listed as flat would understate its risk, so it is left out and named.
+    assert "Too little price history in this lookback for YOUNG (" in w
+    assert "of the portfolio's value" in w
+    assert {h["ticker"] for h in body["risk"]["holdings"]} == {"CALM"}
+    legs = {leg["ticker"] for s in body["stress"] for leg in s["worst"]}
+    assert legs == {"CALM"}
 
 
 async def test_risk_empty_validation_and_ownership(noisy_prices):

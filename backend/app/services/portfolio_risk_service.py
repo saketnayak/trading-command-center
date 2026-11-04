@@ -22,9 +22,12 @@ from app.services.portfolio_pricing import aggregate_shares, fx_factors
 from app.services.price_history_service import get_closes, history_start
 from app.services.risk_calc import STRESS_SCENARIOS, compute_risk, stress_test
 
-LookbackKey = Literal["6m", "1y", "3y"]
-_LOOKBACK_DAYS = {"6m": 183, "1y": 366, "3y": 365 * 3 + 1}
+LookbackKey = Literal["3m", "6m", "1y", "3y"]
+_LOOKBACK_DAYS = {"3m": 92, "6m": 183, "1y": 366, "3y": 365 * 3 + 1}
 MIN_OBSERVATIONS = 20  # fewer daily returns than this and a holding is left out of the statistics
+# A holding must have real prices on this share of the lookback's trading days. Days before it
+# listed would otherwise count as flat (0% return) and understate its volatility and correlation.
+MIN_COVERAGE = 0.8
 STRESS_MARKET = "SPY"
 
 METHODOLOGY = (
@@ -121,11 +124,12 @@ async def build_risk_report(
         return out, real
 
     columns: dict[str, np.ndarray] = {}
-    short_history: list[str] = []
+    short_history: dict[str, float] = {}  # symbol → share of days with real prices
+    needed = max(MIN_OBSERVATIONS, MIN_COVERAGE * max(len(calendar) - 1, 0))
     for s in values:
         r, real = daily_returns(s)
-        if real < MIN_OBSERVATIONS:
-            short_history.append(s)
+        if real < needed:
+            short_history[s] = real / max(len(calendar) - 1, 1)
         else:
             columns[s] = r
     included = sorted(columns)
@@ -160,8 +164,9 @@ async def build_risk_report(
         warnings.append("No price for " + ", ".join(no_price) + "; left out of the risk figures.")
     if short_history:
         warnings.append(
-            "Less than a month of price history for " + ", ".join(sorted(short_history))
-            + "; left out of the risk figures."
+            "Too little price history in this lookback for "
+            + ", ".join(f"{s} ({cov:.0%} of days)" for s, cov in sorted(short_history.items()))
+            + "; left out of the risk figures. Try a shorter lookback."
         )
     if included_value < total_value - 1e-9:
         warnings.append(f"Risk figures cover {included_value / total_value:.0%} of the portfolio's value.")

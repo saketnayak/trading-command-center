@@ -3,9 +3,10 @@
 import { fmtMoney } from "./currency";
 import { fmtPct } from "./performance";
 
-export type RiskLookback = "6m" | "1y" | "3y";
+export type RiskLookback = "3m" | "6m" | "1y" | "3y";
 
 export const RISK_LOOKBACKS: { id: RiskLookback; label: string }[] = [
+  { id: "3m", label: "3M" },
   { id: "6m", label: "6M" },
   { id: "1y", label: "1Y" },
   { id: "3y", label: "3Y" },
