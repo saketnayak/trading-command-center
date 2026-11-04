@@ -3,6 +3,7 @@ import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Repo
 import type { AnalyzeResponse } from "./wave/types";
 import { performanceQueryParams, type PerformanceMode, type PerformanceRange, type PortfolioPerformance } from "./performance";
 import type { PortfolioRisk, RiskLookback } from "./risk";
+import type { AlertCheck, AlertEvent, AlertRule, CreateAlertRuleRequest } from "./alerts";
 import type { ResponseLanguage } from "./responseLanguage";
 import type { AppSettings } from "./appSettings";
 import type { CreateJevSessionRequest, JevCalibration, JevMeta, JevSession, JevSymbolSpec, JevTick } from "./jev/types";
@@ -925,3 +926,36 @@ export async function flattenJevSession(id: string): Promise<{ message: string; 
   if (!r.ok) throw await jevError(r, "Failed to flatten");
   return r.json();
 }
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+
+async function alertsJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const r = await fetchWithAuth(path, init);
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    const detail = body?.detail;
+    throw new Error(typeof detail === "string" ? detail : `Request failed (${r.status})`);
+  }
+  return r.status === 204 ? (undefined as T) : r.json();
+}
+
+export const listAlertRules = () => alertsJson<AlertRule[]>("/alerts/rules");
+
+export const createAlertRule = (body: CreateAlertRuleRequest) =>
+  alertsJson<AlertRule>("/alerts/rules", { method: "POST", body: JSON.stringify(body) });
+
+export const updateAlertRule = (
+  id: string,
+  body: Partial<Pick<AlertRule, "params" | "channels" | "cooldown_hours" | "enabled">>,
+) => alertsJson<AlertRule>(`/alerts/rules/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const deleteAlertRule = (id: string) => alertsJson<void>(`/alerts/rules/${id}`, { method: "DELETE" });
+
+export const checkAlertRule = (id: string) => alertsJson<AlertCheck>(`/alerts/rules/${id}/check`, { method: "POST" });
+
+export const listAlertEvents = (limit = 50) => alertsJson<AlertEvent[]>(`/alerts/events?limit=${limit}`);
+
+export const getAlertUnreadCount = () => alertsJson<{ unread: number }>("/alerts/unread-count");
+
+export const markAlertsRead = (body: { ids?: string[]; all?: boolean }) =>
+  alertsJson<{ marked: number }>("/alerts/events/read", { method: "POST", body: JSON.stringify(body) });

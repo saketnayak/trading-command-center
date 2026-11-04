@@ -140,7 +140,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 - Output is a **plan**, exportable as CSV. No orders, in line with research-only.
 - Seed suggested targets from the investor profile (risk ability, preferred sectors, target portfolio size).
 
-#### 1.5 Unified alerts engine (M)
+#### 1.5 Unified alerts engine (M) ✅ shipped (price, daily move, MA cross, regime, verdict, drawdown, position weight; Elliott-zone and earnings rules still open)
 - `alert_rules(user_id, scope: ticker|portfolio, kind, params, channels, cooldown)` and `alert_events`.
 - Rule kinds, all backed by data AgentFloor already computes:
   - price or % move, and crossing the 50/200-day moving average;

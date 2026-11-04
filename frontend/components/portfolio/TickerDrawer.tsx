@@ -279,6 +279,26 @@ function DrawerContent({
         </>
       )}
 
+      {/* Alert shortcuts: open /alerts with this ticker and kind prefilled */}
+      <Divider />
+      <Section title="Alerts">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+          {([
+            ["price_below", "Price alert"],
+            ["regime_change", "Regime change"],
+            ["verdict_change", "Verdict change"],
+          ] as const).map(([kind, label]) => (
+            <Link
+              key={kind}
+              href={`/alerts?ticker=${encodeURIComponent(holding.ticker)}&kind=${kind}`}
+              className="text-blue-500 hover:underline"
+            >
+              {label} →
+            </Link>
+          ))}
+        </div>
+      </Section>
+
       {/* Last analysis */}
       {holding.last_run && (
         <>

@@ -2,6 +2,8 @@ export type NavItem = {
   href: string;
   label: string;
   prefetchPortfolio?: boolean;
+  /** Show the unread-alert count next to this item. */
+  alertBadge?: boolean;
 };
 
 export const RESEARCH_NAV: NavItem[] = [
@@ -18,6 +20,7 @@ export const PRIMARY_NAV: NavItem[] = [
   { href: "/portfolio", label: "Portfolio", prefetchPortfolio: true },
   { href: "/watchlist", label: "Watchlist" },
   { href: "/market", label: "Market" },
+  { href: "/alerts", label: "Alerts", alertBadge: true },
   { href: "/settings", label: "Settings" },
 ];
 
