@@ -121,7 +121,7 @@ Effort: **S** ≈ ≤1 week, **M** ≈ 1–3 weeks, **L** ≈ 3–6 weeks for on
 - UI: a new **Performance** tab with an equity curve against the benchmark (Plotly is already a dependency) and a returns heat-map by month.
 - AI hook: feed period return and excess return into `portfolio_insight_runner` and the morning brief, so the brief can say "you trail SPY by 3.1% YTD, mostly NVDA → TSLA rotation".
 
-#### 1.3 Portfolio risk workspace (M)
+#### 1.3 Portfolio risk workspace (M) ✅ shipped (as a Risk tab; not yet fed into the AI brief)
 Computed from 1.1, using pure functions like `trim_signal_service`:
 - correlation matrix and clusters ("these four holdings move as one bet");
 - portfolio beta, annualised volatility, max drawdown, and historical VaR/CVaR at 95%;

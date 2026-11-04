@@ -6,7 +6,7 @@ from sqlalchemy import update
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.run import Run, RunStatus
-from app.routers import auth, runs, api_keys, users, llm_providers, watchlist, portfolio, ticker, tickers, admin, market, investor_profile, regime, wave, kalman, jev, portfolio_performance, settings as settings_router
+from app.routers import auth, runs, api_keys, users, llm_providers, watchlist, portfolio, ticker, tickers, admin, market, investor_profile, regime, wave, kalman, jev, portfolio_performance, portfolio_risk, settings as settings_router
 from app.services.jev_session_manager import recover_interrupted_sessions
 from app.services.scheduler import start_scheduler, stop_scheduler
 
@@ -54,6 +54,7 @@ app.include_router(kalman.router, tags=["kalman"])
 app.include_router(settings_router.router, tags=["settings"])
 app.include_router(jev.router, tags=["jev"])
 app.include_router(portfolio_performance.router, tags=["portfolio"])
+app.include_router(portfolio_risk.router, tags=["portfolio"])
 
 
 @app.get("/health")

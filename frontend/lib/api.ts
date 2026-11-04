@@ -2,6 +2,7 @@ import { getSession, signOut } from "next-auth/react";
 import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, SchedulerJobsResponse, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, TickerMetadataResponse, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, KalmanData, TrimSignalsResponse, WaveSummary, PortfolioEarningsResponse, PortfolioFundamentalsResponse, PortfolioNewsResponse } from "./types";
 import type { AnalyzeResponse } from "./wave/types";
 import { performanceQueryParams, type PerformanceMode, type PerformanceRange, type PortfolioPerformance } from "./performance";
+import type { PortfolioRisk, RiskLookback } from "./risk";
 import type { ResponseLanguage } from "./responseLanguage";
 import type { AppSettings } from "./appSettings";
 import type { CreateJevSessionRequest, JevCalibration, JevMeta, JevSession, JevSymbolSpec, JevTick } from "./jev/types";
@@ -596,6 +597,26 @@ export async function getPortfolioPerformance(
   );
   if (!r.ok) {
     let detail = `Failed to load performance (${r.status})`;
+    try {
+      const body = await r.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      /* keep the generic message */
+    }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+export async function getPortfolioRisk(
+  portfolioId: string,
+  lookback: RiskLookback,
+  benchmark: string
+): Promise<PortfolioRisk> {
+  const params = new URLSearchParams({ lookback, benchmark: benchmark.trim().toUpperCase() });
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/risk?${params.toString()}`);
+  if (!r.ok) {
+    let detail = `Failed to load risk (${r.status})`;
     try {
       const body = await r.json();
       if (typeof body?.detail === "string") detail = body.detail;

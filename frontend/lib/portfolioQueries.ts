@@ -12,6 +12,8 @@ export const portfolioQueryKeys = {
   news: (id: string) => ["portfolio-news", id] as const,
   performance: (id: string, mode: string, range: string, benchmark: string) =>
     ["portfolio-performance", id, mode, range, benchmark] as const,
+  risk: (id: string, lookback: string, benchmark: string) =>
+    ["portfolio-risk", id, lookback, benchmark] as const,
   behavioralAlerts: (id: string) => ["behavioralAlerts", id] as const,
   insightLatest: (id: string) => ["insight-latest", id] as const,
   insightsList: (id: string) => ["insights-list", id] as const,
@@ -32,6 +34,7 @@ export const PORTFOLIO_STALE_TIMES = {
   earnings: 30 * 60_000,
   news: 15 * 60_000,
   performance: 30 * 60_000,
+  risk: 30 * 60_000,
   behavioralAlerts: 5 * 60_000,
 } as const;
 
@@ -60,6 +63,7 @@ function appendPortfolioTabCacheKeys(
 export type PortfolioTab =
   | "holdings"
   | "performance"
+  | "risk"
   | "insights"
   | "earnings"
   | "news"

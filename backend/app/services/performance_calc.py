@@ -53,6 +53,9 @@ class _Prices:
         return self.closes[found]
 
 
+PriceLookup = _Prices  # public name for other modules (risk endpoint)
+
+
 def _shares_on(periods: list[HoldingsPeriod], d: date) -> dict[str, float]:
     current: dict[str, float] = {}
     for p in periods:

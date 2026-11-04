@@ -24,12 +24,10 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.portfolio import Portfolio, PortfolioSnapshot
-from app.models.ticker_metadata import TickerMetadata
 from app.models.user import User
-from app.services import fx_service
 from app.services.performance_calc import HoldingsPeriod, compute_performance
+from app.services.portfolio_pricing import aggregate_shares, fx_factors
 from app.services.price_history_service import get_closes
-from app.utils.quote_currency import quote_currency_from_ticker
 
 router = APIRouter()
 
@@ -51,31 +49,6 @@ def _range_start(range_key: str, today: date) -> date:
     if range_key == "ytd":
         return date(today.year - 1, 12, 31)
     return today - timedelta(days=_RANGE_DAYS[range_key])
-
-
-def _aggregate(holdings) -> dict[str, float]:
-    shares: dict[str, float] = {}
-    for h in holdings:
-        sym = h.ticker.strip().upper()
-        shares[sym] = shares.get(sym, 0.0) + float(h.shares or 0.0)
-    return {s: q for s, q in shares.items() if q > 0}
-
-
-async def _fx_factors(db: AsyncSession, symbols: list[str], display_currency: str) -> tuple[dict[str, float], dict[str, str]]:
-    """symbol → factor into the display currency, plus each symbol's listing currency."""
-    meta = {
-        row.ticker.upper(): (row.currency or "").upper()
-        for row in (await db.execute(select(TickerMetadata).where(TickerMetadata.ticker.in_(symbols)))).scalars()
-    }
-    target = await fx_service.get_rate(display_currency)
-    factors: dict[str, float] = {}
-    currencies: dict[str, str] = {}
-    for sym in symbols:
-        ccy = quote_currency_from_ticker(sym) or meta.get(sym) or "USD"
-        currencies[sym] = ccy
-        local = await fx_service.get_rate(ccy) if ccy in fx_service.SUPPORTED_CURRENCIES else 1.0
-        factors[sym] = target / local if local else 1.0
-    return factors, currencies
 
 
 @router.get("/portfolio/{portfolio_id}/performance")
@@ -119,7 +92,7 @@ async def portfolio_performance(
     # One period per upload day; a later upload on the same day replaces an earlier one.
     by_day: dict[date, dict[str, float]] = {}
     for snap in snapshots:
-        by_day[snap.uploaded_at.astimezone(timezone.utc).date()] = _aggregate(snap.holdings)
+        by_day[snap.uploaded_at.astimezone(timezone.utc).date()] = aggregate_shares(snap.holdings)
     history_start = min(by_day) if by_day else None
     history_days = (today - history_start).days if history_start else 0
     latest = by_day[max(by_day)] if by_day else {}
@@ -149,7 +122,7 @@ async def portfolio_performance(
     symbols = sorted({s for p in periods for s in p.shares})
     closes, failed = await get_closes(db, [*symbols, benchmark], start - _PRICE_LOOKBACK, today)
     bench_closes = closes.pop(benchmark, {}) if benchmark not in symbols else dict(closes.get(benchmark, {}))
-    fx, currencies = await _fx_factors(db, symbols, display_currency)
+    fx, currencies = await fx_factors(db, symbols, display_currency)
 
     result = compute_performance(
         periods=periods,

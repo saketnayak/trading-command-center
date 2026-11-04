@@ -49,6 +49,7 @@ import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
 import { UploadDrawer } from "@/components/portfolio/UploadDrawer";
 import { HoldingsTable } from "@/components/portfolio/HoldingsTable";
 import { PerformancePanel } from "@/components/portfolio/PerformancePanel";
+import { PortfolioRiskPanel } from "@/components/portfolio/PortfolioRiskPanel";
 import { InsightsDashboard } from "@/components/portfolio/InsightsDashboard";
 import { PortfolioStatsBar } from "@/components/portfolio/PortfolioStatsBar";
 import { EarningsPanel } from "@/components/portfolio/EarningsPanel";
@@ -665,6 +666,16 @@ function PortfolioPageContent() {
                 aria-labelledby="portfolio-tab-performance"
               >
                 <PerformancePanel portfolioId={selectedId} />
+              </div>
+            )}
+
+            {tab === "risk" && (
+              <div
+                id="portfolio-panel-risk"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-risk"
+              >
+                <PortfolioRiskPanel portfolioId={selectedId} />
               </div>
             )}
 
