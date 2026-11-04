@@ -47,7 +47,10 @@ export function PerformancePanel({ portfolioId }: Props) {
     queryKey: portfolioQueryKeys.performance(portfolioId, mode, range, benchmark),
     queryFn: () => getPortfolioPerformance(portfolioId, mode, range, benchmark),
     staleTime: PORTFOLIO_STALE_TIMES.performance,
-    placeholderData: keepPreviousData,
+    // Keep the old chart while range/mode/benchmark change, but never show
+    // another portfolio's numbers while this one loads.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === portfolioId ? keepPreviousData(previous) : undefined,
   });
 
   const isPreset = BENCHMARK_PRESETS.some((b) => b.symbol === benchmark);

@@ -224,3 +224,26 @@ async def test_tracked_symbols_cover_latest_snapshots_and_benchmarks(fake_prices
         symbols = await price_history_service.tracked_symbols(db)
     assert "AAA" in symbols and "SPY" in symbols and "QQQ" in symbols
     assert "OLD" not in symbols  # only the latest snapshot counts
+
+
+async def test_failed_refresh_with_stored_rows_warns_stale_not_missing(fake_prices, monkeypatch):
+    async with _client() as client:
+        headers = await _token(client, "perf7@example.com")
+        pid = await _portfolio(client, headers, [(1, {"AAA": 10})])
+        first = (await client.get(f"/portfolio/{pid}/performance", headers=headers)).json()
+        assert first["stats"]["total_return"] is not None
+
+        # Make the stored AAA rows stale, then make every download fail.
+        async with AsyncSessionLocal() as db:
+            from sqlalchemy import update
+            await db.execute(update(PriceBar).where(PriceBar.symbol == "AAA").values(fetched_at=datetime(2020, 1, 1, tzinfo=timezone.utc)))
+            await db.commit()
+
+        async def _boom(symbol, start):
+            raise ValueError("Too Many Requests")
+
+        monkeypatch.setattr(price_history_service, "_download_closes", _boom)
+        body = (await client.get(f"/portfolio/{pid}/performance", headers=headers)).json()
+    assert body["stats"]["total_return"] == first["stats"]["total_return"]
+    assert not any("No price history for AAA" in w for w in body["warnings"])
+    assert any("Could not refresh prices for AAA" in w for w in body["warnings"])

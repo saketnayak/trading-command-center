@@ -160,10 +160,18 @@ async def portfolio_performance(
         end=today,
     )
 
-    unpriced = sorted(set(result.pop("unpriced")) | (failed & set(symbols)))
+    # The calc decides what had no usable price. A failed refresh with older
+    # stored rows still prices the holding; it is only out of date.
+    unpriced = sorted(result.pop("unpriced"))
     if unpriced:
         warnings.append(
             "No price history for " + ", ".join(unpriced) + "; those holdings are left out of the return."
+        )
+    stale = sorted(s for s in failed & set(symbols) if s not in unpriced and closes.get(s))
+    if stale:
+        warnings.append(
+            "Could not refresh prices for " + ", ".join(stale) + "; showing the last stored prices "
+            f"(up to {max(max(closes[s]) for s in stale).isoformat()})."
         )
     if not bench_closes:
         warnings.append(f"No price history for benchmark {benchmark}.")
