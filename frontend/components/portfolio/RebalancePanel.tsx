@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
@@ -50,7 +50,9 @@ export function RebalancePanel({ portfolioId, trimEntries }: Props) {
   const [amountText, setAmountText] = useState("");
   const [wholeShares, setWholeShares] = useState(false);
   const modeInfo = REBALANCE_MODES.find((m) => m.id === mode)!;
-  const amount = modeInfo.needsAmount ? Number(amountText) || 0 : 0;
+  // Debounced so typing "5000" asks for one plan, not four.
+  const debouncedAmount = useDebounced(amountText, 400);
+  const amount = modeInfo.needsAmount ? Number(debouncedAmount) || 0 : 0;
   const ready = !modeInfo.needsAmount || amount > 0;
 
   const query = useQuery({
@@ -120,6 +122,15 @@ export function RebalancePanel({ portfolioId, trimEntries }: Props) {
       )}
     </div>
   );
+}
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(id);
+  }, [value, ms]);
+  return settled;
 }
 
 function DriftChart({ rows, hasTargets }: { rows: DriftRow[]; hasTargets: boolean }) {
