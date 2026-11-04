@@ -202,3 +202,10 @@ async def test_check_now_is_a_dry_run(monkeypatch):
         rule = await db.get(AlertRule, uuid.UUID(rid))
         assert rule.state is None and rule.last_triggered_at is None
         assert (await db.execute(select(AlertEvent))).scalars().all() == []
+
+
+async def test_overlapping_passes_are_skipped():
+    async with alert_engine._pass_lock:  # a pass is "running"
+        result = await _run_pass()
+    assert result == {"checked": 0, "fired": 0, "skipped": True}
+    assert "skipped" not in await _run_pass()

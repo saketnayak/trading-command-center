@@ -43,15 +43,28 @@ def test_no_data_keeps_state_and_does_not_fire():
     assert ev.condition is None and not ev.fire and ev.state == {"active": True}
 
 
-def test_daily_move_fires_once_per_day_and_rearms_next_day():
+def test_daily_move_fires_once_per_session_and_rearms_on_a_new_session():
     p = {"pct": 5}
-    d1 = evaluate("daily_move", p, {"price": 90, "change_pct": -6.2}, None, ticker="NVDA", today=date(2026, 11, 3))
+    d1 = evaluate("daily_move", p, {"price": 90, "change_pct": -6.2, "prev_close": 96.0}, None, ticker="NVDA",
+                  today=date(2026, 11, 3))
     assert d1.fire and d1.title == "NVDA down 6.2% today"
-    d1b = evaluate("daily_move", p, {"price": 89, "change_pct": -7.0}, d1.state, ticker="NVDA", today=date(2026, 11, 3))
-    assert not d1b.fire
-    d2 = evaluate("daily_move", p, {"price": 95, "change_pct": 5.5}, d1b.state, ticker="NVDA", today=date(2026, 11, 4))
+    # Still the same session after UTC midnight (after-hours): the previous close is unchanged.
+    after_midnight = evaluate("daily_move", p, {"price": 89, "change_pct": -7.3, "prev_close": 96.0}, d1.state,
+                              ticker="NVDA", today=date(2026, 11, 4))
+    assert not after_midnight.fire
+    # Next session: a new previous close re-arms the rule.
+    d2 = evaluate("daily_move", p, {"price": 95, "change_pct": 5.5, "prev_close": 90.0}, after_midnight.state,
+                  ticker="NVDA", today=date(2026, 11, 4))
     assert d2.fire and "up 5.5%" in d2.title
     assert evaluate("daily_move", p, {"price": 95, "change_pct": None}, d2.state, ticker="NVDA").condition is None
+
+
+def test_daily_move_without_prev_close_falls_back_to_the_date():
+    p = {"pct": 5}
+    a = evaluate("daily_move", p, {"price": 90, "change_pct": -6}, None, ticker="X", today=date(2026, 11, 3))
+    b = evaluate("daily_move", p, {"price": 90, "change_pct": -6}, a.state, ticker="X", today=date(2026, 11, 3))
+    c = evaluate("daily_move", p, {"price": 90, "change_pct": -6}, b.state, ticker="X", today=date(2026, 11, 4))
+    assert a.fire and not b.fire and c.fire
 
 
 def test_ma_cross_below():

@@ -169,7 +169,8 @@ async def update_rule(rule_id: UUID, body: RuleUpdate, db: AsyncSession = Depend
         rule.enabled = body.enabled
     await db.commit()
     await db.refresh(rule)
-    return _rule_dict(rule)
+    portfolio = await db.get(Portfolio, rule.portfolio_id) if rule.portfolio_id else None
+    return _rule_dict(rule, portfolio.name if portfolio else None)
 
 
 @router.delete("/alerts/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)

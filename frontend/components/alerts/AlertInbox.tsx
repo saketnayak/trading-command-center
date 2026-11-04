@@ -55,11 +55,7 @@ function EventRow({ event, onRead }: { event: AlertEvent; onRead: () => void }) 
   const runId = event.kind === "verdict_change" ? (event.data?.run_id as string | undefined) : undefined;
   const unread = !event.read_at;
   return (
-    <li
-      className={`rounded-lg border px-3 py-2.5 ${unread ? "border-blue-500/50 bg-blue-500/5" : "border-border bg-surface"}`}
-      onMouseEnter={onRead}
-      onFocus={onRead}
-    >
+    <li className={`rounded-lg border px-3 py-2.5 ${unread ? "border-blue-500/50 bg-blue-500/5" : "border-border bg-surface"}`}>
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm font-medium text-fg">
           {unread && <span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-blue-500" aria-label="Unread" />}
@@ -71,8 +67,11 @@ function EventRow({ event, onRead }: { event: AlertEvent; onRead: () => void }) 
       </div>
       <p className="mt-0.5 text-xs text-fg-secondary">{event.message}</p>
       <div className="mt-1 flex flex-wrap gap-x-3 text-[11px]">
-        {runId && <Link href={`/runs/${runId}`} className="text-blue-500 hover:text-blue-400">Open the analysis</Link>}
-        {event.portfolio_id && !runId && <Link href="/portfolio" className="text-blue-500 hover:text-blue-400">Open portfolio</Link>}
+        {runId && <Link href={`/runs/${runId}`} onClick={onRead} className="text-blue-500 hover:text-blue-400">Open the analysis</Link>}
+        {event.portfolio_id && !runId && <Link href="/portfolio" onClick={onRead} className="text-blue-500 hover:text-blue-400">Open portfolio</Link>}
+        {unread && (
+          <button type="button" onClick={onRead} className="text-muted hover:text-fg-secondary">Mark read</button>
+        )}
         {issues.map((i) => (
           <span key={i} className="text-amber-600 dark:text-amber-400">{i}</span>
         ))}

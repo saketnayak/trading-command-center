@@ -2,7 +2,7 @@
 
 Two families:
 
-* Level rules (price above/below, daily move, moving-average cross,
+* Level rules (price above/below, daily move (re-armed per trading session), moving-average cross,
   portfolio drawdown, position weight) fire when their condition *becomes*
   true. While it stays true they stay quiet; once it turns false they re-arm.
   The first check counts as a transition, so a rule created while its
@@ -130,11 +130,15 @@ def evaluate(kind: str, params: dict, observed: dict | None, prev_state: dict | 
         chg = observed.get("change_pct")
         if chg is None:
             return Evaluation(None, "No change from the previous close yet", prev_state)
-        day = (today or date.today()).isoformat()
-        if prev_state.get("day") != day:  # a new day re-arms the rule
-            prev_state = {"day": day, "active": False}
+        # The session is identified by the previous close the move is measured from,
+        # not the UTC date: US after-hours trading crosses UTC midnight, and a date
+        # key would re-arm mid-session. A new previous close re-arms the rule.
+        session = observed.get("prev_close")
+        session = f"pc:{session}" if session is not None else (today or date.today()).isoformat()
+        if prev_state.get("session") != session:
+            prev_state = {"session": session, "active": False}
         cond = abs(chg) >= params["pct"]
-        fire, state = _level(prev_state, cond, {"day": day})
+        fire, state = _level(prev_state, cond, {"session": session})
         direction = "up" if chg > 0 else "down"
         return Evaluation(
             cond, f"{chg:+.2f}% today (alert at ±{params['pct']:g}%)", state, fire,

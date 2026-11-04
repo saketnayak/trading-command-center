@@ -31,6 +31,10 @@ from app.services import alert_rules
 logger = logging.getLogger(__name__)
 
 _http = httpx.AsyncClient(timeout=10.0)
+# One pass at a time (single uvicorn worker, like job_manager). A pass that
+# overran the 15-minute interval must not race a second one over the same
+# rule state, or both would fire the same transition.
+_pass_lock = asyncio.Lock()
 
 
 class MarketData:
@@ -118,7 +122,8 @@ async def observe(rule: AlertRule, data: MarketData, currency: str) -> dict | No
     kind, t = rule.kind, rule.ticker
     if kind in ("price_above", "price_below", "daily_move"):
         q = await data.quote(t)
-        return {"price": q["price"], "change_pct": q.get("change_pct")} if q and q.get("price") else None
+        return ({"price": q["price"], "change_pct": q.get("change_pct"), "prev_close": q.get("prev_close")}
+                if q and q.get("price") else None)
     if kind == "ma_cross":
         return await data.moving_average(t, int(rule.params["window"]))
     if kind == "regime_change":
@@ -251,7 +256,16 @@ async def deliver(db: AsyncSession, rule: AlertRule, event: AlertEvent) -> None:
 
 
 async def evaluate_all_alerts(data_factory=MarketData) -> dict:
-    """Scheduler job: evaluate every enabled rule once, then deliver what fired."""
+    """Scheduler job: evaluate every enabled rule once, then deliver what fired.
+    Skips (returns skipped=True) while a previous pass is still running."""
+    if _pass_lock.locked():
+        logger.warning("alerts: previous pass still running; skipping this one")
+        return {"checked": 0, "fired": 0, "skipped": True}
+    async with _pass_lock:
+        return await _evaluate_all(data_factory)
+
+
+async def _evaluate_all(data_factory) -> dict:
     now = datetime.now(timezone.utc)
     fired = 0
     async with AsyncSessionLocal() as db:
