@@ -154,7 +154,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 - Evaluated by an APScheduler job (every 15 min in market hours, plus after each nightly job). Delivered through the existing `delivery_service` (email, Telegram, Slack, webhook) and an **in-app inbox** with a nav badge.
 - This is the base for the natural-language rules in 3.2.
 
-#### 1.6 MCP server (S–M)
+#### 1.6 MCP server (S–M) ✅ shipped (12 tools: 10 read, 2 research; personal access tokens with scopes and expiry)
 - Expose AgentFloor as an MCP server (Streamable HTTP, mounted on the FastAPI app or as a sidecar).
 - **Read tools by default**: `list_portfolios`, `get_holdings`, `get_performance`, `get_risk`, `get_regime`, `get_wave`, `get_latest_insight`, `list_runs`, `get_report`.
 - An **opt-in "research" scope** adds `start_run` and `generate_insight`.

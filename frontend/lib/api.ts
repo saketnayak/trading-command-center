@@ -5,6 +5,7 @@ import { performanceQueryParams, type PerformanceMode, type PerformanceRange, ty
 import type { PortfolioRisk, RiskLookback } from "./risk";
 import type { AlertCheck, AlertEvent, AlertRule, CreateAlertRuleRequest } from "./alerts";
 import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
+import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
 import type { ResponseLanguage } from "./responseLanguage";
 import type { AppSettings } from "./appSettings";
 import type { CreateJevSessionRequest, JevCalibration, JevMeta, JevSession, JevSymbolSpec, JevTick } from "./jev/types";
@@ -982,3 +983,15 @@ export function getRebalancePlan(
   const params = new URLSearchParams({ mode, amount: String(amount || 0), whole_shares: String(wholeShares) });
   return apiJson<RebalanceResponse>(`/portfolio/${portfolioId}/rebalance?${params.toString()}`);
 }
+
+// ── MCP access tokens ─────────────────────────────────────────────────────────
+
+/** The API base the browser uses (absolute in dev, "/api" behind nginx). */
+export const API_BASE_URL = BASE;
+
+export const listMcpTokens = () => apiJson<{ available: boolean; tokens: McpToken[] }>("/mcp-tokens");
+
+export const createMcpToken = (body: { name: string; scopes: McpScope[]; expires_in_days: number | null }) =>
+  apiJson<CreatedMcpToken>("/mcp-tokens", { method: "POST", body: JSON.stringify(body) });
+
+export const revokeMcpToken = (id: string) => apiJson<void>(`/mcp-tokens/${id}`, { method: "DELETE" });
