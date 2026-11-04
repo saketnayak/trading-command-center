@@ -4,13 +4,14 @@ export type { PortfolioTab };
 
 export const DEFAULT_PORTFOLIO_TAB: PortfolioTab = "holdings";
 
-export const PRIMARY_PORTFOLIO_TAB_IDS: readonly PortfolioTab[] = ["holdings", "performance", "risk", "rebalance", "insights", "earnings", "news"];
+export const PRIMARY_PORTFOLIO_TAB_IDS: readonly PortfolioTab[] = ["holdings", "performance", "risk", "rebalance", "transactions", "insights", "earnings", "news"];
 
 const VALID_TABS: readonly PortfolioTab[] = [
   "holdings",
   "performance",
   "risk",
   "rebalance",
+  "transactions",
   "insights",
   "earnings",
   "news",
@@ -35,6 +36,7 @@ const BASE_TAB_DEFINITIONS: PortfolioTabDefinition[] = [
   { id: "performance", label: "Performance", shortLabel: "Perf.", tier: "primary" },
   { id: "risk", label: "Risk", tier: "primary" },
   { id: "rebalance", label: "Rebalance", shortLabel: "Rebal.", tier: "primary" },
+  { id: "transactions", label: "Transactions", shortLabel: "Txns", tier: "primary" },
   { id: "insights", label: "AI Insights", shortLabel: "Insights", tier: "primary", badge: "✦", showAlertCount: true },
   { id: "earnings", label: "Earnings", shortLabel: "Earn.", tier: "primary", hideWhenAllCrypto: true },
   { id: "news", label: "News", tier: "primary" },

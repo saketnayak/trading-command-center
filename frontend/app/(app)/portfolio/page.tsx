@@ -51,6 +51,7 @@ import { HoldingsTable } from "@/components/portfolio/HoldingsTable";
 import { PerformancePanel } from "@/components/portfolio/PerformancePanel";
 import { PortfolioRiskPanel } from "@/components/portfolio/PortfolioRiskPanel";
 import { RebalancePanel } from "@/components/portfolio/RebalancePanel";
+import { TransactionsPanel } from "@/components/portfolio/TransactionsPanel";
 import { InsightsDashboard } from "@/components/portfolio/InsightsDashboard";
 import { PortfolioStatsBar } from "@/components/portfolio/PortfolioStatsBar";
 import { EarningsPanel } from "@/components/portfolio/EarningsPanel";
@@ -464,6 +465,13 @@ function PortfolioPageContent() {
   });
 
   const selectedPortfolio = portfolios.find((p) => p.id === selectedId) ?? null;
+  const ledgerBacked = selectedPortfolio?.holdings_source === "ledger";
+  // Ledger-backed holdings are derived from transactions: "Import" opens the
+  // Transactions tab (CSV of transactions) instead of a holdings upload.
+  const openImport = useCallback(() => {
+    if (ledgerBacked) setTab("transactions");
+    else setUploadOpen(true);
+  }, [ledgerBacked, setTab]);
 
   async function handleExport() {
     if (!selectedId || !selectedPortfolio) return;
@@ -541,7 +549,7 @@ function PortfolioPageContent() {
                 isSyncing={isSyncing}
                 onRefreshClick={() => refetchCurrent()}
                 onSyncAllClick={() => syncAll()}
-                onUploadClick={() => setUploadOpen(true)}
+                onUploadClick={openImport}
                 onExportClick={handleExport}
                 onDeliveryClick={() => setDeliveryOpen(true)}
               />
@@ -643,7 +651,17 @@ function PortfolioPageContent() {
                     computedAt={trimSignals?.computed_at}
                   />
                 )}
+                {ledgerBacked && (
+                  <p className="rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2 text-xs text-fg-secondary">
+                    These holdings come from your transaction ledger.{" "}
+                    <button type="button" className="text-blue-500 underline hover:text-blue-400" onClick={() => setTab("transactions")}>
+                      Record a trade in Transactions
+                    </button>{" "}
+                    to change them.
+                  </p>
+                )}
                 <HoldingsTable
+                  readOnly={ledgerBacked}
                   portfolioId={selectedId}
                   holdings={current.holdings}
                   priceUnavailableReason={current.price_unavailable_reason}
@@ -655,7 +673,7 @@ function PortfolioPageContent() {
                   trimSignals={markovEnabled ? trimByHoldingId : undefined}
                   tickerMetadata={tickerMetadata}
                   onTickerClick={setDrawerHolding}
-                  onUploadClick={() => setUploadOpen(true)}
+                  onUploadClick={openImport}
                 />
               </div>
             )}
@@ -690,6 +708,16 @@ function PortfolioPageContent() {
                   portfolioId={selectedId}
                   trimEntries={markovEnabled ? trimSignals?.entries : undefined}
                 />
+              </div>
+            )}
+
+            {tab === "transactions" && (
+              <div
+                id="portfolio-panel-transactions"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-transactions"
+              >
+                <TransactionsPanel portfolioId={selectedId} hasHoldings={hasHoldings} />
               </div>
             )}
 

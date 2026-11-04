@@ -202,6 +202,8 @@ export interface Portfolio {
   created_at: string;
   last_snapshot_at: string | null;
   holding_count: number;
+  /** "ledger" when holdings are derived from the transaction ledger (read-only on the Holdings tab). */
+  holdings_source?: "snapshot" | "ledger";
 }
 
 export interface PortfolioSnapshot {

@@ -197,7 +197,7 @@ function PerformanceBody({ data, refreshing }: { data: PortfolioPerformance; ref
         </ul>
       )}
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
+      <div className={`grid grid-cols-2 gap-2 sm:grid-cols-4 ${s?.mwr_period != null ? "lg:grid-cols-8" : "lg:grid-cols-7"}`}>
         <StatTile label="Total return" value={fmtSignedPct(s?.total_return)} tone={returnTone(s?.total_return)}
           sub={b ? `${data.benchmark} ${fmtSignedPct(b.total_return)}` : undefined} />
         <StatTile label={`vs ${data.benchmark}`} value={fmtSignedPct(s?.excess_return)} tone={returnTone(s?.excess_return)}
@@ -209,6 +209,10 @@ function PerformanceBody({ data, refreshing }: { data: PortfolioPerformance; ref
         <StatTile label="Max drawdown" value={fmtSignedPct(s?.max_drawdown, 1)} tone={returnTone(s?.max_drawdown)}
           sub={s?.max_drawdown_trough ? `trough ${s.max_drawdown_trough}` : undefined} />
         <StatTile label="Beta" value={fmtRatio(s?.beta)} sub={s?.correlation != null ? `correlation ${fmtRatio(s.correlation)}` : `vs ${data.benchmark}`} />
+        {s?.mwr_period != null && (
+          <StatTile label="Money-weighted" value={fmtSignedPct(s.mwr_period)} tone={returnTone(s.mwr_period)}
+            sub={s.mwr_annualised != null ? `${fmtSignedPct(s.mwr_annualised)} a year · your timing` : "IRR on your trades · your timing"} />
+        )}
       </div>
 
       <section className="rounded-lg border border-border bg-surface p-3">

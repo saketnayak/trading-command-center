@@ -39,6 +39,7 @@ from app.services.settings_service import get_app_settings
 from app.schemas.portfolio_delivery_settings import UpdateDeliverySettingsRequest
 from app.utils.asset_type import is_crypto
 from app.utils.quote_currency import quote_currency_from_ticker
+from app.services.ledger_service import ensure_not_ledger_backed
 from app.utils.response_language import DEFAULT_RESPONSE_LANGUAGE, normalize_response_language
 from app.schemas.money import PriceQuote
 from app.services.fx_service import SUPPORTED_CURRENCIES
@@ -90,6 +91,7 @@ class PortfolioListItem(BaseModel):
     created_at: datetime
     last_snapshot_at: Optional[datetime]
     holding_count: int
+    holdings_source: str = "snapshot"  # "ledger" when holdings are derived from transactions
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -336,6 +338,7 @@ async def list_portfolios(
             created_at=p.created_at,
             last_snapshot_at=latest.uploaded_at if latest else None,
             holding_count=latest.row_count if latest else 0,
+            holdings_source=p.holdings_source or "snapshot",
         ))
     return items
 
@@ -384,6 +387,7 @@ async def upload_snapshot(
     if not portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found")
 
+    await ensure_not_ledger_backed(db, portfolio_id)
     content = await file.read()
     broker, holdings = parse_portfolio_csv(content)
 
@@ -766,6 +770,7 @@ async def add_holding(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await ensure_not_ledger_backed(db, portfolio_id)
     snap = await _get_latest_snapshot(portfolio_id, user.id, db)
     h = PortfolioHolding(
         snapshot_id=snap.id,
@@ -789,6 +794,7 @@ async def update_holding(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await ensure_not_ledger_backed(db, portfolio_id)
     h = await _get_holding_for_user(holding_id, portfolio_id, user.id, db)
     if body.ticker is not None:
         h.ticker = body.ticker.upper().strip()
@@ -808,6 +814,7 @@ async def delete_holding(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    await ensure_not_ledger_backed(db, portfolio_id)
     h = await _get_holding_for_user(holding_id, portfolio_id, user.id, db)
     snap_result = await db.execute(select(PortfolioSnapshot).where(PortfolioSnapshot.id == h.snapshot_id))
     snap = snap_result.scalar_one_or_none()
