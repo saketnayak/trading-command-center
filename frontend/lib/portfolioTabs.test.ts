@@ -10,13 +10,14 @@ import {
 describe("portfolioTabs", () => {
   it("recognizes valid tab ids", () => {
     expect(isPortfolioTab("holdings")).toBe(true);
+    expect(isPortfolioTab("performance")).toBe(true);
     expect(isPortfolioTab("trending")).toBe(false);
     expect(isPortfolioTab("invalid")).toBe(false);
   });
 
   it("splits primary and overflow tabs", () => {
     const groups = buildPortfolioTabGroups({ allCrypto: false });
-    expect(groups.primary.map((t) => t.id)).toEqual(["holdings", "insights", "earnings", "news"]);
+    expect(groups.primary.map((t) => t.id)).toEqual(["holdings", "performance", "insights", "earnings", "news"]);
     expect(groups.overflow.map((t) => t.id)).toEqual(["chat", "thesis"]);
   });
 

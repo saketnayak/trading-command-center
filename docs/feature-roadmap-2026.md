@@ -106,11 +106,11 @@ Effort: **S** ≈ ≤1 week, **M** ≈ 1–3 weeks, **L** ≈ 3–6 weeks for on
 
 ### Phase 1: "Am I winning, and am I safe?" (works on today's data model)
 
-#### 1.1 Price-history store (foundation, S)
+#### 1.1 Price-history store (foundation, S) ✅ shipped
 - New `price_bars(symbol, date, close, adj_close, currency)` table, filled by a nightly scheduler job through the existing `yfinance_service.fetch_history`. Finnhub is the fallback.
 - One source for 1.2, 1.3, 2.x and 3.x, replacing the scattered in-process caches. It also survives restarts.
 
-#### 1.2 Performance & benchmark engine (M)
+#### 1.2 Performance & benchmark engine (M) ✅ shipped (holdings-based TWR, benchmark, risk stats, contribution; MWR waits for the ledger in 2.1, and feeding these figures into the AI brief is still open)
 - Nightly `portfolio_valuations(portfolio_id, date, market_value, cost_basis, net_flow)`.
 - Until the ledger (2.1) lands, net flows are inferred from snapshot-to-snapshot changes in shares × price. The UI marks those figures as estimated.
 - Metrics:

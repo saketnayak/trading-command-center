@@ -48,6 +48,7 @@ import { PortfolioActions } from "@/components/portfolio/PortfolioActions";
 import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
 import { UploadDrawer } from "@/components/portfolio/UploadDrawer";
 import { HoldingsTable } from "@/components/portfolio/HoldingsTable";
+import { PerformancePanel } from "@/components/portfolio/PerformancePanel";
 import { InsightsDashboard } from "@/components/portfolio/InsightsDashboard";
 import { PortfolioStatsBar } from "@/components/portfolio/PortfolioStatsBar";
 import { EarningsPanel } from "@/components/portfolio/EarningsPanel";
@@ -654,6 +655,16 @@ function PortfolioPageContent() {
                   onTickerClick={setDrawerHolding}
                   onUploadClick={() => setUploadOpen(true)}
                 />
+              </div>
+            )}
+
+            {tab === "performance" && (
+              <div
+                id="portfolio-panel-performance"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-performance"
+              >
+                <PerformancePanel portfolioId={selectedId} />
               </div>
             )}
 

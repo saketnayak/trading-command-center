@@ -7,3 +7,4 @@ from app.models.portfolio_thesis_crossref import PortfolioThesisCrossRef  # noqa
 from app.models.ticker_metadata import TickerMetadata  # noqa: F401
 from app.models.settings import AppSettings  # noqa: F401
 from app.models.jev import JevSession, JevSessionStatus, JevTick  # noqa: F401
+from app.models.price_bar import PriceBar  # noqa: F401
