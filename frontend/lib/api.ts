@@ -4,6 +4,7 @@ import type { AnalyzeResponse } from "./wave/types";
 import { performanceQueryParams, type PerformanceMode, type PerformanceRange, type PortfolioPerformance } from "./performance";
 import type { PortfolioRisk, RiskLookback } from "./risk";
 import type { AlertCheck, AlertEvent, AlertRule, CreateAlertRuleRequest } from "./alerts";
+import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
 import type { ResponseLanguage } from "./responseLanguage";
 import type { AppSettings } from "./appSettings";
 import type { CreateJevSessionRequest, JevCalibration, JevMeta, JevSession, JevSymbolSpec, JevTick } from "./jev/types";
@@ -929,7 +930,8 @@ export async function flattenJevSession(id: string): Promise<{ message: string; 
 
 // ── Alerts ────────────────────────────────────────────────────────────────────
 
-async function alertsJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+/** fetchWithAuth + JSON, throwing the API's `detail` message on errors. */
+async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const r = await fetchWithAuth(path, init);
   if (!r.ok) {
     const body = await r.json().catch(() => null);
@@ -939,23 +941,44 @@ async function alertsJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   return r.status === 204 ? (undefined as T) : r.json();
 }
 
-export const listAlertRules = () => alertsJson<AlertRule[]>("/alerts/rules");
+export const listAlertRules = () => apiJson<AlertRule[]>("/alerts/rules");
 
 export const createAlertRule = (body: CreateAlertRuleRequest) =>
-  alertsJson<AlertRule>("/alerts/rules", { method: "POST", body: JSON.stringify(body) });
+  apiJson<AlertRule>("/alerts/rules", { method: "POST", body: JSON.stringify(body) });
 
 export const updateAlertRule = (
   id: string,
   body: Partial<Pick<AlertRule, "params" | "channels" | "cooldown_hours" | "enabled">>,
-) => alertsJson<AlertRule>(`/alerts/rules/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+) => apiJson<AlertRule>(`/alerts/rules/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 
-export const deleteAlertRule = (id: string) => alertsJson<void>(`/alerts/rules/${id}`, { method: "DELETE" });
+export const deleteAlertRule = (id: string) => apiJson<void>(`/alerts/rules/${id}`, { method: "DELETE" });
 
-export const checkAlertRule = (id: string) => alertsJson<AlertCheck>(`/alerts/rules/${id}/check`, { method: "POST" });
+export const checkAlertRule = (id: string) => apiJson<AlertCheck>(`/alerts/rules/${id}/check`, { method: "POST" });
 
-export const listAlertEvents = (limit = 50) => alertsJson<AlertEvent[]>(`/alerts/events?limit=${limit}`);
+export const listAlertEvents = (limit = 50) => apiJson<AlertEvent[]>(`/alerts/events?limit=${limit}`);
 
-export const getAlertUnreadCount = () => alertsJson<{ unread: number }>("/alerts/unread-count");
+export const getAlertUnreadCount = () => apiJson<{ unread: number }>("/alerts/unread-count");
 
 export const markAlertsRead = (body: { ids?: string[]; all?: boolean }) =>
-  alertsJson<{ marked: number }>("/alerts/events/read", { method: "POST", body: JSON.stringify(body) });
+  apiJson<{ marked: number }>("/alerts/events/read", { method: "POST", body: JSON.stringify(body) });
+
+// ── Targets & rebalancing ─────────────────────────────────────────────────────
+
+export const getPortfolioTargets = (portfolioId: string) =>
+  apiJson<{ targets: TargetRow[]; default_band: number }>(`/portfolio/${portfolioId}/targets`);
+
+export const putPortfolioTargets = (portfolioId: string, targets: TargetRow[]) =>
+  apiJson<{ targets: TargetRow[]; default_band: number }>(`/portfolio/${portfolioId}/targets`, {
+    method: "PUT",
+    body: JSON.stringify({ targets }),
+  });
+
+export function getRebalancePlan(
+  portfolioId: string,
+  mode: RebalanceMode,
+  amount: number,
+  wholeShares: boolean,
+): Promise<RebalanceResponse> {
+  const params = new URLSearchParams({ mode, amount: String(amount || 0), whole_shares: String(wholeShares) });
+  return apiJson<RebalanceResponse>(`/portfolio/${portfolioId}/rebalance?${params.toString()}`);
+}

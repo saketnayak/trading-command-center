@@ -131,7 +131,7 @@ Computed from 1.1, using pure functions like `trim_signal_service`:
 
 Show the results as a **Risk** card in Holdings plus a full tab. Feed the numbers into the insight prompt so risk alerts quote measured values rather than LLM guesses.
 
-#### 1.4 Target allocation & rebalancing planner (M)
+#### 1.4 Target allocation & rebalancing planner (M) ✅ shipped (ticker-level targets; sector/asset-class targets, profile-seeded targets and tax-aware mode still open)
 - `portfolio_targets(portfolio_id, kind: ticker|sector|asset_class, key, target_weight, band)`.
 - Drift table with tolerance bands. **Rebalance plan**: the minimum set of buys and sells to get back inside the bands, with:
   - a "new money only" mode (put the cash contribution toward underweights and never sell);

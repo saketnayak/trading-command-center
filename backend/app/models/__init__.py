@@ -9,3 +9,4 @@ from app.models.settings import AppSettings  # noqa: F401
 from app.models.jev import JevSession, JevSessionStatus, JevTick  # noqa: F401
 from app.models.price_bar import PriceBar  # noqa: F401
 from app.models.alert import AlertEvent, AlertRule  # noqa: F401
+from app.models.portfolio_target import PortfolioTarget  # noqa: F401
