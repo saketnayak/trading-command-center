@@ -10,6 +10,7 @@ export const SETTINGS_SECTIONS: SettingsNavItem[] = [
   { id: "strategy", label: "Strategy" },
   { id: "llm-providers", label: "LLM Providers", adminOnly: true },
   { id: "data-providers", label: "Data Providers", adminOnly: true },
+  { id: "jev-lab", label: "JEV Lab", adminOnly: true },
   { id: "notifications", label: "Notifications", adminOnly: true },
   { id: "team", label: "Team", adminOnly: true },
   { id: "database", label: "Database", adminOnly: true },

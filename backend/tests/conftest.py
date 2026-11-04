@@ -109,6 +109,7 @@ async def temporary_database(request):
         import app.models.watchlist  # noqa: F401
         import app.models.ticker_metadata  # noqa: F401
         import app.models.settings  # noqa: F401
+        import app.models.jev  # noqa: F401
         from app.database import Base, engine
 
         async with engine.begin() as conn:
@@ -148,7 +149,7 @@ async def clean_db(request, temporary_database):
             "TRUNCATE users, runs, agent_events, reports, api_keys, run_outcomes, "
             "watchlists, watchlist_items, portfolios, portfolio_snapshots, portfolio_holdings, "
             "investor_profiles, portfolio_thesis_crossrefs, portfolio_delivery_settings, "
-            "ticker_metadata, settings "
+            "ticker_metadata, settings, jev_sessions, jev_ticks "
             "RESTART IDENTITY CASCADE"
         ))
     yield

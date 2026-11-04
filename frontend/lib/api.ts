@@ -3,6 +3,7 @@ import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Repo
 import type { AnalyzeResponse } from "./wave/types";
 import type { ResponseLanguage } from "./responseLanguage";
 import type { AppSettings } from "./appSettings";
+import type { CreateJevSessionRequest, JevCalibration, JevMeta, JevSession, JevSymbolSpec, JevTick } from "./jev/types";
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
@@ -464,6 +465,7 @@ interface AppSettingsResponse {
   enable_kalman_filter: boolean;
   enable_elliott_wave: boolean;
   enable_markov_regime: boolean;
+  enable_jev_loop: boolean;
   updated_at: string | null;
 }
 
@@ -475,6 +477,7 @@ function fromAppSettingsResponse(data: AppSettingsResponse): AppSettings {
     enableKalmanFilter: data.enable_kalman_filter,
     enableElliottWave: data.enable_elliott_wave,
     enableMarkovRegime: data.enable_markov_regime,
+    enableJevLoop: data.enable_jev_loop ?? false,
   };
 }
 
@@ -494,6 +497,7 @@ export async function updateAppSettings(settings: AppSettings): Promise<AppSetti
       enable_kalman_filter: settings.enableKalmanFilter,
       enable_elliott_wave: settings.enableElliottWave,
       enable_markov_regime: settings.enableMarkovRegime,
+      enable_jev_loop: settings.enableJevLoop,
     }),
   });
   if (!r.ok) {
@@ -809,5 +813,71 @@ export async function testWebhook(portfolioId: string): Promise<{ sent: boolean 
     try { detail = (await r.json()).detail ?? detail; } catch { /* ignore parse errors */ }
     throw new Error(detail);
   }
+  return r.json();
+}
+
+// ─── JEV Lab ─────────────────────────────────────────────────────────────────
+
+async function jevError(r: Response, fallback: string): Promise<Error> {
+  const body = await r.json().catch(() => null);
+  const detail = body?.detail;
+  return new Error(typeof detail === "string" ? detail : fallback);
+}
+
+export async function getJevMeta(): Promise<JevMeta> {
+  const r = await fetchWithAuth("/jev/meta");
+  if (!r.ok) throw await jevError(r, "Failed to load JEV Lab");
+  return r.json();
+}
+
+export async function validateJevSymbol(symbol: string): Promise<JevSymbolSpec> {
+  const r = await fetchWithAuth(`/jev/symbols/validate?symbol=${encodeURIComponent(symbol)}`);
+  if (!r.ok) throw await jevError(r, "Unknown symbol");
+  return r.json();
+}
+
+export async function getJevSessions(): Promise<JevSession[]> {
+  const r = await fetchWithAuth("/jev/sessions");
+  if (!r.ok) throw await jevError(r, "Failed to load sessions");
+  return r.json();
+}
+
+export async function getJevSession(id: string): Promise<JevSession> {
+  const r = await fetchWithAuth(`/jev/sessions/${id}`);
+  if (!r.ok) throw await jevError(r, "Session not found");
+  return r.json();
+}
+
+export async function createJevSession(req: CreateJevSessionRequest): Promise<JevSession> {
+  const r = await fetchWithAuth("/jev/sessions", { method: "POST", body: JSON.stringify(req) });
+  if (!r.ok) throw await jevError(r, "Failed to start session");
+  return r.json();
+}
+
+export async function getJevTicks(id: string, params: { tail?: number; after?: number; full?: boolean } = {}): Promise<JevTick[]> {
+  const p = new URLSearchParams();
+  if (params.tail != null) p.set("tail", String(params.tail));
+  if (params.after != null) p.set("after", String(params.after));
+  if (params.full) p.set("full", "true");
+  const r = await fetchWithAuth(`/jev/sessions/${id}/ticks?${p.toString()}`);
+  if (!r.ok) throw await jevError(r, "Failed to load ticks");
+  return r.json();
+}
+
+export async function getJevCalibration(id: string, horizon: number): Promise<JevCalibration> {
+  const r = await fetchWithAuth(`/jev/sessions/${id}/calibration?horizon=${horizon}`);
+  if (!r.ok) throw await jevError(r, "Failed to load calibration");
+  return r.json();
+}
+
+export async function stopJevSession(id: string): Promise<JevSession> {
+  const r = await fetchWithAuth(`/jev/sessions/${id}/stop`, { method: "POST" });
+  if (!r.ok) throw await jevError(r, "Failed to stop session");
+  return r.json();
+}
+
+export async function flattenJevSession(id: string): Promise<{ message: string; session: JevSession }> {
+  const r = await fetchWithAuth(`/jev/sessions/${id}/flatten`, { method: "POST" });
+  if (!r.ok) throw await jevError(r, "Failed to flatten");
   return r.json();
 }

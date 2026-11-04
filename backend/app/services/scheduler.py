@@ -13,6 +13,7 @@ from app.database import AsyncSessionLocal
 from app.models.run import Run, RunStatus
 from app.models.watchlist import WatchlistItem, Watchlist
 from app.services.job_manager import start_run
+from app.services.jev_session_manager import prune_old_ticks
 from app.utils.cron_validation import normalize_schedule_cron, parse_cron_trigger
 
 logger = logging.getLogger(__name__)
@@ -277,6 +278,13 @@ async def start_scheduler() -> AsyncScheduler:
         _fire_daily_portfolio_insights,
         CronTrigger(minute=15, day_of_week="mon-fri"),
         id="daily_portfolio_insights",
+        conflict_policy="replace",
+    )
+    # JEV Lab tick retention (a no-op when the module was never used)
+    await _scheduler.add_schedule(
+        prune_old_ticks,
+        CronTrigger(hour=3, minute=30),
+        id="jev_tick_retention",
         conflict_policy="replace",
     )
     return _scheduler
