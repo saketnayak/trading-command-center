@@ -48,6 +48,9 @@ import { PortfolioActions } from "@/components/portfolio/PortfolioActions";
 import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
 import { UploadDrawer } from "@/components/portfolio/UploadDrawer";
 import { HoldingsTable } from "@/components/portfolio/HoldingsTable";
+import { PerformancePanel } from "@/components/portfolio/PerformancePanel";
+import { PortfolioRiskPanel } from "@/components/portfolio/PortfolioRiskPanel";
+import { RebalancePanel } from "@/components/portfolio/RebalancePanel";
 import { InsightsDashboard } from "@/components/portfolio/InsightsDashboard";
 import { PortfolioStatsBar } from "@/components/portfolio/PortfolioStatsBar";
 import { EarningsPanel } from "@/components/portfolio/EarningsPanel";
@@ -653,6 +656,39 @@ function PortfolioPageContent() {
                   tickerMetadata={tickerMetadata}
                   onTickerClick={setDrawerHolding}
                   onUploadClick={() => setUploadOpen(true)}
+                />
+              </div>
+            )}
+
+            {tab === "performance" && (
+              <div
+                id="portfolio-panel-performance"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-performance"
+              >
+                <PerformancePanel portfolioId={selectedId} />
+              </div>
+            )}
+
+            {tab === "risk" && (
+              <div
+                id="portfolio-panel-risk"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-risk"
+              >
+                <PortfolioRiskPanel portfolioId={selectedId} />
+              </div>
+            )}
+
+            {tab === "rebalance" && (
+              <div
+                id="portfolio-panel-rebalance"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-rebalance"
+              >
+                <RebalancePanel
+                  portfolioId={selectedId}
+                  trimEntries={markovEnabled ? trimSignals?.entries : undefined}
                 />
               </div>
             )}

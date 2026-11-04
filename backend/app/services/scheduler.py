@@ -14,6 +14,8 @@ from app.models.run import Run, RunStatus
 from app.models.watchlist import WatchlistItem, Watchlist
 from app.services.job_manager import start_run
 from app.services.jev_session_manager import prune_old_ticks
+from app.services.price_history_service import refresh_tracked_price_history
+from app.services.alert_engine import evaluate_all_alerts
 from app.utils.cron_validation import normalize_schedule_cron, parse_cron_trigger
 
 logger = logging.getLogger(__name__)
@@ -285,6 +287,20 @@ async def start_scheduler() -> AsyncScheduler:
         prune_old_ticks,
         CronTrigger(hour=3, minute=30),
         id="jev_tick_retention",
+        conflict_policy="replace",
+    )
+    # Daily adjusted closes for portfolio performance, after the US close
+    await _scheduler.add_schedule(
+        refresh_tracked_price_history,
+        CronTrigger(day_of_week="mon-fri", hour=22, minute=30),
+        id="price_history_refresh",
+        conflict_policy="replace",
+    )
+    # Alert rules (price, regime, verdict, portfolio) every 15 minutes
+    await _scheduler.add_schedule(
+        evaluate_all_alerts,
+        CronTrigger(minute="*/15"),
+        id="alert_evaluation",
         conflict_policy="replace",
     )
     return _scheduler

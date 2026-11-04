@@ -1,6 +1,11 @@
 import { getSession, signOut } from "next-auth/react";
 import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, SchedulerJobsResponse, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, TickerMetadataResponse, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, KalmanData, TrimSignalsResponse, WaveSummary, PortfolioEarningsResponse, PortfolioFundamentalsResponse, PortfolioNewsResponse } from "./types";
 import type { AnalyzeResponse } from "./wave/types";
+import { performanceQueryParams, type PerformanceMode, type PerformanceRange, type PortfolioPerformance } from "./performance";
+import type { PortfolioRisk, RiskLookback } from "./risk";
+import type { AlertCheck, AlertEvent, AlertRule, CreateAlertRuleRequest } from "./alerts";
+import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
+import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
 import type { ResponseLanguage } from "./responseLanguage";
 import type { AppSettings } from "./appSettings";
 import type { CreateJevSessionRequest, JevCalibration, JevMeta, JevSession, JevSymbolSpec, JevTick } from "./jev/types";
@@ -584,6 +589,48 @@ export async function getPortfolioTrimSignals(
   return data ?? { entries: [], computed_at: "" };
 }
 
+export async function getPortfolioPerformance(
+  portfolioId: string,
+  mode: PerformanceMode,
+  range: PerformanceRange,
+  benchmark: string
+): Promise<PortfolioPerformance> {
+  const r = await fetchWithAuth(
+    `/portfolio/${portfolioId}/performance?${performanceQueryParams(mode, range, benchmark)}`
+  );
+  if (!r.ok) {
+    let detail = `Failed to load performance (${r.status})`;
+    try {
+      const body = await r.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      /* keep the generic message */
+    }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+export async function getPortfolioRisk(
+  portfolioId: string,
+  lookback: RiskLookback,
+  benchmark: string
+): Promise<PortfolioRisk> {
+  const params = new URLSearchParams({ lookback, benchmark: benchmark.trim().toUpperCase() });
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/risk?${params.toString()}`);
+  if (!r.ok) {
+    let detail = `Failed to load risk (${r.status})`;
+    try {
+      const body = await r.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      /* keep the generic message */
+    }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
 export async function getPortfolioNews(portfolioId: string, days = 7): Promise<PortfolioNewsResponse> {
   const r = await fetchWithAuth(`/portfolio/${portfolioId}/news?days=${days}`);
   if (!r.ok) throw new Error("Failed to fetch news");
@@ -881,3 +928,70 @@ export async function flattenJevSession(id: string): Promise<{ message: string; 
   if (!r.ok) throw await jevError(r, "Failed to flatten");
   return r.json();
 }
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+
+/** fetchWithAuth + JSON, throwing the API's `detail` message on errors. */
+async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const r = await fetchWithAuth(path, init);
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    const detail = body?.detail;
+    throw new Error(typeof detail === "string" ? detail : `Request failed (${r.status})`);
+  }
+  return r.status === 204 ? (undefined as T) : r.json();
+}
+
+export const listAlertRules = () => apiJson<AlertRule[]>("/alerts/rules");
+
+export const createAlertRule = (body: CreateAlertRuleRequest) =>
+  apiJson<AlertRule>("/alerts/rules", { method: "POST", body: JSON.stringify(body) });
+
+export const updateAlertRule = (
+  id: string,
+  body: Partial<Pick<AlertRule, "params" | "channels" | "cooldown_hours" | "enabled">>,
+) => apiJson<AlertRule>(`/alerts/rules/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const deleteAlertRule = (id: string) => apiJson<void>(`/alerts/rules/${id}`, { method: "DELETE" });
+
+export const checkAlertRule = (id: string) => apiJson<AlertCheck>(`/alerts/rules/${id}/check`, { method: "POST" });
+
+export const listAlertEvents = (limit = 50) => apiJson<AlertEvent[]>(`/alerts/events?limit=${limit}`);
+
+export const getAlertUnreadCount = () => apiJson<{ unread: number }>("/alerts/unread-count");
+
+export const markAlertsRead = (body: { ids?: string[]; all?: boolean }) =>
+  apiJson<{ marked: number }>("/alerts/events/read", { method: "POST", body: JSON.stringify(body) });
+
+// ── Targets & rebalancing ─────────────────────────────────────────────────────
+
+export const getPortfolioTargets = (portfolioId: string) =>
+  apiJson<{ targets: TargetRow[]; default_band: number }>(`/portfolio/${portfolioId}/targets`);
+
+export const putPortfolioTargets = (portfolioId: string, targets: TargetRow[]) =>
+  apiJson<{ targets: TargetRow[]; default_band: number }>(`/portfolio/${portfolioId}/targets`, {
+    method: "PUT",
+    body: JSON.stringify({ targets }),
+  });
+
+export function getRebalancePlan(
+  portfolioId: string,
+  mode: RebalanceMode,
+  amount: number,
+  wholeShares: boolean,
+): Promise<RebalanceResponse> {
+  const params = new URLSearchParams({ mode, amount: String(amount || 0), whole_shares: String(wholeShares) });
+  return apiJson<RebalanceResponse>(`/portfolio/${portfolioId}/rebalance?${params.toString()}`);
+}
+
+// ── MCP access tokens ─────────────────────────────────────────────────────────
+
+/** The API base the browser uses (absolute in dev, "/api" behind nginx). */
+export const API_BASE_URL = BASE;
+
+export const listMcpTokens = () => apiJson<{ available: boolean; tokens: McpToken[] }>("/mcp-tokens");
+
+export const createMcpToken = (body: { name: string; scopes: McpScope[]; expires_in_days: number | null }) =>
+  apiJson<CreatedMcpToken>("/mcp-tokens", { method: "POST", body: JSON.stringify(body) });
+
+export const revokeMcpToken = (id: string) => apiJson<void>(`/mcp-tokens/${id}`, { method: "DELETE" });

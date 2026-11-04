@@ -18,7 +18,8 @@ import {
   RESEARCH_NAV,
 } from "@/lib/navConfig";
 import { useQuery } from "@tanstack/react-query";
-import { getAppSettings } from "@/lib/api";
+import { getAlertUnreadCount, getAppSettings } from "@/lib/api";
+import { ALERT_UNREAD_QUERY_KEY } from "@/lib/alerts";
 
 function navLinkClass(active: boolean) {
   return active
@@ -33,6 +34,7 @@ function NavLink({
   className,
   onPrefetch,
   onNavigate,
+  badge,
 }: {
   href: string;
   label: string;
@@ -40,6 +42,7 @@ function NavLink({
   className: string;
   onPrefetch?: () => void;
   onNavigate?: () => void;
+  badge?: number;
 }) {
   function handleIntent(_event: MouseEvent<HTMLAnchorElement> | FocusEvent<HTMLAnchorElement>) {
     onPrefetch?.();
@@ -52,8 +55,14 @@ function NavLink({
       onFocus={onPrefetch ? handleIntent : undefined}
       onClick={onNavigate}
       className={className}
+      aria-label={badge ? `${label} (${badge} unread)` : undefined}
     >
       {label}
+      {badge ? (
+        <span className="ml-1 inline-flex min-w-[1.1rem] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold leading-4 text-white">
+          {badge > 99 ? "99+" : badge}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -66,6 +75,14 @@ export function TopNav() {
 
   const { data: appSettings } = useQuery({ queryKey: ["app-settings"], queryFn: getAppSettings, retry: false });
   const jevEnabled = appSettings?.enableJevLoop === true;
+  const { data: unread } = useQuery({
+    queryKey: ALERT_UNREAD_QUERY_KEY,
+    queryFn: getAlertUnreadCount,
+    refetchInterval: 60_000,
+    retry: false,
+    enabled: !!session,
+  });
+  const unreadAlerts = unread?.unread ?? 0;
   const researchNav = jevEnabled ? [...RESEARCH_NAV, JEV_NAV_ITEM] : RESEARCH_NAV;
   const mobileSections = jevEnabled
     ? MOBILE_NAV_SECTIONS.map((section) => (section.title === "Research" ? { ...section, items: researchNav } : section))
@@ -110,11 +127,12 @@ export function TopNav() {
               }))}
             />
 
-            {PRIMARY_NAV.map(({ href, label, prefetchPortfolio: shouldPrefetch }) => (
+            {PRIMARY_NAV.map(({ href, label, prefetchPortfolio: shouldPrefetch, alertBadge }) => (
               <NavLink
                 key={href}
                 href={href}
                 label={label}
+                badge={alertBadge ? unreadAlerts : undefined}
                 active={isNavItemActive(path, href)}
                 onPrefetch={shouldPrefetch ? prefetchPortfolio : undefined}
                 className={`text-xs px-1 pb-0.5 whitespace-nowrap ${navLinkClass(isNavItemActive(path, href))}`}
@@ -136,11 +154,14 @@ export function TopNav() {
             </button>
             <button
               type="button"
-              className="lg:hidden p-1.5 rounded border border-border text-fg-secondary hover:text-fg hover:bg-elevated"
-              aria-label={menuOpen ? "Close menu" : "Open menu"}
+              className="relative lg:hidden p-1.5 rounded border border-border text-fg-secondary hover:text-fg hover:bg-elevated"
+              aria-label={`${menuOpen ? "Close menu" : "Open menu"}${unreadAlerts ? ` (${unreadAlerts} unread alerts)` : ""}`}
               aria-expanded={menuOpen}
               onClick={() => setMenuOpen((v) => !v)}
             >
+              {unreadAlerts > 0 && !menuOpen && (
+                <span aria-hidden className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-600 ring-2 ring-background" />
+              )}
               {menuOpen ? (
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden>
                   <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
@@ -177,11 +198,12 @@ export function TopNav() {
                     {section.title}
                   </p>
                 )}
-                {section.items.map(({ href, label, prefetchPortfolio: shouldPrefetch }) => (
+                {section.items.map(({ href, label, prefetchPortfolio: shouldPrefetch, alertBadge }) => (
                   <NavLink
                     key={href}
                     href={href}
                     label={label}
+                    badge={alertBadge ? unreadAlerts : undefined}
                     active={isNavItemActive(path, href)}
                     onPrefetch={shouldPrefetch ? prefetchPortfolio : undefined}
                     onNavigate={closeMobileMenu}
