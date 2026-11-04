@@ -110,7 +110,7 @@ Effort: **S** ≈ ≤1 week, **M** ≈ 1–3 weeks, **L** ≈ 3–6 weeks for on
 - New `price_bars(symbol, date, close, adj_close, currency)` table, filled by a nightly scheduler job through the existing `yfinance_service.fetch_history`. Finnhub is the fallback.
 - One source for 1.2, 1.3, 2.x and 3.x, replacing the scattered in-process caches. It also survives restarts.
 
-#### 1.2 Performance & benchmark engine (M) ✅ shipped (holdings-based TWR, benchmark, risk stats, contribution; MWR waits for the ledger in 2.1, and feeding these figures into the AI brief is still open)
+#### 1.2 Performance & benchmark engine (M) ✅ shipped (holdings-based TWR, benchmark, risk stats, contribution; MWR waits for the ledger in 2.1; figures now feed the AI brief)
 - Nightly `portfolio_valuations(portfolio_id, date, market_value, cost_basis, net_flow)`.
 - Until the ledger (2.1) lands, net flows are inferred from snapshot-to-snapshot changes in shares × price. The UI marks those figures as estimated.
 - Metrics:
@@ -121,7 +121,7 @@ Effort: **S** ≈ ≤1 week, **M** ≈ 1–3 weeks, **L** ≈ 3–6 weeks for on
 - UI: a new **Performance** tab with an equity curve against the benchmark (Plotly is already a dependency) and a returns heat-map by month.
 - AI hook: feed period return and excess return into `portfolio_insight_runner` and the morning brief, so the brief can say "you trail SPY by 3.1% YTD, mostly NVDA → TSLA rotation".
 
-#### 1.3 Portfolio risk workspace (M) ✅ shipped (as a Risk tab; not yet fed into the AI brief)
+#### 1.3 Portfolio risk workspace (M) ✅ shipped (as a Risk tab; figures feed the AI brief)
 Computed from 1.1, using pure functions like `trim_signal_service`:
 - correlation matrix and clusters ("these four holdings move as one bet");
 - portfolio beta, annualised volatility, max drawdown, and historical VaR/CVaR at 95%;
