@@ -14,6 +14,8 @@ class Watchlist(Base):
 
     items = relationship("WatchlistItem", back_populates="watchlist", cascade="all, delete-orphan")
 
+    __table_args__ = (UniqueConstraint("created_by", name="uq_watchlists_created_by"),)
+
 
 class WatchlistItem(Base):
     __tablename__ = "watchlist_items"
