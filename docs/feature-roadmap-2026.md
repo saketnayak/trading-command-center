@@ -191,7 +191,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 
 ### Phase 3: AI that earns trust
 
-#### 3.1 Agent Backtest Lab + learning loop (M) ✅ partly shipped (Backtest Lab with dry runs, budget cap, baselines, train-cutoff contamination labelling with out-of-sample headlines, isolated walk-forward memory, and the model leaderboard; still open: the live-run learning loop (`reflect_and_remember` on resolved outcomes, per-user memories) and contamination labels on live runs)
+#### 3.1 Agent Backtest Lab + learning loop (M) ✅ shipped (Backtest Lab with dry runs, budget cap, baselines, training-cutoff contamination labels with out-of-sample headlines and isolated walk-forward memory; the model leaderboard; the opt-in per-user learning loop with nightly reflections, retries and hindsight flags on past-dated live runs)
 - New `/runs/backtest`: choose tickers, a date grid, provider and model, analysts, depth, and a **budget cap in USD**. The job wraps `tradingagents.backtest.Backtester` (already installed, unused), inside `job_manager` and `asyncio.to_thread` like live runs.
 - Persist the `BacktestReport` and show:
   - Sharpe, hit-rate, expectancy and drawdown;

@@ -117,6 +117,7 @@ export interface Leaderboard {
   group_by: "model" | "depth" | "analysts";
   groups: LeaderboardGroup[];
   benchmark_available: boolean;
+  excluded_in_sample: number;
   note: string;
 }
 

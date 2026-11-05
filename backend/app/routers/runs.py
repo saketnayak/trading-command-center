@@ -63,7 +63,12 @@ router = APIRouter()
 
 
 def _run_to_response(run: Run) -> RunResponse:
+    from app.services.backtest_calc import cutoff_for
+
     base = RunResponse.model_validate(run)
+    cutoff = cutoff_for(run.llm_model or "")
+    base = base.model_copy(update={"training_cutoff": cutoff,
+                                   "hindsight_risk": bool(cutoff and run.analysis_date.isoformat() <= cutoff)})
     if run.report:
         return base.model_copy(update={
             "suggested_entry": run.report.suggested_entry,
@@ -254,12 +259,18 @@ async def get_leaderboard(
     from app.services.backtest_calc import leaderboard
     from app.services.price_history_service import get_closes
 
+    from app.services.backtest_calc import cutoff_for
+
     rows = (await db.execute(select(RunOutcome, Run).join(Run, Run.id == RunOutcome.run_id))).all()
-    data = []
+    data, in_sample = [], 0
     for o, r in rows:
         try:
             d0 = _date.fromisoformat(str(o.analysis_date)[:10])
         except ValueError:
+            continue
+        cutoff = cutoff_for(r.llm_model or "")
+        if cutoff and d0.isoformat() <= cutoff:
+            in_sample += 1  # a past date the model may remember: not a fair test
             continue
         data.append({"provider": r.llm_provider, "model": r.llm_model, "depth": r.depth, "analysts": list(r.analysts or []),
                      "verdict": o.verdict, "analysis_date": d0, "price_at_analysis": o.price_at_analysis,
@@ -273,6 +284,7 @@ async def get_leaderboard(
         "group_by": group_by,
         "groups": leaderboard(data, spy, group_by),
         "benchmark_available": bool(spy),
+        "excluded_in_sample": in_sample,
         "note": "Accuracy counts a BUY as right when the price rose and a SELL when it fell; HOLD verdicts aren't scored. "
                 "Excess return is the direction-signed return minus SPY's over the same window. Small groups are noisy.",
     }

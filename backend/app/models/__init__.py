@@ -15,3 +15,4 @@ from app.models.portfolio_transaction import PortfolioTransaction  # noqa: F401
 from app.models.dividend import DividendHistory, DividendSync  # noqa: F401
 from app.models.net_worth import NetWorthItem, NetWorthValuation  # noqa: F401
 from app.models.backtest import Backtest  # noqa: F401
+from app.models.run_reflection import RunReflection  # noqa: F401

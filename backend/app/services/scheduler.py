@@ -18,6 +18,7 @@ from app.services.price_history_service import refresh_tracked_price_history
 from app.services.alert_engine import evaluate_all_alerts
 from app.services.dividend_service import refresh_tracked_dividends
 from app.services.wallet_service import sync_all_wallets
+from app.services.learning_service import run_learning_pass
 from app.utils.cron_validation import normalize_schedule_cron, parse_cron_trigger
 
 logger = logging.getLogger(__name__)
@@ -310,6 +311,13 @@ async def start_scheduler() -> AsyncScheduler:
         sync_all_wallets,
         CronTrigger(hour=23, minute=20),
         id="wallet_sync",
+        conflict_policy="replace",
+    )
+    # Learning loop: reflect on runs whose outcome horizon has passed (opt-in users)
+    await _scheduler.add_schedule(
+        run_learning_pass,
+        CronTrigger(hour=1, minute=10),
+        id="learning_reflections",
         conflict_policy="replace",
     )
     # Alert rules (price, regime, verdict, portfolio) every 15 minutes
