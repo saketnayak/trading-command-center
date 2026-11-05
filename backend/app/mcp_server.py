@@ -7,7 +7,7 @@ Settings → MCP access, sent as `Authorization: Bearer af_...`.
 
 Scopes:
   read      portfolios, holdings, performance, risk, rebalance plans,
-            regimes, runs, reports, insights, alerts. Read-only.
+            dividend income, regimes, runs, reports, insights, alerts. Read-only.
   research  additionally starts an AI analysis run or a portfolio insight
             (spends the user's LLM credits).
 
@@ -269,6 +269,19 @@ def build_server():
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
             return await rebalance(uuid.UUID(portfolio_id), mode=mode, amount=amount, whole_shares=whole_shares, db=db, user=user)
+
+    @server.tool()
+    async def get_income(portfolio_id: str) -> dict[str, Any]:
+        """Dividend income: forward annual and monthly income, yield and yield on cost, each holding's
+        frequency and next ex-dividend date, the next 12 months' expected payments, income received, and
+        progress toward the user's monthly target. Estimates from each holding's dividend history."""
+        from app.routers.portfolio_income import portfolio_income
+
+        user_id, _ = _caller()
+        async with AsyncSessionLocal() as db:
+            await _own_portfolio(db, user_id, portfolio_id)
+            user = await _user(db, user_id)
+            return await portfolio_income(uuid.UUID(portfolio_id), db=db, user=user)
 
     @server.tool()
     async def get_regime(ticker: str) -> dict[str, Any]:

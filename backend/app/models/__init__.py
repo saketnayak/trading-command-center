@@ -12,3 +12,4 @@ from app.models.alert import AlertEvent, AlertRule  # noqa: F401
 from app.models.portfolio_target import PortfolioTarget  # noqa: F401
 from app.models.mcp_token import McpToken  # noqa: F401
 from app.models.portfolio_transaction import PortfolioTransaction  # noqa: F401
+from app.models.dividend import DividendHistory, DividendSync  # noqa: F401
