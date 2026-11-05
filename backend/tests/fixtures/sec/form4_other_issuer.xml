@@ -1,0 +1,12 @@
+<?xml version="1.0"?>
+<ownershipDocument>
+    <issuer><issuerCik>0009999999</issuerCik><issuerTradingSymbol>OTHR</issuerTradingSymbol></issuer>
+    <reportingOwner><reportingOwnerId><rptOwnerName>SEC ALPHA CORP</rptOwnerName></reportingOwnerId>
+        <reportingOwnerRelationship><isTenPercentOwner>1</isTenPercentOwner></reportingOwnerRelationship></reportingOwner>
+    <nonDerivativeTable><nonDerivativeTransaction>
+        <transactionDate><value>2026-10-05</value></transactionDate>
+        <transactionCoding><transactionCode>P</transactionCode></transactionCoding>
+        <transactionAmounts><transactionShares><value>5</value></transactionShares><transactionPricePerShare><value>1</value></transactionPricePerShare>
+        <transactionAcquiredDisposedCode><value>A</value></transactionAcquiredDisposedCode></transactionAmounts>
+    </nonDerivativeTransaction></nonDerivativeTable>
+</ownershipDocument>

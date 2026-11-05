@@ -105,7 +105,7 @@ async def test_read_tools_see_only_the_callers_data(fake_prices):  # noqa: F811
     async with mcp_session(tok) as s:
         names = {t.name for t in (await s.list_tools()).tools}
         assert {"list_portfolios", "get_holdings", "get_performance", "get_risk", "get_rebalance_plan", "get_regime",
-                "list_runs", "get_run_report", "get_latest_insight", "list_alerts", "get_income", "get_tax_report", "get_net_worth", "start_analysis",
+                "list_runs", "get_run_report", "get_latest_insight", "list_alerts", "get_income", "get_tax_report", "get_net_worth", "get_filings", "start_analysis",
                 "generate_portfolio_insight"} <= names
         assert not any("order" in n or "trade" in n or "jev" in n for n in names)
 

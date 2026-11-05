@@ -285,6 +285,20 @@ def build_server():
             return await portfolio_income(uuid.UUID(portfolio_id), db=db, user=user)
 
     @server.tool()
+    async def get_filings(portfolio_id: str, days: int = 30) -> dict[str, Any]:
+        """Recent SEC filings for the portfolio's holdings (10-K/10-Q risk-factor changes vs the previous
+        filing, 8-K reports with their items) and Form 4 insider buys and sells, from EDGAR. Digests are
+        AI summaries whose every point quotes the filing; `url` links the filing itself. Stored data only:
+        the app refreshes it nightly and when the Filings tab is opened. days: 7-120."""
+        from app.services import edgar_service, filing_digest_service
+
+        user_id, _ = _caller()
+        async with AsyncSessionLocal() as db:
+            await _own_portfolio(db, user_id, portfolio_id)
+            tickers = await edgar_service.held_tickers(db, uuid.UUID(portfolio_id))
+            return await filing_digest_service.report(db, tickers, days=max(7, min(120, days)))
+
+    @server.tool()
     async def get_tax_report(portfolio_id: str, year: int | None = None, min_loss: float = 100.0) -> dict[str, Any]:
         """Tax view of a ledger-backed portfolio (informational, not tax advice; simplified US rules): realised
         gains for a tax year split short/long term with wash-sale adjustments, and open lots at a loss of at

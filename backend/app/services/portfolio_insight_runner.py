@@ -443,6 +443,7 @@ Your analysis should:
 8. Frame urgency and risk relative to the investor's stated time horizon and risk tolerance
 9. Where regime data is provided, note regime-conflicted positions (e.g. AI said Buy but regime is Bear) and regime-supported positions
 10. Where MEASURED figures are provided, use them for risk alerts and the summary: quote them exactly, raise "correlated_positions" for listed clusters, treat a holding whose risk share far exceeds its value share as concentration risk, and never state a return, volatility or drawdown figure that is not in the data
+11. Where RECENT SEC FILINGS are provided, mention material ones (form and date) in risk alerts or action items; describe them only as given, never add details
 
 Respond ONLY with a single valid JSON object matching this exact schema (no markdown, no explanation):
 {{
@@ -490,6 +491,21 @@ def _parse_insight_json(raw: str) -> dict:
     if start == -1 or end == 0:
         raise ValueError("No JSON object found in LLM response")
     return json.loads(text[start:end])
+
+
+async def _filings_block(portfolio_id) -> str:
+    """Recent SEC filings and insider trades for the holdings (stored data only), or "".
+    Never raises."""
+    from app.services import edgar_service, filing_calc, filing_digest_service
+
+    try:
+        async with AsyncSessionLocal() as fdb:
+            tickers = await edgar_service.held_tickers(fdb, portfolio_id)
+            report = await filing_digest_service.report(fdb, tickers, days=30)
+        return filing_calc.prompt_block(report)
+    except Exception:  # noqa: BLE001
+        logger.warning("filings unavailable for portfolio %s", portfolio_id, exc_info=True)
+        return ""
 
 
 async def _measured_metrics(portfolio_id, display_currency: str) -> Optional[dict]:
@@ -676,7 +692,7 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                 holdings=enriched,
                 investor_profile=investor_profile,
                 regime_map=regime_map,
-                measured_block=insight_metrics.prompt_block(measured, pref_currency),
+                measured_block=insight_metrics.prompt_block(measured, pref_currency) + await _filings_block(portfolio.id),
             )
 
             raw_response = await _call_llm(llm_provider, llm_model, llm_key, prompt)

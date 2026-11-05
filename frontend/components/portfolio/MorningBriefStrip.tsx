@@ -1,13 +1,16 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getLatestInsight } from "@/lib/api";
+import { getLatestInsight, getPortfolioFilings } from "@/lib/api";
+import { briefLine, filingsQueryKey } from "@/lib/filings";
 import type { InsightActionItem, InsightStance, PortfolioInsight } from "@/lib/types";
 import { BTN_AI_SM_CLASS } from "@/lib/uiClasses";
 
 type MorningBriefStripProps = {
   portfolioId: string;
   onOpenInsights: () => void;
+  /** Shows the week's SEC filings and insider trades when set (not for all-crypto portfolios). */
+  onOpenFilings?: () => void;
 };
 
 function stanceClasses(stance: InsightStance): string {
@@ -93,7 +96,29 @@ function BriefContent({
   );
 }
 
-export function MorningBriefStrip({ portfolioId, onOpenInsights }: MorningBriefStripProps) {
+function FilingsLine({ portfolioId, onOpenFilings }: { portfolioId: string; onOpenFilings: () => void }) {
+  const { data } = useQuery({
+    queryKey: filingsQueryKey(portfolioId, 7),
+    queryFn: () => getPortfolioFilings(portfolioId, 7),
+    staleTime: 10 * 60_000,
+    refetchInterval: (q) => (q.state.data?.syncing ? 5000 : false),
+  });
+  const line = data ? briefLine(data) : null;
+  if (!line) return null;
+  return (
+    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2">
+      <p className="min-w-0 text-xs text-fg-secondary">
+        <span className="text-muted">{"SEC filings this week: "}</span>
+        {line}
+      </p>
+      <button type="button" onClick={onOpenFilings} className="shrink-0 text-xs text-blue-500 hover:text-blue-400">
+        What changed →
+      </button>
+    </div>
+  );
+}
+
+export function MorningBriefStrip({ portfolioId, onOpenInsights, onOpenFilings }: MorningBriefStripProps) {
   const { data: insight, isLoading } = useQuery({
     queryKey: ["insights-latest", portfolioId],
     queryFn: () => getLatestInsight(portfolioId),
@@ -121,6 +146,7 @@ export function MorningBriefStrip({ portfolioId, onOpenInsights }: MorningBriefS
           </button>
         </div>
       )}
+      {onOpenFilings && <FilingsLine portfolioId={portfolioId} onOpenFilings={onOpenFilings} />}
     </section>
   );
 }

@@ -191,7 +191,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 
 ### Phase 3: AI that earns trust
 
-> **Status (2026-11-05):** Phases 1–2, 3.1 and 3.2 are shipped. Next up is 3.3. Leftovers, existing issues, dev setup and a continuation prompt are in [`docs/handoffs/2026-11-05-roadmap-phase3-handoff.md`](handoffs/2026-11-05-roadmap-phase3-handoff.md).
+> **Status (2026-11-05):** Phases 1–2 and 3.1–3.3 are shipped. Next up is 3.4. Leftovers, existing issues, dev setup and a continuation prompt are in [`docs/handoffs/2026-11-05-roadmap-phase3-handoff.md`](handoffs/2026-11-05-roadmap-phase3-handoff.md).
 
 #### 3.1 Agent Backtest Lab + learning loop (M) ✅ shipped (Backtest Lab with dry runs, budget cap, baselines, training-cutoff contamination labels with out-of-sample headlines and isolated walk-forward memory; the model leaderboard; the opt-in per-user learning loop with nightly reflections, retries and hindsight flags on past-dated live runs)
 - New `/runs/backtest`: choose tickers, a date grid, provider and model, analysts, depth, and a **budget cap in USD**. The job wraps `tradingagents.backtest.Backtester` (already installed, unused), inside `job_manager` and `asyncio.to_thread` like live runs.
@@ -209,7 +209,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 - An LLM compiles the sentence to the 1.5 rule DSL. The user reviews the compiled rule (the same approval idea as Public's Agents). A deterministic evaluator runs it, so the LLM is never in the hot path.
 - Optional action: **re-run the TradingAgents analysis** when the rule fires, and attach the new verdict to the alert. This stays research-only and never places an order.
 
-#### 3.3 "What changed" digests: filings, insiders, calls (M)
+#### 3.3 "What changed" digests: filings, insiders, calls (M) ✅ shipped (an SEC filings tab: 10-K/10-Q risk-factor changes vs the previous filing, 8-K reports with item labels, Form 4 open-market insider trades with 10b5-1 flags, one AI digest per filing whose every point must quote the filing and links to the quote, plain summaries without a key, a nightly refresh, a "this week" line in the morning brief and the AI brief, MCP `get_filings`; still open: 13F changes for chosen funds, earnings-call transcripts, MD&A diffs, and alert rules on new filings or insider buys)
 - SEC EDGAR, which is free and keyless:
   - new 10-K, 10-Q and 8-K filings for holdings;
   - Form 4 insider buys and sells;
