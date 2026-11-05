@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "noreply@agentfloor.local"
     frontend_url: str = "http://localhost:3000"
-    # SEC EDGAR asks every client to identify itself; set this to "Your Name you@example.com".
+    # SEC EDGAR rejects clients that don't identify themselves with an email, so the SEC
+    # filings tab stays off until this is set to "Your Name you@example.com".
     sec_user_agent: str = "AgentFloor self-hosted research app"
     run_timeout_seconds: int = 3600
     trim_gain_threshold_pct: float = 30.0

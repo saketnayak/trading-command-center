@@ -227,6 +227,9 @@ async def refresh(tickers: list[str], *, force: bool = False, key: str | None = 
 
 async def refresh_all_holdings() -> None:
     """Nightly job: every ticker held in any portfolio."""
+    if not edgar_service.contact_configured():
+        logger.info("sec: skipping the nightly refresh; set SEC_USER_AGENT to a name and contact email")
+        return
     async with AsyncSessionLocal() as db:
         tickers = await edgar_service.held_tickers(db)
     if not tickers:

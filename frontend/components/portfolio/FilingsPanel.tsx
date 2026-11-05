@@ -62,7 +62,7 @@ export function FilingsPanel({ portfolioId }: { portfolioId: string }) {
             type="button"
             className={`${BTN_SECONDARY_CLASS} gap-1.5`}
             onClick={() => refresh.mutate()}
-            disabled={data.syncing || refresh.isPending || data.holdings === 0}
+            disabled={data.syncing || refresh.isPending || data.holdings === 0 || data.needs_contact}
           >
             <RefreshCw size={13} className={data.syncing ? "animate-spin" : ""} aria-hidden />
             Refresh
@@ -87,6 +87,13 @@ export function FilingsPanel({ portfolioId }: { portfolioId: string }) {
         </div>
       </div>
 
+      {data.needs_contact && (
+        <div className={ALERT_BANNER_CLASS}>
+          The SEC only answers clients that identify themselves with a contact email. Your administrator needs to set{" "}
+          <code>SEC_USER_AGENT</code> to a name and email, such as <code>Jane Doe jane@example.com</code>, and restart
+          AgentFloor. Filings will load after that.
+        </div>
+      )}
       {!data.llm_available && data.filings.length > 0 && (
         <div className={ALERT_BANNER_CLASS}>
           Add an LLM key in Settings to get a short summary of each filing, with every point quoted from the filing.

@@ -15,14 +15,14 @@ API keys for LLM providers, Finnhub and the JEV Lab are **not** environment vari
 | `ENCRYPTION_KEY` | Yes | 64 hex characters; encrypts stored API keys. Changing it makes stored keys unreadable |
 | `NEXTAUTH_SECRET` | Yes | Signs browser sessions |
 | `NEXTAUTH_URL` | Yes | Public address of your install, e.g. `http://localhost` or `https://agentfloor.example.com`. Also used for links in emails and alerts |
-| `SEC_USER_AGENT` | Recommended | Your name and email, e.g. `"Jane Doe jane@example.com"`. The SEC asks every client to identify itself; used for the SEC filings tab. Defaults to a generic AgentFloor identifier |
+| `SEC_USER_AGENT` | For SEC filings | Your name and email, e.g. `"Jane Doe jane@example.com"`. The SEC rejects clients without a contact email, so the SEC filings tab stays off until this is set |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` | | Email for invites, alert emails and briefing delivery. Without SMTP, invite links are shown on screen and alert emails are skipped |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | | Adds "Sign in with Google" |
 | `OPENAI_API_KEY` | | Pre-seeds an OpenAI key for everyone (optional) |
 | `TRADINGAGENTS_RESULTS_DIR` | | Where agent memories for the learning loop are kept (default `./results`, one folder per user) |
 | `DATABASE_URL` | | Postgres connection; set by the compose files |
 
-> **Installed before November 2026?** `agentfloor update` pulls new images but keeps the compose file from your install, which doesn't pass `SEC_USER_AGENT` to the backend. SEC filings still work with the default identifier. To use your own, re-run the installer: it keeps your existing `.env` and your data.
+> **Installed before November 2026?** `agentfloor update` pulls new images but keeps the compose file from your install, which doesn't pass `SEC_USER_AGENT` to the backend. The SEC filings tab needs it, so set it in `.env` and re-run the installer, which keeps your existing `.env` and your data.
 
 ## Admin toggles (Settings, admin only)
 
@@ -52,6 +52,6 @@ The backend runs these on its own; no cron setup is needed. Times are UTC.
 | Daily price history (Performance, Risk, Rebalance, alerts on moving averages) and dividends | Yahoo Finance | No |
 | Crypto prices | CoinGecko | No |
 | Exchange rates | ECB rates via Frankfurter | No |
-| SEC filings and insider trades | SEC EDGAR | No (send `SEC_USER_AGENT`) |
+| SEC filings and insider trades | SEC EDGAR | No key, but needs `SEC_USER_AGENT` |
 | Wallet balances | mempool.space (BTC), a public Ethereum node (ETH) | No |
 | AI analysis, briefings, summaries | The LLM provider you choose | Your key |
