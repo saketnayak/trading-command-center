@@ -107,7 +107,7 @@ async def _company_maps(db: AsyncSession) -> tuple[dict[str, int], dict[str, tup
     by_ticker = {t: c for t, c, _ in rows}
     by_name: dict[str, tuple[str, int]] = {}
     for t, c, n in sorted(rows, key=lambda r: (len(r[0]), r[0])):  # GOOG before GOOGL, for a stable label
-        by_name.setdefault(lookthrough_calc.normalize_name(n), (t, c))
+        by_name.setdefault(lookthrough_calc.name_key(n), (t, c))
     return by_ticker, by_name
 
 
@@ -128,7 +128,10 @@ async def _refresh_ticker(db: AsyncSession, ticker: str, series: dict[str, tuple
         error = f"Yahoo: {exc}"[:300]
         logger.warning("look-through: Yahoo failed for %s: %s", ticker, exc)
 
-    found = series.get(edgar_service.normalize_ticker(ticker))
+    # Only Yahoo says whether a ticker is a fund: the SEC's fund list shares tickers with stocks on other
+    # exchanges. Without an answer from Yahoo, a ticker counts as a fund only if it was one before.
+    is_fund = yahoo["kind"] == "fund" if yahoo else (row.kind == "fund" and row.fetched_at is not None)
+    found = series.get(edgar_service.normalize_ticker(ticker)) if is_fund else None
     nport: dict | None = None
     if found:
         try:
@@ -152,8 +155,8 @@ async def _refresh_ticker(db: AsyncSession, ticker: str, series: dict[str, tuple
     elif yahoo:
         row.kind, row.name, row.sector = "stock", yahoo.get("name"), yahoo.get("sector")
         row.source, row.as_of, row.covered_weight, row.holdings, row.sectors = None, None, None, [], {}
-    elif found and row.kind == "unknown":
-        row.kind = "fund"  # listed by the SEC as a fund, holdings not available yet
+    elif row.fetched_at is None:
+        row.kind = "unknown"
 
     if nport or yahoo:
         row.fetched_at, row.error = now, None
