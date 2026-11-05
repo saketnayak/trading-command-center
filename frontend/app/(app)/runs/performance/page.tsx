@@ -7,6 +7,7 @@ import { PageShell } from "@/components/layout/PageShell";
 import { BTN_SECONDARY_CLASS } from "@/lib/uiClasses";
 import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
+import { ModelLeaderboard } from "@/components/backtest/ModelLeaderboard";
 
 function AccuracyBadge({ value }: { value: number | null }) {
   if (value === null) return <span className="text-muted text-sm">—</span>;
@@ -122,6 +123,7 @@ export default function PerformancePage() {
             </div>
           </>
         )}
+        <ModelLeaderboard />
       </PageShell>
   );
 }
