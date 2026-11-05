@@ -19,7 +19,7 @@
 | 3.1 | Backtest Lab and model leaderboard | saketnayak/trading-command-center#62 |
 | 3.1 | Opt-in learning loop and hindsight flags | saketnayak/trading-command-center#64 |
 
-Alembic head: `w3x4y5z6a7b8` (learning loop). Chain since Phase 2: `s9t0u1v2w3x4` (ledger) → `t0u1v2w3x4y5` (dividends) → `u1v2w3x4y5z6` (net worth) → `v2w3x4y5z6a7` (backtests) → `w3x4y5z6a7b8`.
+Alembic head: `x4y5z6a7b8c9` (learning loop). Chain since Phase 2: `s9t0u1v2w3x4` (ledger) → `t0u1v2w3x4y5` (dividends) → `u1v2w3x4y5z6` (net worth) → `v2w3x4y5z6a7` (backtests) → `w3x4y5z6a7b8` (stranded ledger snapshots) → `x4y5z6a7b8c9` (learning loop; first merged as a second `w3x4y5z6a7b8`, renumbered).
 
 ---
 
