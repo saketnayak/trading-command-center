@@ -47,7 +47,7 @@ export function TransactionsPanel({ portfolioId, hasHoldings }: Props) {
   /** Every ledger change re-derives holdings, so refresh everything that reads them. */
   function refreshAll() {
     for (const prefix of ["portfolio-transactions", "portfolio-ledger", "portfolio-current", "portfolios", "portfolio-performance",
-      "portfolio-risk", "portfolio-rebalance", "portfolio-income", "portfolio-trim-signals", "portfolio-regime", "portfolio-wave", "portfolio-fundamentals"]) {
+      "portfolio-risk", "portfolio-rebalance", "portfolio-income", "portfolio-tax", "portfolio-trim-signals", "portfolio-regime", "portfolio-wave", "portfolio-fundamentals"]) {
       qc.invalidateQueries({ queryKey: [prefix] });
     }
   }

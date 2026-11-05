@@ -22,7 +22,7 @@ describe("portfolioTabs", () => {
   it("splits primary and overflow tabs", () => {
     const groups = buildPortfolioTabGroups({ allCrypto: false });
     expect(groups.primary.map((t) => t.id)).toEqual(["holdings", "performance", "risk", "rebalance", "transactions", "income", "insights", "earnings", "news"]);
-    expect(groups.overflow.map((t) => t.id)).toEqual(["chat", "thesis"]);
+    expect(groups.overflow.map((t) => t.id)).toEqual(["chat", "thesis", "tax"]);
   });
 
   it("hides earnings when portfolio is all crypto", () => {

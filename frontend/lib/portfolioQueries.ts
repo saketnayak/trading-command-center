@@ -17,6 +17,8 @@ export const portfolioQueryKeys = {
   transactions: (id: string) => ["portfolio-transactions", id] as const,
   ledger: (id: string) => ["portfolio-ledger", id] as const,
   income: (id: string) => ["portfolio-income", id] as const,
+  tax: (id: string, year: number | null, minLoss: number) => ["portfolio-tax", id, year, minLoss] as const,
+  taxReplacements: (id: string, symbol: string) => ["portfolio-tax-replacements", id, symbol] as const,
   rebalance: (id: string, mode: string, amount: number, wholeShares: boolean) =>
     ["portfolio-rebalance", id, mode, amount, wholeShares] as const,
   behavioralAlerts: (id: string) => ["behavioralAlerts", id] as const,
@@ -73,6 +75,7 @@ export type PortfolioTab =
   | "rebalance"
   | "transactions"
   | "income"
+  | "tax"
   | "insights"
   | "earnings"
   | "news"

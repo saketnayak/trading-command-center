@@ -154,7 +154,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 - Evaluated by an APScheduler job (every 15 min in market hours, plus after each nightly job). Delivered through the existing `delivery_service` (email, Telegram, Slack, webhook) and an **in-app inbox** with a nav badge.
 - This is the base for the natural-language rules in 3.2.
 
-#### 1.6 MCP server (S–M) ✅ shipped (12 tools at launch, 13 with `get_income`: 11 read, 2 research; personal access tokens with scopes and expiry)
+#### 1.6 MCP server (S–M) ✅ shipped (12 tools at launch, 14 with `get_income` and `get_tax_report`: 12 read, 2 research; personal access tokens with scopes and expiry)
 - Expose AgentFloor as an MCP server (Streamable HTTP, mounted on the FastAPI app or as a sidecar).
 - **Read tools by default**: `list_portfolios`, `get_holdings`, `get_performance`, `get_risk`, `get_regime`, `get_wave`, `get_latest_insight`, `list_runs`, `get_report`.
 - An **opt-in "research" scope** adds `start_run` and `generate_insight`.
@@ -178,7 +178,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 - Forward 12-month income projection, yield on cost, monthly income calendar, and DRIP modelling.
 - Matches the investor profile's `income_goal` ("you're 62% of the way to $1,500/mo").
 
-#### 2.3 Tax tools (M, informational only)
+#### 2.3 Tax tools (M, informational only) ✅ shipped (as a Tax tab: realised gains by tax year in Form 8949 layout with CSV, wash sales across all of a user's portfolios, loss-harvest candidates with wash-sale risk and correlated ETF ideas, MCP `get_tax_report`; US only; still open: other jurisdiction presets, carrying disallowed losses into replacement lots' basis, and wash-sale checks against accounts outside AgentFloor)
 - Realised-gains report by tax year, split short- and long-term per jurisdiction preset (US first), exportable as CSV.
 - **Harvest candidates**: lots with unrealised loss above $X, ranked by loss and correlation-matched replacement ideas.
 - **Wash-sale guard**: warn when a buy in *any* account or portfolio falls within ±30 days of a loss sale.

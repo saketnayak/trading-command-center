@@ -7,7 +7,8 @@ Settings → MCP access, sent as `Authorization: Bearer af_...`.
 
 Scopes:
   read      portfolios, holdings, performance, risk, rebalance plans,
-            dividend income, regimes, runs, reports, insights, alerts. Read-only.
+            dividend income, tax (realised gains, wash sales, harvest candidates), regimes, runs, reports,
+            insights, alerts. Read-only.
   research  additionally starts an AI analysis run or a portfolio insight
             (spends the user's LLM credits).
 
@@ -282,6 +283,19 @@ def build_server():
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
             return await portfolio_income(uuid.UUID(portfolio_id), db=db, user=user)
+
+    @server.tool()
+    async def get_tax_report(portfolio_id: str, year: int | None = None, min_loss: float = 100.0) -> dict[str, Any]:
+        """Tax view of a ledger-backed portfolio (informational, not tax advice; simplified US rules): realised
+        gains for a tax year split short/long term with wash-sale adjustments, and open lots at a loss of at
+        least `min_loss` (display currency) that could be harvested, with any wash-sale risk."""
+        from app.routers.portfolio_tax import portfolio_tax
+
+        user_id, _ = _caller()
+        async with AsyncSessionLocal() as db:
+            await _own_portfolio(db, user_id, portfolio_id)
+            user = await _user(db, user_id)
+            return await portfolio_tax(uuid.UUID(portfolio_id), year=year, min_loss=min_loss, db=db, user=user)
 
     @server.tool()
     async def get_regime(ticker: str) -> dict[str, Any]:
