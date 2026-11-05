@@ -57,8 +57,10 @@ async def get_filings(portfolio_id: UUID, days: int = Query(90, ge=7, le=120),
     else:
         # No holding files with the SEC (funds, crypto) — refresh only to load the ticker → CIK map.
         stale = bool(tickers) and (await db.execute(select(SecCik.ticker).limit(1))).first() is None
-    if stale:
+    needs_contact = not edgar_service.contact_configured()
+    if stale and not needs_contact:
         _start_refresh(portfolio_id, tickers, force=False)
+    out["needs_contact"] = needs_contact
     out["syncing"] = str(portfolio_id) in filing_digest_service.running
     out["llm_available"] = await filing_digest_service._team_llm(db) is not None
     out["holdings"] = len(tickers)
@@ -71,5 +73,7 @@ async def refresh_filings(portfolio_id: UUID, db: AsyncSession = Depends(get_db)
     tickers = await edgar_service.held_tickers(db, portfolio_id)
     if not tickers:
         raise HTTPException(status_code=422, detail="This portfolio has no holdings yet.")
+    if not edgar_service.contact_configured():
+        raise HTTPException(status_code=422, detail="Set SEC_USER_AGENT to a name and contact email first.")
     started = _start_refresh(portfolio_id, tickers, force=True)
     return {"started": started, "syncing": True}

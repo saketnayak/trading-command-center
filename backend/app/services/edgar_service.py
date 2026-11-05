@@ -53,6 +53,11 @@ class EdgarError(RuntimeError):
     pass
 
 
+def contact_configured() -> bool:
+    """EDGAR answers 403 to a User-Agent without a contact email, so don't call it without one."""
+    return "@" in settings.sec_user_agent
+
+
 async def _http_get(url: str) -> str:
     """One GET to EDGAR, rate-limited and retried. The test seam."""
     global _last_request

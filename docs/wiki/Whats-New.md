@@ -10,7 +10,7 @@ A new **SEC filings** tab (Portfolio → ⋯) shows:
 
 AI summaries must quote the filing word for word, and each quote links to the passage on sec.gov. Without an LLM key you still get plain summaries. The morning brief shows this week's filings. → [SEC filings](SEC-Filings.md)
 
-**Self-hosters:** set `SEC_USER_AGENT` in `.env` ([Configuration](Configuration.md)).
+**Self-hosters:** this tab needs `SEC_USER_AGENT` in `.env` ([Configuration](Configuration.md)).
 
 ## Alerts you can describe in plain English ([#65](https://github.com/saketnayak/trading-command-center/pull/65))
 "Tell me if any semiconductor holding goes Bear on Markov and drops below its 200-day" becomes a rule that you check and save.

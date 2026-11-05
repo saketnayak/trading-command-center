@@ -89,6 +89,7 @@ def edgar(monkeypatch):
         raise edgar_service.EdgarError(f"HTTP 404 from {url}")
 
     monkeypatch.setattr(edgar_service, "_http_get", _get)
+    monkeypatch.setattr(edgar_service.settings, "sec_user_agent", "AgentFloor tests test@example.com")
     return calls
 
 
@@ -203,6 +204,19 @@ async def test_an_uncited_reply_is_never_shown(edgar, llm):
         assert row.digest_status == "uncited" and row.digest is None
         report = await fds.report(db, ["SECD"])
     assert report["filings"][0]["digest"] is None and report["filings"][0]["summary"] == "Other events"
+
+
+async def test_without_a_contact_email_edgar_is_not_called(edgar, llm, monkeypatch):
+    monkeypatch.setattr(edgar_service.settings, "sec_user_agent", "AgentFloor self-hosted research app")
+    async with _client() as c:
+        h = await _token(c, "sec-contact@example.com")
+        pid = await _portfolio(c, h, [(1, {"SECE": 3})])
+        got = (await c.get(f"/portfolio/{pid}/filings", headers=h)).json()
+        assert got["needs_contact"] is True and got["syncing"] is False
+        r = await c.post(f"/portfolio/{pid}/filings/refresh", headers=h)
+        assert r.status_code == 422 and "SEC_USER_AGENT" in r.json()["detail"]
+        await fds.refresh_all_holdings()
+    assert edgar == []
 
 
 async def test_get_starts_a_background_refresh_and_post_forces_one(edgar, llm):
