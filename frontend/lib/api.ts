@@ -7,6 +7,7 @@ import type { AlertCheck, AlertEvent, AlertRule, CreateAlertRuleRequest } from "
 import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
 import type { IncomeReport } from "./income";
 import type { ReplacementIdeas, TaxReport } from "./tax";
+import type { NetWorthItemInput, NetWorthRange, NetWorthReport } from "./netWorth";
 import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
 import type { CostBasisMethod, ImportResult, LedgerSummary, LedgerTx, TxInput } from "./ledger";
 import type { ResponseLanguage } from "./responseLanguage";
@@ -1051,3 +1052,21 @@ export const getPortfolioTax = (portfolioId: string, year: number | null, minLos
 
 export const getTaxReplacements = (portfolioId: string, symbol: string) =>
   apiJson<ReplacementIdeas>(`/portfolio/${portfolioId}/tax/replacements?symbol=${encodeURIComponent(symbol)}`);
+
+// ── Net worth ─────────────────────────────────────────────────────────────────
+
+export const getNetWorth = (range: NetWorthRange) => apiJson<NetWorthReport>(`/net-worth?range=${range}`);
+
+export const addNetWorthItem = (body: NetWorthItemInput) =>
+  apiJson<{ id: string; sync_error: string | null }>("/net-worth/items", { method: "POST", body: JSON.stringify(body) });
+
+export const updateNetWorthItem = (id: string, body: { name?: string; category?: string; notes?: string | null; value?: number; as_of?: string }) =>
+  apiJson<{ id: string }>(`/net-worth/items/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const deleteNetWorthItem = (id: string) => apiJson<void>(`/net-worth/items/${id}`, { method: "DELETE" });
+
+export const deleteNetWorthValuation = (id: string, date: string) =>
+  apiJson<void>(`/net-worth/items/${id}/valuations/${date}`, { method: "DELETE" });
+
+export const syncNetWorthWallet = (id: string) =>
+  apiJson<{ ok: boolean; sync_error: string | null }>(`/net-worth/items/${id}/sync`, { method: "POST" });

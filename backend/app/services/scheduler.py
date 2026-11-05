@@ -17,6 +17,7 @@ from app.services.jev_session_manager import prune_old_ticks
 from app.services.price_history_service import refresh_tracked_price_history
 from app.services.alert_engine import evaluate_all_alerts
 from app.services.dividend_service import refresh_tracked_dividends
+from app.services.wallet_service import sync_all_wallets
 from app.utils.cron_validation import normalize_schedule_cron, parse_cron_trigger
 
 logger = logging.getLogger(__name__)
@@ -302,6 +303,13 @@ async def start_scheduler() -> AsyncScheduler:
         refresh_tracked_dividends,
         CronTrigger(day_of_week="mon-fri", hour=23, minute=5),
         id="dividend_refresh",
+        conflict_policy="replace",
+    )
+    # Crypto wallet balances for Net worth, daily
+    await _scheduler.add_schedule(
+        sync_all_wallets,
+        CronTrigger(hour=23, minute=20),
+        id="wallet_sync",
         conflict_policy="replace",
     )
     # Alert rules (price, regime, verdict, portfolio) every 15 minutes

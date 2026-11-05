@@ -7,8 +7,8 @@ Settings → MCP access, sent as `Authorization: Bearer af_...`.
 
 Scopes:
   read      portfolios, holdings, performance, risk, rebalance plans,
-            dividend income, tax (realised gains, wash sales, harvest candidates), regimes, runs, reports,
-            insights, alerts. Read-only.
+            dividend income, tax (realised gains, wash sales, harvest candidates), net worth, regimes,
+            runs, reports, insights, alerts. Read-only.
   research  additionally starts an AI analysis run or a portfolio insight
             (spends the user's LLM credits).
 
@@ -296,6 +296,18 @@ def build_server():
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
             return await portfolio_tax(uuid.UUID(portfolio_id), year=year, min_loss=min_loss, db=db, user=user)
+
+    @server.tool()
+    async def get_net_worth(range: str = "1y") -> dict[str, Any]:  # noqa: A002
+        """Household net worth: portfolios plus manually tracked assets (cash, property, private holdings,
+        retirement accounts, crypto wallets) and liabilities (mortgages, loans, cards). Totals, the split by
+        category, every item, and a series over `range` (6m, ytd, 1y, 3y, 5y)."""
+        from app.routers.net_worth import net_worth
+
+        user_id, _ = _caller()
+        async with AsyncSessionLocal() as db:
+            user = await _user(db, user_id)
+            return await net_worth(range=range, db=db, user=user)
 
     @server.tool()
     async def get_regime(ticker: str) -> dict[str, Any]:
