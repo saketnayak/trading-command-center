@@ -26,6 +26,9 @@ class AlertRule(Base):
     channels: Mapped[list] = mapped_column(JSONB, default=lambda: ["inbox"])
     cooldown_hours: Mapped[int] = mapped_column(Integer, default=6)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Action: start a fresh TradingAgents run for each ticker the firing is about
+    # (research only; at most a few per firing, skipped when one ran recently).
+    rerun_analysis: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     state: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_triggered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

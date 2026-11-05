@@ -3,6 +3,7 @@
 **Branch:** `claude/clever-cray-8uxyls` (equal to `main` at `3119b92` plus this document)
 **Roadmap:** [`docs/feature-roadmap-2026.md`](../feature-roadmap-2026.md)
 **Architecture reference:** [`CLAUDE.md`](../../CLAUDE.md), which has a section for every feature below
+**Update:** roadmap 3.2 (natural-language watch rules) is built on `claude/youthful-dijkstra-6vla3b`, which also renumbers the duplicate learning-loop migration; Alembic head there is `y5z6a7b8c9d0` (`alert_rules.rerun_analysis`).
 **Status:** Phases 1–2 and roadmap 3.1 are shipped and merged. Nothing is half-built; there is no uncommitted code. Next up is **3.2 Natural-language watch rules**.
 
 ---

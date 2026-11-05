@@ -3,7 +3,7 @@ import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Repo
 import type { AnalyzeResponse } from "./wave/types";
 import { performanceQueryParams, type PerformanceMode, type PerformanceRange, type PortfolioPerformance } from "./performance";
 import type { PortfolioRisk, RiskLookback } from "./risk";
-import type { AlertCheck, AlertEvent, AlertRule, CreateAlertRuleRequest } from "./alerts";
+import type { AlertCheck, AlertEvent, AlertRule, CompileResult, CreateAlertRuleRequest } from "./alerts";
 import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
 import type { IncomeReport } from "./income";
 import type { ReplacementIdeas, TaxReport } from "./tax";
@@ -955,8 +955,12 @@ export const createAlertRule = (body: CreateAlertRuleRequest) =>
 
 export const updateAlertRule = (
   id: string,
-  body: Partial<Pick<AlertRule, "params" | "channels" | "cooldown_hours" | "enabled">>,
+  body: Partial<Pick<AlertRule, "params" | "channels" | "cooldown_hours" | "enabled" | "rerun_analysis">>,
 ) => apiJson<AlertRule>(`/alerts/rules/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+/** Turn a sentence into a proposed rule with the user's default LLM. Never saves. */
+export const compileAlertRule = (text: string) =>
+  apiJson<CompileResult>("/alerts/compile", { method: "POST", body: JSON.stringify({ text }) });
 
 export const deleteAlertRule = (id: string) => apiJson<void>(`/alerts/rules/${id}`, { method: "DELETE" });
 

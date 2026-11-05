@@ -9,6 +9,9 @@ Two families:
   condition already holds fires once.
 * Change rules (Markov regime, AI verdict) record a baseline on the first
   check and fire when the observed value changes after that.
+* Compound rules (``compound``) combine per-ticker conditions with AND/OR
+  over one ticker or a portfolio's holdings, with level semantics per ticker.
+  Their params and evaluator live in alert_compound.py.
 
 The engine (alert_engine.py) fetches the observation, calls `evaluate`,
 stores the returned state and applies the per-rule cooldown.
@@ -22,6 +25,8 @@ from datetime import date
 from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
+
+from app.services import alert_compound
 
 TICKER_RE = re.compile(r"^[A-Z0-9][A-Z0-9.\-^=]{0,15}$")
 
@@ -54,7 +59,7 @@ class PortfolioPctParams(BaseModel):
 @dataclass(frozen=True)
 class KindSpec:
     label: str
-    scope: Literal["ticker", "portfolio"]
+    scope: Literal["ticker", "portfolio", "either"]  # either: compound, decided by params.scope
     params: type[BaseModel]
     family: Literal["level", "change"]
 
@@ -68,7 +73,26 @@ KINDS: dict[str, KindSpec] = {
     "verdict_change": KindSpec("AI verdict changes", "ticker", NoParams, "change"),
     "portfolio_drawdown": KindSpec("Portfolio falls X% from its peak", "portfolio", PortfolioPctParams, "level"),
     "position_weight": KindSpec("A holding grows past X% of the portfolio", "portfolio", PortfolioPctParams, "level"),
+    "compound": KindSpec("Several conditions (AND/OR)", "either", alert_compound.CompoundParams, "level"),
 }
+
+
+def rule_scope(kind: str, params: dict) -> Literal["ticker", "portfolio"]:
+    """Whether a rule needs a ticker or a portfolio (compound: from its params)."""
+    spec = KINDS[kind]
+    if spec.scope != "either":
+        return spec.scope
+    return "portfolio" if params.get("scope") == "holdings" else "ticker"
+
+
+def rule_tickers(kind: str, data: dict | None, ticker: str | None) -> list[str]:
+    """Tickers an event is about: the rule's own, or those that newly matched."""
+    data = data or {}
+    if kind == "compound":
+        return list(data.get("matched") or [])
+    if kind == "position_weight":
+        return list(data.get("new") or [])
+    return [ticker] if ticker else []
 
 
 class RuleParamError(ValueError):
@@ -83,8 +107,9 @@ def validate_params(kind: str, params: dict | None) -> dict:
         return spec.params.model_validate(params or {}).model_dump()
     except ValidationError as exc:
         first = exc.errors()[0]
-        where = ".".join(str(p) for p in first.get("loc", ())) or "params"
-        raise RuleParamError(f"{where}: {first.get('msg')}") from exc
+        where = ".".join(str(p) for p in first.get("loc", ()))
+        msg = str(first.get("msg", "")).removeprefix("Value error, ")
+        raise RuleParamError(f"{where}: {msg}" if where else msg) from exc
 
 
 @dataclass
@@ -218,5 +243,9 @@ def evaluate(kind: str, params: dict, observed: dict | None, prev_state: dict | 
             f"{desc} of {name}, above your {params['pct']:g}% position limit." if new else "",
             {"over": over, "new": new},
         )
+
+    if kind == "compound":
+        r = alert_compound.evaluate(params, observed, prev_state, ticker=ticker, portfolio_name=portfolio_name)
+        return Evaluation(r.condition, r.observed, r.state, r.fire, r.title, r.message, r.data)
 
     raise RuleParamError(f"Unknown alert kind '{kind}'")

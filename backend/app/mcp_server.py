@@ -21,7 +21,7 @@ import hashlib
 import logging
 import secrets
 import uuid
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import desc, select, update
@@ -409,39 +409,17 @@ def build_server():
                              llm_model: str | None = None) -> dict[str, Any]:
         """[research scope] Start a multi-agent AI analysis of a ticker. Returns the run id; poll list_runs and
         then call get_run_report once it completes. Uses the user's LLM keys (spends credits)."""
-        from app.models.run import Run
-        from app.schemas.run import RunCreateRequest
-        from app.services.job_manager import start_run
-        from app.services.llm_selection import pick_llm_for_user
-        from app.utils.asset_type import is_crypto
-        from app.utils.tradingagents_analysts import normalize_analysts
+        from app.services.run_launcher import LaunchError, launch_run
 
         user_id = _require_research()
         sym = _ticker(ticker)
         async with AsyncSessionLocal() as db:
             user = await _user(db, user_id)
-            if not llm_provider:
-                picked = await pick_llm_for_user(db, user)
-                if picked is None:
-                    raise ToolError("No LLM provider key is configured; add one in Settings.")
-                llm_provider, llm_model = picked
             try:
-                req = RunCreateRequest(ticker=sym, analysis_date=date.today(), llm_provider=llm_provider,
-                                       llm_model=llm_model or "", depth=depth)
-            except ValueError as exc:
+                run = await launch_run(db, user, sym, label="via MCP", depth=depth,
+                                       llm_provider=llm_provider, llm_model=llm_model)
+            except LaunchError as exc:
                 raise ToolError(str(exc)) from exc
-            run = Run(created_by=user_id, ticker=sym, analysis_date=req.analysis_date, llm_provider=req.llm_provider,
-                      llm_model=req.llm_model, depth=req.depth,
-                      analysts=normalize_analysts(req.analysts, exclude_fundamentals=is_crypto(sym)),
-                      response_language=req.response_language, label="via MCP")
-            db.add(run)
-            await db.commit()
-            await db.refresh(run)
-        await start_run(str(run.id), {
-            "ticker": run.ticker, "analysis_date": str(run.analysis_date), "llm_provider": run.llm_provider,
-            "llm_model": run.llm_model, "depth": run.depth, "analysts": run.analysts,
-            "response_language": run.response_language,
-        })
         return {"run_id": str(run.id), "ticker": sym, "status": "running", "llm": f"{run.llm_provider}/{run.llm_model}",
                 "link": f"{base}/runs/{run.id}/live"}
 
