@@ -271,9 +271,17 @@ async def update_rule(rule_id: UUID, body: RuleUpdate, db: AsyncSession = Depend
     rule = await _own_rule(db, rule_id, user)
     if body.params is not None:
         try:
-            rule.params = validate_params(rule.kind, body.params)
+            params = validate_params(rule.kind, body.params)
         except RuleParamError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if rule.kind == "compound":
+            # The ticker/portfolio were checked against the old scope; a new scope
+            # without them would leave a rule that can never be evaluated.
+            if rule_scope(rule.kind, params) != rule_scope(rule.kind, rule.params):
+                raise HTTPException(status_code=422, detail="Changing between one ticker and a portfolio's holdings needs a new rule")
+            if alert_compound.needs_portfolio(params) and rule.portfolio_id is None:
+                raise HTTPException(status_code=422, detail="A portfolio-weight condition needs a portfolio")
+        rule.params = params
         rule.state = None  # a new threshold starts a fresh edge/baseline
     if body.channels is not None:
         rule.channels = _channels(body.channels, rule.portfolio_id)

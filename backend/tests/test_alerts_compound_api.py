@@ -151,6 +151,19 @@ async def test_compound_rule_validation():
         upd = await c.patch(f"/alerts/rules/{rid}", json={"rerun_analysis": True}, headers=h)
         assert upd.json()["rerun_analysis"] is True
 
+        # PATCHing a compound rule's params can't switch it to a scope it lacks a ticker/portfolio for.
+        cid = (await c.post("/alerts/rules", json={"kind": "compound", "ticker": "NLX", "params": {
+            "conditions": [{"type": "ma"}]}}, headers=h)).json()["id"]
+        for params, needle in [
+            (SEMIS_BEAR_BELOW_200, "needs a new rule"),
+            ({"conditions": [{"type": "weight_above", "pct": 5}]}, "needs a portfolio"),
+        ]:
+            r = await c.patch(f"/alerts/rules/{cid}", json={"params": params}, headers=h)
+            assert r.status_code == 422 and needle in r.text, r.text
+        ok = await c.patch(f"/alerts/rules/{cid}", json={"params": {"op": "or", "conditions": [
+            {"type": "ma"}, {"type": "regime", "regime": "Bear"}]}}, headers=h)
+        assert ok.status_code == 200 and ok.json()["params"]["op"] == "or"
+
 
 # ── re-run the analysis when it fires ─────────────────────────────────────────
 
