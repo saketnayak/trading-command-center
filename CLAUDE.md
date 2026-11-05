@@ -59,6 +59,12 @@ Local Postgres from `docker compose -f docker-compose.dev.yml up db` is mapped t
 
 ---
 
+## Documentation
+
+User-facing guides live in `docs/wiki/` (one page per feature, plus Getting started, What's new, Configuration and Troubleshooting) and are published to the GitHub wiki with `scripts/publish-wiki.sh`. When a change is visible to users, update its wiki page and `Whats-New.md`, and the README's feature sections if it adds or removes a feature, alongside the section here.
+
+---
+
 ## Architecture
 
 ### Backend (`backend/`)
@@ -248,13 +254,13 @@ CORS is restricted to `settings.frontend_url`.
 
 **Elliott Wave analysis (`backend/elliott_wave/`):** Self-contained package vendored into the repo. Entry point is `services/wave_service.py` which wraps the package in async helpers. Architecture: `AnalysisOrchestrator` (top-level) → `SwingDetector` (ZigZag pivots) + `ElliottEngine` (wave labelling) + `FibonacciEngine` (retracement/extension levels) + `SignalEngine` (trade region scoring) + `ChartPayloadService` (Plotly-ready JSON). Results are cached in-process for 4 hours keyed by `ticker:period:interval:profile`. Four analysis profiles: `full_confluence`, `elliott_focused`, `fib_only`, `swing_only`. The `GET /wave/{ticker}` endpoint returns a compact summary (scenario, direction, trade zone, confidence) suitable for badges; `POST /wave/{ticker}/analyze` returns the full chart payload for the `WavePanel` Plotly chart. The portfolio batch endpoint (`GET /portfolio/{id}/wave`) runs summaries concurrently for all holdings via `asyncio.gather` with a semaphore(5) cap.
 
-**Watchlist & Scheduler:** `watchlist.py` router manages per-user watchlists (one per user, auto-created on first access). Each `WatchlistItem` stores ticker, LLM config, and an optional cron expression. `services/scheduler.py` wraps APScheduler 4.x `AsyncScheduler`. On startup it calls `start_in_background()` (required — `__aenter__` alone leaves the scheduler in `RunState.stopped`) then `_reload_jobs()` to register all enabled items. After every watchlist mutation the router calls `reload_jobs()` so changes take effect without restart. Additionally, a system-level daily job (`daily_portfolio_insights`, weekdays 09:15 UTC) calls `_fire_daily_portfolio_insights()`, which picks the first configured LLM provider key and generates a `PortfolioInsight` for every portfolio that has holdings and no insight in the last 12 hours.
+**Watchlist & Scheduler:** `watchlist.py` router manages per-user watchlists (one per user, auto-created on first access). Each `WatchlistItem` stores ticker, LLM config, and an optional cron expression. `services/scheduler.py` wraps APScheduler 4.x `AsyncScheduler`. On startup it calls `start_in_background()` (required — `__aenter__` alone leaves the scheduler in `RunState.stopped`) then `_reload_jobs()` to register all enabled items. After every watchlist mutation the router calls `reload_jobs()` so changes take effect without restart. Additionally, a system-level job (`daily_portfolio_insights`, weekdays hourly at :15 UTC) calls `_fire_daily_portfolio_insights()`, which picks the first configured LLM provider key and generates a `PortfolioInsight` for every portfolio where it is 9 AM in its delivery timezone, that has holdings and no insight in the last 12 hours.
 
 **WebSocket:** `ws_manager` (singleton in `websocket_manager.py`) maintains `dict[run_id, list[WebSocket]]`. The WS endpoint at `/ws/runs/{run_id}` loops on `receive_text()` to keep the connection alive; clients send `"ping"` every 30 s.
 
 **Encryption:** API keys are stored encrypted. `services/encryption.py` derives a `Fernet` key from the 64-hex-char `ENCRYPTION_KEY` setting.
 
-**Config:** All settings are in `app/config.py` via pydantic-settings. Env var names: `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FRONTEND_URL`, `SEC_USER_AGENT` (name and contact email EDGAR asks for). For local inference: `OLLAMA_HOST` (default `http://localhost:11434`) and `VLLM_BASE_URL` (default `http://localhost:8080`) are read via `getattr(settings, ..., default)` — add them to `config.py` if you need to override the defaults.
+**Config:** All settings are in `app/config.py` via pydantic-settings. Env var names: `DATABASE_URL`, `JWT_SECRET`, `ENCRYPTION_KEY`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FRONTEND_URL`, `SEC_USER_AGENT` (name and contact email EDGAR asks for). `SEC_USER_AGENT` identifies the app to SEC EDGAR. Local model servers (Ollama, vLLM, LiteLLM) are not env vars: their base URL is stored like a key in Settings → API Keys and passed to the runner (`trading_agent_runner` sets `OLLAMA_HOST` from it per run). The learning loop reads `TRADINGAGENTS_RESULTS_DIR` (default `./results`).
 
 **TradingAgents version:** `tradingagents>=0.7.0,<0.8.0` (PyPI, Mai0313 fork). The `backend/patches/` install-time monkey-patch pipeline was removed when upgrading from 0.3.2; the technical analyst is now folded into the upstream `market` analyst. Legacy `"technical"` analyst selections are silently normalised to `"market"` by `app/utils/tradingagents_analysts.py`. `propagate()` now returns `(state, recommendation)` — a structured `TradeRecommendation` object with `.signal` (BUY/SELL/HOLD), `.rationale`, `.entry_reference_price`, `.stop_loss`, `.target_price` — replacing the free-text signal string. `_parse_verdict` and `_extract_trader_decision` in `trading_agent_runner.py` consume these structured fields directly.
 
