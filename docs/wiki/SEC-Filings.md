@@ -35,6 +35,6 @@ One summary is written per filing and shared by everyone on your AgentFloor who 
 
 Filings refresh every weekday night at 23:40 UTC, when you open the tab and the data is more than a day old (it says "Checking EDGAR…" while it works), and when you press **Refresh**. The first visit takes a few seconds per holding.
 
-**Self-hosting**: set `SEC_USER_AGENT` to your name and email ([Configuration](Configuration.md)). The SEC asks every client to identify itself and may block anonymous traffic.
+**Self-hosting**: set `SEC_USER_AGENT` to your name and email ([Configuration](Configuration.md)). The SEC rejects clients without a contact email, so the tab shows a setup message until this is set.
 
 Not yet covered: 13F fund holdings, earnings-call transcripts, and changes in the MD&A section.

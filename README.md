@@ -278,7 +278,7 @@ Finnhub powers live portfolio prices, outcome tracking, earnings calendar, funda
 
 AgentFloor checks Finnhub endpoint access in Settings and warns when a key lacks required plan rights, such as premium-only news.
 
-**No key needed** for daily price history, dividends, SEC filings, exchange rates and wallet balances. If you self-host, set `SEC_USER_AGENT` in your `.env` to your name and email (the SEC asks every client to identify itself).
+**No key needed** for daily price history, dividends, SEC filings, exchange rates and wallet balances. The SEC filings tab needs one setting: `SEC_USER_AGENT` in your `.env`, set to your name and email, because the SEC rejects clients without a contact email.
 
 ### Step 2 — Set up your portfolio
 
@@ -454,7 +454,7 @@ DATABASE_URL=postgresql://agentfloor:agentfloor@localhost:5433/agentfloor \
 | `SMTP_USER` | | |
 | `SMTP_PASSWORD` | | |
 | `SMTP_FROM` | | From address for invite and alert emails |
-| `SEC_USER_AGENT` | Recommended | Your name and email for SEC EDGAR (SEC filings tab), e.g. `"Jane Doe jane@example.com"` |
+| `SEC_USER_AGENT` | For SEC filings | Your name and email for SEC EDGAR, which rejects clients without one; the SEC filings tab stays off until it is set, e.g. `"Jane Doe jane@example.com"` |
 | `TRADINGAGENTS_RESULTS_DIR` | | Where the learning loop keeps per-user agent memories (default `./results`) |
 
 LLM, Finnhub and JEV Lab keys, and the address of a local model server (Ollama, vLLM, LiteLLM), are entered in **Settings → API Keys**, not as environment variables. More in the [Configuration guide](docs/wiki/Configuration.md), including every scheduled job and its time.
@@ -508,7 +508,7 @@ python -m pytest tests/test_auth.py                          # single file
 python -m pytest tests/test_auth.py::test_register_first_user_is_admin
 ```
 
-Tests require a running Postgres instance (`docker compose -f docker-compose.dev.yml up db -d`) with migrations applied (`uv run alembic upgrade head`). **The suite empties every table of the database in `DATABASE_URL` at the start of each run**, so point it at a development database, never one with data you want to keep. External services (Yahoo Finance, SEC EDGAR, LLMs) are faked in the tests.
+Tests require a running Postgres instance (`docker compose -f docker-compose.dev.yml up db -d`) with migrations applied (`uv run alembic upgrade head`). The suite creates its own uniquely named database on that server for the run and drops it afterwards, so your data in `DATABASE_URL` is left alone; the role needs permission to create databases. External services (Yahoo Finance, SEC EDGAR, LLMs) are faked in the tests.
 
 Frontend:
 

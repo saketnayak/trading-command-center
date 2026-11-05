@@ -81,6 +81,7 @@ export interface FilingsReport {
   insiders: InsiderSummary[];
   syncing: boolean;
   llm_available: boolean;
+  needs_contact: boolean;
   holdings: number;
 }
 

@@ -29,7 +29,7 @@ Already installed? `agentfloor update` pulls the latest version and runs the dat
 
 Everything else needs no key: daily price history and dividends come from Yahoo Finance, SEC filings from SEC EDGAR, exchange rates from the ECB, and wallet balances from public blockchain APIs.
 
-Optional but recommended: set `SEC_USER_AGENT` in your `.env` to your name and email (see [Configuration](Configuration.md)); the SEC asks every client to identify itself.
+For the SEC filings tab, set `SEC_USER_AGENT` in your `.env` to your name and email (see [Configuration](Configuration.md)); the SEC rejects clients without a contact email.
 
 ## 3. Load a portfolio
 
