@@ -8,6 +8,7 @@ import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
 import type { IncomeReport } from "./income";
 import type { ReplacementIdeas, TaxReport } from "./tax";
 import type { NetWorthItemInput, NetWorthRange, NetWorthReport } from "./netWorth";
+import type { BacktestDetail, BacktestInput, BacktestMeta, BacktestSummary, Leaderboard } from "./backtest";
 import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
 import type { CostBasisMethod, ImportResult, LedgerSummary, LedgerTx, TxInput } from "./ledger";
 import type { ResponseLanguage } from "./responseLanguage";
@@ -1070,3 +1071,21 @@ export const deleteNetWorthValuation = (id: string, date: string) =>
 
 export const syncNetWorthWallet = (id: string) =>
   apiJson<{ ok: boolean; sync_error: string | null }>(`/net-worth/items/${id}/sync`, { method: "POST" });
+
+// ── Backtest Lab and model leaderboard ───────────────────────────────────────
+
+export const getBacktestMeta = () => apiJson<BacktestMeta>("/backtests/meta");
+
+export const listBacktests = () => apiJson<BacktestSummary[]>("/backtests");
+
+export const getBacktest = (id: string) => apiJson<BacktestDetail>(`/backtests/${id}`);
+
+export const createBacktest = (body: BacktestInput) =>
+  apiJson<BacktestSummary>("/backtests", { method: "POST", body: JSON.stringify(body) });
+
+export const abortBacktest = (id: string) => apiJson<{ status: string }>(`/backtests/${id}/abort`, { method: "POST" });
+
+export const deleteBacktest = (id: string) => apiJson<void>(`/backtests/${id}`, { method: "DELETE" });
+
+export const getLeaderboard = (groupBy: "model" | "depth" | "analysts") =>
+  apiJson<Leaderboard>(`/runs/leaderboard?group_by=${groupBy}`);
