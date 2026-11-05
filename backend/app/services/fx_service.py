@@ -1,6 +1,6 @@
 """
 FX rate service — converts USD prices to a user's preferred display currency.
-Source: Frankfurter (https://api.frankfurter.app), ECB-backed, free, no API key.
+Source: Frankfurter (https://api.frankfurter.dev), ECB-backed, free, no API key.
 Rates are cached process-wide for 24 hours; degrades to 1.0 (USD pass-through)
 if the upstream call fails.
 """
@@ -23,9 +23,10 @@ _FX_TTL = 86_400  # 24 hours
 async def _refresh_rates() -> None:
     global _rates_expiry
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
+        # api.frankfurter.app now 301-redirects here; follow any later move too.
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
             r = await client.get(
-                "https://api.frankfurter.app/latest",
+                "https://api.frankfurter.dev/v1/latest",
                 params={"from": "USD", "to": _TARGETS},
             )
             r.raise_for_status()

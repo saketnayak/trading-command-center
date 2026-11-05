@@ -84,6 +84,7 @@ Local Postgres from `docker compose -f docker-compose.dev.yml up db` is mapped t
 | (none) | `portfolio_ledger.py` | Transaction ledger: `/portfolio/{id}/transactions` (list, add, `PATCH`/`DELETE /{tx_id}`, `POST /import` with `dry_run`), `/portfolio/{id}/ledger` (summary `GET`, `POST /bootstrap`, `PUT /settings`, `DELETE`); see *Transaction ledger* below |
 | (none) | `portfolio_income.py` | `GET /portfolio/{id}/income` (forward dividend income, yield, yield on cost, 12-month calendar, income received, goal progress, reinvestment projection) and `PUT /portfolio/{id}/income/target` (monthly income goal, `null` clears); see *Dividend income* below |
 | (none) | `portfolio_tax.py` | Tax tools for ledger-backed portfolios: `GET /portfolio/{id}/tax?year=&min_loss=` (realised gains by tax year with wash-sale adjustments, loss-harvest candidates) and `GET /portfolio/{id}/tax/replacements?symbol=` (correlated ETFs); see *Tax tools* below |
+| (none) | `net_worth.py` | Household net worth: `GET /net-worth?range=6m\|ytd\|1y\|3y\|5y` (totals, category split, items, portfolios, series), `/net-worth/items` (`POST`, `PATCH`/`DELETE /{id}`), `POST`/`DELETE /net-worth/items/{id}/valuations[/{date}]`, `POST /net-worth/items/{id}/sync` (wallets); see *Net worth* below |
 | (none) | `mcp_tokens.py` | Personal access tokens for the MCP server: `GET/POST /mcp-tokens`, `DELETE /mcp-tokens/{id}` (revoke). The token is returned once; only its SHA-256 is stored |
 | `/mcp` | `app/mcp_server.py` | The MCP server itself (not a FastAPI router; see *MCP server* below) |
 | (none) | `alerts.py` | Alert rules CRUD (`/alerts/rules`), dry-run `POST /alerts/rules/{id}/check`, inbox (`GET /alerts/events`, `GET /alerts/unread-count`, `POST /alerts/events/read`); see *Alerts* below |
@@ -154,12 +155,27 @@ CORS is restricted to `settings.frontend_url`.
 
   Ledger changes invalidate it.
 
+**Net worth (`models/net_worth.py`, `services/net_worth_calc.py`, `services/wallet_service.py`, `routers/net_worth.py`):**
+- **Items:** `net_worth_items` holds what a user owns or owes outside their portfolios. Each has a `kind` (asset/liability), a category (`ASSET_CATEGORIES` / `LIABILITY_CATEGORIES`), a name, a currency and notes. Values live in `net_worth_valuations(item_id, date, value)`: each update records a value on a date, and the latest value on or before a day is the item's value that day. An item counts from its first value; at least one value must remain. Limit: 200 items per user.
+- **Crypto wallets:** a wallet item has `wallet_chain` btc|eth and a public address. Its valuations hold coin balances, priced at report time from the price store (`BTC-USD`/`ETH-USD`) × the USD → display rate.
+  - Balances are read-only, with no keys: BTC from mempool.space, native ETH from a public JSON-RPC node.
+  - Sync happens on create, on demand, and nightly (`wallet_sync`, 23:20 UTC).
+  - A failed sync keeps the last balance and stores `sync_error`.
+- **Report:** portfolios use their Performance series (mode `auto`) and count from where it starts. `net_worth_calc` (pure) forward-fills everything onto the portfolios' trading days, or weekly points for 3Y/5Y. It returns assets, liabilities, net worth, the debt ratio, and the split by category (portfolios grouped as "Portfolios"). It also flags manual values older than 180 days. All conversions use today's FX rate.
+- **Frontend:** the `/net-worth` page (`components/networth/NetWorthView.tsx`, helpers in `lib/netWorth.ts`, figure in `lib/netWorthChart.ts`) has:
+  - a headline with the change over the range, range pills and tiles;
+  - a net-worth/liabilities chart with a note naming items that start inside the range;
+  - category bars;
+  - an add form (asset, liability or wallet);
+  - per-item Update value (any past date), History (delete a value), Sync and Remove;
+  - the portfolio list.
+
 **MCP server (`app/mcp_server.py`, `models/mcp_token.py`, `routers/mcp_tokens.py`):** AgentFloor is exposed to MCP clients (Claude Code/Desktop, Cursor, …) at `/mcp` (behind nginx `https://<host>/api/mcp`).
 - **Transport:** FastMCP from the `mcp` SDK in stateless Streamable HTTP mode with JSON responses (no SSE, so nginx needs no change). `mcp` arrives transitively via `chainlit` in `uv.lock`: it could not be declared directly because `uv lock` currently fails for the Python 3.14/Windows split (tradingagents 0.7 is unavailable there). The app still boots without it, and then `/mcp` answers 503.
 - **Routing:** `McpDispatch` (ASGI middleware added in `main.py`) hands exactly `/mcp` and `/mcp/` to the MCP app and everything else to FastAPI. A `Mount("/mcp")` would only match `/mcp/...`. The session manager runs inside the FastAPI lifespan.
 - **Auth:** `PatVerifier` (FastMCP `TokenVerifier`) resolves `Authorization: Bearer af_...` to the user via the SHA-256 lookup. It rejects revoked or expired tokens and records `last_used_at` at most every 5 min. Tools read the caller from `get_access_token()`, and every query is scoped to that user.
 - **Scopes and tools:**
-  - `read`: `list_portfolios`, `get_holdings`, `get_performance`, `get_risk`, `get_rebalance_plan`, `get_regime`, `list_runs`, `get_run_report`, `get_latest_insight`, `list_alerts`, `get_income`, `get_tax_report`.
+  - `read`: `list_portfolios`, `get_holdings`, `get_performance`, `get_risk`, `get_rebalance_plan`, `get_regime`, `list_runs`, `get_run_report`, `get_latest_insight`, `list_alerts`, `get_income`, `get_tax_report`, `get_net_worth`.
   - `research` (opt-in when creating the token) adds `start_analysis` (creates a Run labelled "via MCP" with the user's default LLM) and `generate_portfolio_insight`.
   - No tool places orders and JEV Lab is not exposed.
 - **DNS-rebinding:** host checking is disabled on purpose. Every request needs a bearer token that a rebinding page cannot attach, and the check would reject proxied hosts.
@@ -196,7 +212,7 @@ CORS is restricted to `settings.frontend_url`.
 
 **TradingAgents runtime patches (`services/tradingagents_grounding.py`):** Two runtime patches applied at the start of each `execute_run` call (idempotent, module-level flags). Neither modifies site-packages. (1) `apply_analyst_specific_grounding_patch()` — tightens the grounding check so an analyst section is only marked as evidence-based when the ToolMessage belongs to *that analyst's* tool set, preventing cross-analyst contamination. (2) `apply_reasoning_effort_patch()` — patches `tradingagents.llm._apply_reasoning` to skip the `reasoning_effort` kwarg when `OPENAI_BASE_URL` points to a non-native OpenAI endpoint (Groq, IONOS); both providers use an OpenAI-compatible API but reject this parameter with HTTP 400.
 
-**Tests:** All tests share one event loop (`asyncio_default_test_loop_scope = "session"` in pyproject.toml). The `clean_db` session-scoped autouse fixture in `conftest.py` TRUNCATEs all tables before each test session: `users, runs, agent_events, reports, api_keys, run_outcomes, watchlists, watchlist_items, portfolios, portfolio_snapshots, portfolio_holdings, …, jev_sessions, jev_ticks, price_bars, alert_rules, alert_events, portfolio_targets, mcp_tokens, portfolio_transactions, dividend_history, dividend_sync` (see `conftest.py` for the full list).
+**Tests:** All tests share one event loop (`asyncio_default_test_loop_scope = "session"` in pyproject.toml). The `clean_db` session-scoped autouse fixture in `conftest.py` TRUNCATEs all tables before each test session: `users, runs, agent_events, reports, api_keys, run_outcomes, watchlists, watchlist_items, portfolios, portfolio_snapshots, portfolio_holdings, …, jev_sessions, jev_ticks, price_bars, alert_rules, alert_events, portfolio_targets, mcp_tokens, portfolio_transactions, dividend_history, dividend_sync, net_worth_items, net_worth_valuations` (see `conftest.py` for the full list).
 
 ### Frontend (`frontend/`)
 
@@ -218,6 +234,7 @@ CORS is restricted to `settings.frontend_url`.
 - `/runs/performance` — accuracy stats (7d/14d/30d/90d) and outcomes table across all completed runs
 - `/watchlist` — ticker watchlist with visual schedule builder; per-item manual run trigger
 - `/portfolio` — portfolio manager with primary tabs **Holdings**, **Performance** (growth-of-100 vs a benchmark, drawdown, trailing returns, contribution; Auto/Actual/What-if holdings and 1M–5Y ranges), **Risk** (VaR headline, risk vs value share, correlation heatmap and clusters, stress scenarios, 1-year Monte Carlo fan), **Rebalance** (targets, drift and a trade plan), **Transactions** (the transaction ledger: trades, income, lots, realised gains, CSV import), **Income** (forward dividend income, yield on cost, 12-month calendar, income received, a monthly goal, reinvestment projection), **AI Insights**, **Earnings**, **News**, plus Chat, Thesis and **Tax** (realised gains by tax year with wash sales, loss-harvest candidates; ledger-backed portfolios) in the overflow menu. **Holdings** (CSV upload, live prices via Finnhub, unrealized P&L, inline row editing, CSV export; stats bar with best/worst performer and stale count; per-row "Watch" button to add to watchlist; expandable ▸ fundamentals strip per holding), **AI Insights** (generate / view AI-powered portfolio briefings — health score, action items, risk alerts, sector exposure), **Earnings** (upcoming earnings calendar for portfolio tickers, 60-day window), and **News** (merged company news feed). Multiple portfolios per user; each portfolio holds versioned snapshots.
+- `/net-worth` — household net worth: portfolios plus manual assets, liabilities and crypto wallets, with a chart over 6M–5Y, the split by category, and per-item value history
 - `/alerts` — alert inbox (unread highlighted, mark read, delivery problems shown per event) and rules (create with a live preview sentence, enable/disable, delete, Check now). `?ticker=&kind=` prefills the form.
 - `/settings` — MCP access tokens for every user (create, revoke, client config snippets); API key management (Finnhub for portfolio prices + outcome tracking; LLM providers including IONOS; JEV Lab keys: Alpaca paper Key ID + Secret, Vercel AI Gateway, TypeSafe) + team admin (admin-only). Invite URL is shown inline when SMTP is not configured.
 - `/jev` — JEV Lab (nav link only when `enable_jev_loop` is on): split explainer, start form (symbol check, shadow/paper, duration, threshold/limit overrides), session list

@@ -154,7 +154,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 - Evaluated by an APScheduler job (every 15 min in market hours, plus after each nightly job). Delivered through the existing `delivery_service` (email, Telegram, Slack, webhook) and an **in-app inbox** with a nav badge.
 - This is the base for the natural-language rules in 3.2.
 
-#### 1.6 MCP server (S–M) ✅ shipped (12 tools at launch, 14 with `get_income` and `get_tax_report`: 12 read, 2 research; personal access tokens with scopes and expiry)
+#### 1.6 MCP server (S–M) ✅ shipped (12 tools at launch, 15 with `get_income`, `get_tax_report` and `get_net_worth`: 13 read, 2 research; personal access tokens with scopes and expiry)
 - Expose AgentFloor as an MCP server (Streamable HTTP, mounted on the FastAPI app or as a sidecar).
 - **Read tools by default**: `list_portfolios`, `get_holdings`, `get_performance`, `get_risk`, `get_regime`, `get_wave`, `get_latest_insight`, `list_runs`, `get_report`.
 - An **opt-in "research" scope** adds `start_run` and `generate_insight`.
@@ -184,7 +184,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 - **Wash-sale guard**: warn when a buy in *any* account or portfolio falls within ±30 days of a loss sale.
 - Clear "not tax advice" labelling, as with the existing research-only disclaimers.
 
-#### 2.4 Multi-asset net worth (S–M)
+#### 2.4 Multi-asset net worth (S–M) ✅ shipped (a /net-worth page: manual assets and liabilities with dated value history, read-only BTC and native-ETH wallets by public address, a net-worth chart from 1.2's valuations, category split, MCP `get_net_worth`; still open: household-wide allocation targets, ERC-20 tokens and xpubs)
 - Manual assets and liabilities (cash, real estate, private holdings, loans), as in Kubera and Wealthfolio.
 - Crypto wallets by public address, read-only, through the existing `crypto_data_service` and CoinGecko.
 - A net-worth chart on top of 1.2's valuations. Allocation targets (1.4) can then cover the whole household.

@@ -18,6 +18,7 @@ export const JEV_NAV_ITEM: NavItem = { href: "/jev", label: "JEV Lab" };
 
 export const PRIMARY_NAV: NavItem[] = [
   { href: "/portfolio", label: "Portfolio", prefetchPortfolio: true },
+  { href: "/net-worth", label: "Net worth" },
   { href: "/watchlist", label: "Watchlist" },
   { href: "/market", label: "Market" },
   { href: "/alerts", label: "Alerts", alertBadge: true },

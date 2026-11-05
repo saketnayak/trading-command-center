@@ -25,6 +25,7 @@ from app.models import portfolio_target  # noqa: F401, E402
 from app.models import mcp_token  # noqa: F401, E402
 from app.models import portfolio_transaction  # noqa: F401, E402
 from app.models import dividend  # noqa: F401, E402
+from app.models import net_worth  # noqa: F401, E402
 
 _DEFAULT_DATABASE_URL = "postgresql://agentfloor:agentfloor@localhost:5433/agentfloor"
 _PLACEHOLDER_INI_URL = "driver://user:pass@localhost/dbname"
