@@ -444,6 +444,7 @@ Your analysis should:
 9. Where regime data is provided, note regime-conflicted positions (e.g. AI said Buy but regime is Bear) and regime-supported positions
 10. Where MEASURED figures are provided, use them for risk alerts and the summary: quote them exactly, raise "correlated_positions" for listed clusters, treat a holding whose risk share far exceeds its value share as concentration risk, and never state a return, volatility or drawdown figure that is not in the data
 11. Where RECENT SEC FILINGS are provided, mention material ones (form and date) in risk alerts or action items; describe them only as given, never add details
+12. Where ETF LOOK-THROUGH is provided, use it for concentration risk: quote the figures exactly, and say they are minimums because only part of each fund is itemised.
 
 Respond ONLY with a single valid JSON object matching this exact schema (no markdown, no explanation):
 {{
@@ -491,6 +492,19 @@ def _parse_insight_json(raw: str) -> dict:
     if start == -1 or end == 0:
         raise ValueError("No JSON object found in LLM response")
     return json.loads(text[start:end])
+
+
+async def _xray_block(portfolio_id, display_currency: str) -> str:
+    """ETF look-through lines (stored fund data only), or "". Never raises."""
+    from app.services import fund_lookthrough_service, lookthrough_calc
+
+    try:
+        async with AsyncSessionLocal() as xdb:
+            report = await fund_lookthrough_service.build_report(xdb, portfolio_id, display_currency=display_currency)
+        return lookthrough_calc.prompt_block(report)
+    except Exception:  # noqa: BLE001
+        logger.warning("look-through unavailable for portfolio %s", portfolio_id, exc_info=True)
+        return ""
 
 
 async def _filings_block(portfolio_id) -> str:
@@ -692,7 +706,8 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                 holdings=enriched,
                 investor_profile=investor_profile,
                 regime_map=regime_map,
-                measured_block=insight_metrics.prompt_block(measured, pref_currency) + await _filings_block(portfolio.id),
+                measured_block=insight_metrics.prompt_block(measured, pref_currency) + await _filings_block(portfolio.id)
+                + await _xray_block(portfolio.id, pref_currency),
             )
 
             raw_response = await _call_llm(llm_provider, llm_model, llm_key, prompt)

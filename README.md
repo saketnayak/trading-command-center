@@ -21,6 +21,7 @@
 
 | | |
 |---|---|
+| 🔬 **ETF X-ray** | What you really own through your funds: exposure by company and sector, and overlap between funds ([guide](docs/wiki/ETF-X-ray.md)) |
 | 📄 **SEC filings** | What changed in your holdings' 10-K, 10-Q and 8-K filings, plus insider buys and sells, with AI summaries that must quote the filing ([guide](docs/wiki/SEC-Filings.md)) |
 | 🔔 **Alerts in plain English** | "Tell me if any semiconductor holding goes Bear and drops below its 200-day" becomes a rule you check before saving; optionally re-run the analysis when it fires ([guide](docs/wiki/Alerts.md)) |
 | 🧪 **Backtest Lab and learning loop** | Replay the agents on past dates against simple baselines, see which model calls it best, and let the agents learn from outcomes ([guide](docs/wiki/Backtest-Lab-and-Learning.md)) |
@@ -149,6 +150,7 @@ Performance, Risk and Rebalance are measured from five years of daily price hist
 | **Income** | Forward dividend income, yield and yield on cost, a 12-month calendar, income received, a monthly goal and a 10-year reinvestment projection |
 | **Tax** | Realised gains by tax year (Form 8949 layout), wash sales across all your portfolios, loss-harvest candidates with similar funds (informational, simplified US rules) |
 | **SEC filings** | 10-K/10-Q risk-factor changes vs the previous report, 8-K events, and insider buys/sells from Form 4, with AI summaries that must quote the filing and link to the passage |
+| **ETF X-ray** | True exposure by company and sector through your ETFs and funds, overlap between funds, and concentration before and after looking through them. Full holdings from SEC filings where available, otherwise Yahoo's top 10, always labelled |
 
 Guides: [Portfolio analytics](docs/wiki/Portfolio-Analytics.md) · [Transactions, income and tax](docs/wiki/Transactions-Income-and-Tax.md) · [SEC filings](docs/wiki/SEC-Filings.md)
 
@@ -172,7 +174,7 @@ Rules on price levels, daily moves, 50/200-day averages, Markov regime changes, 
 
 ### Use it from Claude, Cursor and other AI assistants (MCP)
 
-Create a personal access token in **Settings → MCP access** and connect any MCP client. 14 read tools cover portfolios, performance, risk, rebalancing, income, tax, net worth, filings, runs, insights and alerts; two opt-in research tools can start an analysis or a briefing. There is no order tool. [Guide](docs/wiki/MCP-Server.md)
+Create a personal access token in **Settings → MCP access** and connect any MCP client. 15 read tools cover portfolios, performance, risk, rebalancing, income, tax, net worth, filings, runs, insights and alerts; two opt-in research tools can start an analysis or a briefing. There is no order tool. [Guide](docs/wiki/MCP-Server.md)
 
 ### Scheduled delivery
 

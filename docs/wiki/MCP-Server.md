@@ -42,6 +42,7 @@ The Settings page fills in your host and token for you.
 - `get_performance`, `get_risk`, `get_rebalance_plan`
 - `get_income`, `get_tax_report`, `get_net_worth`
 - `get_filings`
+- `get_xray`
 - `get_regime`
 - `list_runs`, `get_run_report`, `get_latest_insight`
 - `list_alerts`

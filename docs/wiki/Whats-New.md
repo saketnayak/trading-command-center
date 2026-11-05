@@ -2,6 +2,14 @@
 
 Everything below arrived in **November 2026** as part of the [2026 feature roadmap](https://github.com/saketnayak/trading-command-center/blob/main/docs/feature-roadmap-2026.md). Run `agentfloor update` to get it; database changes are applied automatically when the backend starts.
 
+## ETF X-ray
+See what you really own through your funds: "You hold 21.3% NVDA: 16.7% directly and 4.7% through 3 funds".
+- **Exposure** by company and sector, counted across direct holdings and funds.
+- **Overlap** between funds, and concentration before and after looking through them.
+- **Honest coverage**: each fund shows its source, date and how much of it is itemised.
+
+Works with no setup using Yahoo's top holdings; `SEC_USER_AGENT` adds full holdings from SEC filings. → [ETF X-ray](ETF-X-ray.md)
+
 ## SEC filings, with summaries you can check ([#66](https://github.com/saketnayak/trading-command-center/pull/66))
 A new **SEC filings** tab (Portfolio → ⋯) shows:
 - **10-K and 10-Q**: risk-factor changes vs the previous report.

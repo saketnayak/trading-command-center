@@ -19,6 +19,7 @@ const VALID_TABS: readonly PortfolioTab[] = [
   "chat",
   "thesis",
   "filings",
+  "xray",
   "tax",
 ];
 
@@ -47,6 +48,7 @@ const BASE_TAB_DEFINITIONS: PortfolioTabDefinition[] = [
   { id: "chat", label: "Chat", tier: "overflow" },
   { id: "thesis", label: "Thesis", tier: "overflow" },
   { id: "filings", label: "SEC filings", tier: "overflow", hideWhenAllCrypto: true },
+  { id: "xray", label: "ETF X-ray", tier: "overflow", hideWhenAllCrypto: true },
   { id: "tax", label: "Tax", tier: "overflow" },
 ];
 

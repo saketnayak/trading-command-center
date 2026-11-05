@@ -20,6 +20,7 @@ from app.services.dividend_service import refresh_tracked_dividends
 from app.services.wallet_service import sync_all_wallets
 from app.services.learning_service import run_learning_pass
 from app.services.filing_digest_service import refresh_all_holdings as refresh_sec_filings
+from app.services.fund_lookthrough_service import refresh_all_holdings as refresh_fund_profiles
 from app.utils.cron_validation import normalize_schedule_cron, parse_cron_trigger
 
 logger = logging.getLogger(__name__)
@@ -326,6 +327,13 @@ async def start_scheduler() -> AsyncScheduler:
         refresh_sec_filings,
         CronTrigger(day_of_week="mon-fri", hour=23, minute=40),
         id="sec_filings_refresh",
+        conflict_policy="replace",
+    )
+    # ETF look-through: fund holdings change slowly and are stale after a week
+    await _scheduler.add_schedule(
+        refresh_fund_profiles,
+        CronTrigger(day_of_week="sun", hour=22, minute=30),
+        id="fund_profiles_refresh",
         conflict_policy="replace",
     )
     # Alert rules (price, regime, verdict, portfolio) every 15 minutes
