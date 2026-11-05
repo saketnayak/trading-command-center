@@ -15,6 +15,8 @@ class Portfolio(Base):
     # derived from portfolio_transactions, and snapshot writes are refused.
     holdings_source: Mapped[str] = mapped_column(String(16), default="snapshot", server_default="snapshot")
     cost_basis_method: Mapped[str] = mapped_column(String(16), default="fifo", server_default="fifo")
+    # Monthly dividend income the user is aiming for (display currency); optional.
+    income_target_monthly: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     snapshots = relationship("PortfolioSnapshot", back_populates="portfolio", cascade="all, delete-orphan")
     insights = relationship("PortfolioInsight", back_populates="portfolio", cascade="all, delete-orphan")

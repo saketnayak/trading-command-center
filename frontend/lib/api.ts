@@ -5,6 +5,7 @@ import { performanceQueryParams, type PerformanceMode, type PerformanceRange, ty
 import type { PortfolioRisk, RiskLookback } from "./risk";
 import type { AlertCheck, AlertEvent, AlertRule, CreateAlertRuleRequest } from "./alerts";
 import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
+import type { IncomeReport } from "./income";
 import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
 import type { CostBasisMethod, ImportResult, LedgerSummary, LedgerTx, TxInput } from "./ledger";
 import type { ResponseLanguage } from "./responseLanguage";
@@ -1028,3 +1029,13 @@ export const setCostBasisMethod = (portfolioId: string, method: CostBasisMethod)
   });
 
 export const clearLedger = (portfolioId: string) => apiJson<void>(`/portfolio/${portfolioId}/ledger`, { method: "DELETE" });
+
+// ── Dividend income ───────────────────────────────────────────────────────────
+
+export const getPortfolioIncome = (portfolioId: string) => apiJson<IncomeReport>(`/portfolio/${portfolioId}/income`);
+
+export const setIncomeTarget = (portfolioId: string, monthly: number | null) =>
+  apiJson<{ monthly: number | null }>(`/portfolio/${portfolioId}/income/target`, {
+    method: "PUT",
+    body: JSON.stringify({ monthly }),
+  });

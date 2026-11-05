@@ -16,6 +16,7 @@ from app.services.job_manager import start_run
 from app.services.jev_session_manager import prune_old_ticks
 from app.services.price_history_service import refresh_tracked_price_history
 from app.services.alert_engine import evaluate_all_alerts
+from app.services.dividend_service import refresh_tracked_dividends
 from app.utils.cron_validation import normalize_schedule_cron, parse_cron_trigger
 
 logger = logging.getLogger(__name__)
@@ -294,6 +295,13 @@ async def start_scheduler() -> AsyncScheduler:
         refresh_tracked_price_history,
         CronTrigger(day_of_week="mon-fri", hour=22, minute=30),
         id="price_history_refresh",
+        conflict_policy="replace",
+    )
+    # Dividend history for the Income tab, after the price refresh
+    await _scheduler.add_schedule(
+        refresh_tracked_dividends,
+        CronTrigger(day_of_week="mon-fri", hour=23, minute=5),
+        id="dividend_refresh",
         conflict_policy="replace",
     )
     # Alert rules (price, regime, verdict, portfolio) every 15 minutes

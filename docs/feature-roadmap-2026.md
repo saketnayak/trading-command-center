@@ -154,7 +154,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 - Evaluated by an APScheduler job (every 15 min in market hours, plus after each nightly job). Delivered through the existing `delivery_service` (email, Telegram, Slack, webhook) and an **in-app inbox** with a nav badge.
 - This is the base for the natural-language rules in 3.2.
 
-#### 1.6 MCP server (S–M) ✅ shipped (12 tools: 10 read, 2 research; personal access tokens with scopes and expiry)
+#### 1.6 MCP server (S–M) ✅ shipped (12 tools at launch, 13 with `get_income`: 11 read, 2 research; personal access tokens with scopes and expiry)
 - Expose AgentFloor as an MCP server (Streamable HTTP, mounted on the FastAPI app or as a sidecar).
 - **Read tools by default**: `list_portfolios`, `get_holdings`, `get_performance`, `get_risk`, `get_regime`, `get_wave`, `get_latest_insight`, `list_runs`, `get_report`.
 - An **opt-in "research" scope** adds `start_run` and `generate_insight`.
@@ -173,7 +173,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
   - presets for Fidelity, Schwab, IBKR Flex, Robinhood, Vanguard and Zerodha.
 - Unlocks realised P&L, exact TWR/MWR (replacing the estimated flows in 1.2), dividends (2.2), tax tools (2.3) and broker sync (4.1).
 
-#### 2.2 Dividend & income tracker (S–M)
+#### 2.2 Dividend & income tracker (S–M) ✅ shipped (as an Income tab: forward income, yield and yield on cost, 12-month ex-date calendar, income received from the ledger or estimated, per-portfolio monthly goal, DRIP projection; MCP `get_income`; still open: pay dates (yfinance only gives ex-dates) and per-account DRIP settings)
 - Dividend history from the ledger; upcoming ex-dividend and pay dates (Finnhub or yfinance).
 - Forward 12-month income projection, yield on cost, monthly income calendar, and DRIP modelling.
 - Matches the investor profile's `income_goal` ("you're 62% of the way to $1,500/mo").

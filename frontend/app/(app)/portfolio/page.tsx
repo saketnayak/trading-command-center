@@ -52,6 +52,7 @@ import { PerformancePanel } from "@/components/portfolio/PerformancePanel";
 import { PortfolioRiskPanel } from "@/components/portfolio/PortfolioRiskPanel";
 import { RebalancePanel } from "@/components/portfolio/RebalancePanel";
 import { TransactionsPanel } from "@/components/portfolio/TransactionsPanel";
+import { IncomePanel } from "@/components/portfolio/IncomePanel";
 import { InsightsDashboard } from "@/components/portfolio/InsightsDashboard";
 import { PortfolioStatsBar } from "@/components/portfolio/PortfolioStatsBar";
 import { EarningsPanel } from "@/components/portfolio/EarningsPanel";
@@ -718,6 +719,16 @@ function PortfolioPageContent() {
                 aria-labelledby="portfolio-tab-transactions"
               >
                 <TransactionsPanel portfolioId={selectedId} hasHoldings={hasHoldings} />
+              </div>
+            )}
+
+            {tab === "income" && (
+              <div
+                id="portfolio-panel-income"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-income"
+              >
+                <IncomePanel portfolioId={selectedId} />
               </div>
             )}
 
