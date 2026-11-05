@@ -223,6 +223,11 @@ async def test_get_starts_a_background_refresh_and_post_forces_one(edgar, llm):
 
         assert (await other.get(f"/portfolio/{pid}/filings", headers=oh)).status_code == 404
         assert (await other.post(f"/portfolio/{pid}/filings/refresh", headers=oh)).status_code == 404
+        # Holdings with no SEC filer (the CIK map is loaded by now) don't trigger a refresh on every visit.
+        funds = await _portfolio(c, h, [(1, {"NOTSEC-USD": 1})])
+        out = (await c.get(f"/portfolio/{funds}/filings", headers=h)).json()
+        assert out["syncing"] is False and out["no_filer"] == ["NOTSEC-USD"] and not filings_router._tasks
+
         empty = (await c.post("/portfolio", json={"name": "Empty"}, headers=h)).json()["id"]
         assert (await c.post(f"/portfolio/{empty}/filings/refresh", headers=h)).status_code == 422
         assert (await c.get(f"/portfolio/{empty}/filings", headers=h)).json()["filings"] == []

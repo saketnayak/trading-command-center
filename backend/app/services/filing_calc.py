@@ -435,8 +435,13 @@ def validate_digest(raw: str, excerpts: dict[str, str]) -> dict | None:
 
 
 def quote_link(url: str, quote: str) -> str:
-    """A text-fragment link that scrolls the filing to the quote (Chromium, Safari)."""
-    from urllib.parse import quote as q
+    """A text-fragment link that scrolls the filing to the quote (Chromium, Safari).
+    "-" and "," are syntax in a text fragment (prefix-/-suffix, start,end), so they
+    are percent-encoded inside the quoted text."""
+    from urllib.parse import quote as _q
+
+    def q(text: str, safe: str = "") -> str:
+        return _q(text, safe=safe).replace("-", "%2D")
 
     words = quote.split()
     if len(words) > 8:  # start,end form keeps the URL short

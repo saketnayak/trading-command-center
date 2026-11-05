@@ -137,6 +137,9 @@ def test_prompts_links_and_brief_block():
     assert fc.quote_link("https://x/doc.htm", "short quote here") == "https://x/doc.htm#:~:text=short%20quote%20here"
     assert fc.quote_link("https://x/d", "one two three four five six seven eight nine") == (
         "https://x/d#:~:text=one%20two%20three%20four,six%20seven%20eight%20nine")
+    # "-" and "," would read as fragment syntax, so they are encoded inside the text.
+    assert fc.quote_link("https://x/d", "third-party foundries, assembly") == (
+        "https://x/d#:~:text=third%2Dparty%20foundries%2C%20assembly")
 
     report = {"days": 30, "filings": [
         {"ticker": "SECA", "form": "10-Q", "filed_date": "2026-10-30", "summary": "Risk factors vs ...",

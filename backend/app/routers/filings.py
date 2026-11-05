@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.portfolio import Portfolio
+from app.models.sec_filing import SecCik
 from app.models.user import User
 from app.services import edgar_service, filing_digest_service
 
@@ -51,7 +52,11 @@ async def get_filings(portfolio_id: UUID, days: int = Query(90, ge=7, le=120),
     tickers = await edgar_service.held_tickers(db, portfolio_id)
     out = await filing_digest_service.report(db, tickers, days=days)
     last = out["last_synced_at"]
-    stale = bool(tickers) and (last is None or datetime.now(timezone.utc) - datetime.fromisoformat(last) > STALE_AFTER)
+    if out["covered"]:
+        stale = last is None or datetime.now(timezone.utc) - datetime.fromisoformat(last) > STALE_AFTER
+    else:
+        # No holding files with the SEC (funds, crypto) — refresh only to load the ticker → CIK map.
+        stale = bool(tickers) and (await db.execute(select(SecCik.ticker).limit(1))).first() is None
     if stale:
         _start_refresh(portfolio_id, tickers, force=False)
     out["syncing"] = str(portfolio_id) in filing_digest_service.running
