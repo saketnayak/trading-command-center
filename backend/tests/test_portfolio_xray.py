@@ -138,6 +138,32 @@ async def test_with_a_contact_nport_gives_full_holdings_and_skips_sibling_funds(
     assert world["edgar_calls"].count(SIBLING_DOC) == 1  # only the opening bytes of the sibling's filing
 
 
+async def test_a_stock_sharing_a_ticker_with_an_sec_fund_stays_a_stock(world, monkeypatch):
+    _with_edgar(world, monkeypatch, TODAY - timedelta(days=60))
+    world["edgar"][service.MF_TICKERS_URL] = json.dumps({"fields": ["cik", "seriesId", "classId", "symbol"],
+                                                         "data": [[TRUST, SERIES, "C1", "XRSTK"]]})
+    async with _client() as c:
+        h = await _token(c, "xr8@example.com")
+        pid = await _portfolio(c, h, [(1, {"XRSTK": 1})])
+        await service.refresh(["XRSTK"], force=True)
+        out = await _xray(c, h, pid)
+    assert out["funds"] == [] and out["exposures"][0]["ticker"] == "XRSTK"
+    assert NPORT_DOC not in world["edgar_calls"]
+
+
+async def test_a_ticker_yahoo_cannot_find_is_never_guessed_to_be_a_fund(world, monkeypatch):
+    _with_edgar(world, monkeypatch, TODAY - timedelta(days=60))
+    world["yahoo"].pop("XRFUND")
+    async with _client() as c:
+        h = await _token(c, "xr9@example.com")
+        pid = await _portfolio(c, h, [(1, {"XRFUND": 1})])
+        report = await service.refresh(["XRFUND"], force=True)
+        out = await _xray(c, h, pid)
+    assert report["failed"] == ["XRFUND"]
+    assert out["funds"] == [] and "XRFUND" in out["failed"]
+    assert NPORT_DOC not in world["edgar_calls"]
+
+
 async def test_an_old_nport_falls_back_to_yahoo(world, monkeypatch):
     _with_edgar(world, monkeypatch, TODAY - timedelta(days=service.MAX_NPORT_AGE_DAYS + 5))
     async with _client() as c:

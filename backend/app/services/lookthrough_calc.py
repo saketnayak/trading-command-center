@@ -32,7 +32,7 @@ _SECTOR_LABELS = {
     "energy": "Energy",
     "healthcare": "Healthcare",
 }
-_NAME_SUFFIXES = {"inc", "incorporated", "corp", "corporation", "co", "company", "ltd", "limited", "plc",
+_NAME_SUFFIXES = {"inc", "incorporated", "corp", "corporation", "co", "company", "companies", "cos", "ltd", "limited", "plc",
                   "sa", "nv", "ag", "se", "lp", "llc", "the", "de", "class", "cl", "a", "b", "c", "common",
                   "stock", "shares", "ordinary", "new"}
 
@@ -46,6 +46,12 @@ def normalize_name(name: str) -> str:
     words = re.sub(r"[^a-z0-9& ]+", " ", name.lower().replace(".", "")).split()
     kept = [w for w in words if w not in _NAME_SUFFIXES]
     return " ".join(kept or words)
+
+
+def name_key(name: str) -> str:
+    """Matching key for one company's names across sources: 'Amazon.com Inc' and 'AMAZON COM INC', or
+    'Corning Inc' and 'CORNING INC /NY'. The SEC appends a state after a slash, so that part is dropped."""
+    return normalize_name(name.split("/", 1)[0]).replace(" ", "")
 
 
 def _local(tag: str) -> str:
@@ -98,11 +104,11 @@ def parse_nport(xml_text: str) -> dict:
 
 def resolve_holdings(rows: list[dict], by_ticker: dict[str, int], by_name: dict[str, tuple[str, int]]) -> list[dict]:
     """Give each row a `key`, so a company's share classes add up: its SEC CIK when known, else the
-    ticker, else the name. by_ticker: ticker → CIK; by_name: normalized name → (ticker, CIK)."""
+    ticker, else the name. by_ticker: ticker → CIK; by_name: name_key → (ticker, CIK)."""
     merged: dict[str, dict] = {}
     for r in rows:
         ticker, cik = (r.get("ticker") or "").upper().replace(".", "-"), None
-        norm = normalize_name(r.get("name") or "")
+        norm = name_key(r.get("name") or "")
         if ticker in by_ticker:
             cik = by_ticker[ticker]
         elif not ticker and norm in by_name:

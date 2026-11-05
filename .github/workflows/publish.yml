@@ -5,6 +5,12 @@ on:
     branches: [main]
     tags: ["v*"]
 
+# One run per ref at a time, newest last, so `latest` is never left on an older commit when
+# PRs merge back to back. A newer push replaces a waiting run rather than cancelling the one building.
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   REGISTRY: ghcr.io
   BACKEND_IMAGE: ghcr.io/saketnayak/agentfloor-backend

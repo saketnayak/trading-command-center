@@ -41,11 +41,29 @@ def test_normalize_name(name, want):
     assert lc.normalize_name(name) == want
 
 
+@pytest.mark.parametrize("fund_name,sec_title", [
+    ("Amazon.com Inc", "AMAZON COM INC"),
+    ("Corning Inc", "CORNING INC /NY"),
+    ("Marriott International, Inc.", "MARRIOTT INTERNATIONAL INC /MD/"),
+    ("Vertex Pharmaceuticals Inc.", "VERTEX PHARMACEUTICALS INC / MA"),
+    ("Wells Fargo & Co", "WELLS FARGO & COMPANY/MN"),
+    ("TJX Cos Inc/The", "TJX COMPANIES INC /DE/"),
+    ("ARM Holdings PLC", "ARM HOLDINGS PLC /UK"),
+])
+def test_a_fund_holding_matches_the_sec_title_of_the_same_company(fund_name, sec_title):
+    assert lc.name_key(fund_name) == lc.name_key(sec_title)
+
+
+def test_different_companies_keep_different_keys():
+    assert lc.name_key("Meta Platforms Inc") != lc.name_key("Metaplatforms Holdings Corp")
+    assert lc.name_key("Apple Inc") != lc.name_key("Applied Materials Inc")
+
+
 def test_share_classes_of_one_company_add_up_and_unknown_names_stay_by_name():
     rows = [{"name": "Alphabet Inc Class A", "ticker": "GOOGL", "weight": 0.02},
             {"name": "Alphabet Inc Class C", "ticker": "", "weight": 0.015},
             {"name": "Private Co Ltd", "ticker": "", "weight": 0.01}]
-    out = lc.resolve_holdings(rows, {"GOOGL": 1652044}, {"alphabet": ("GOOGL", 1652044)})
+    out = lc.resolve_holdings(rows, {"GOOGL": 1652044}, {lc.name_key("Alphabet Inc."): ("GOOGL", 1652044)})
     assert out[0]["key"] == "cik:1652044" and out[0]["weight"] == pytest.approx(0.035)
     assert out[1]["key"] == "n:private" and out[1]["ticker"] is None
 
