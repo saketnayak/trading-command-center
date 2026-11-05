@@ -11,6 +11,7 @@ export const RESEARCH_NAV: NavItem[] = [
   { href: "/runs", label: "History" },
   { href: "/runs/performance", label: "Performance" },
   { href: "/runs/compare", label: "Compare" },
+  { href: "/runs/backtest", label: "Backtest" },
 ];
 
 /** Appended to Research only while the JEV Lab module is enabled in Settings. */
@@ -53,7 +54,8 @@ export function isNavItemActive(path: string, href: string): boolean {
       (path.startsWith("/runs/") &&
         path !== "/runs/new" &&
         path !== "/runs/performance" &&
-        path !== "/runs/compare")
+        path !== "/runs/compare" &&
+        !path.startsWith("/runs/backtest"))
     );
   }
   if (href === "/portfolio") {
