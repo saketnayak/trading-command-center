@@ -69,6 +69,7 @@ class TxPatch(BaseModel):
 class ImportIn(BaseModel):
     rows: list[dict] = Field(max_length=MAX_IMPORT_ROWS)
     dry_run: bool = True
+    replace_holdings: bool = False  # the user accepted losing holdings the ledger doesn't know about
 
 
 class BootstrapIn(BaseModel):
@@ -130,13 +131,15 @@ async def list_transactions(
 
 
 @router.post("/portfolio/{portfolio_id}/transactions", status_code=status.HTTP_201_CREATED)
-async def add_transaction(portfolio_id: UUID, body: TxIn, db: AsyncSession = Depends(get_db),
-                          user: User = Depends(get_current_user)):
+async def add_transaction(portfolio_id: UUID, body: TxIn, replace_holdings: bool = Query(False),
+                          db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     portfolio = await _own(db, portfolio_id, user)
     try:
         clean = _clean(body)
     except TxError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not replace_holdings:
+        await ledger_service.ensure_holdings_not_replaced(db, portfolio)
     row = PortfolioTransaction(portfolio_id=portfolio_id, seq=await ledger_service.next_seq(db, portfolio_id),
                                source="manual", **clean.model_dump())
     db.add(row)
@@ -179,7 +182,7 @@ async def delete_transaction(portfolio_id: UUID, tx_id: UUID, db: AsyncSession =
         PortfolioTransaction.id == tx_id, PortfolioTransaction.portfolio_id == portfolio_id))
     if not result.rowcount:
         raise HTTPException(status_code=404, detail="Transaction not found")
-    await ledger_service.sync_holdings(db, portfolio)
+    await ledger_service.sync_holdings(db, portfolio, discard_derived=True)  # deleting the last one is an undo
     await db.commit()
 
 
@@ -207,6 +210,8 @@ async def import_transactions(portfolio_id: UUID, body: ImportIn, db: AsyncSessi
         preview_warnings = replay(trial, portfolio.cost_basis_method or "fifo").warnings
     if body.dry_run or errors:
         return {"valid": len(clean), "errors": errors, "warnings": preview_warnings, "imported": 0}
+    if not body.replace_holdings:
+        await ledger_service.ensure_holdings_not_replaced(db, portfolio)
     seq = await ledger_service.next_seq(db, portfolio_id)
     for i, t in enumerate(clean):
         db.add(PortfolioTransaction(portfolio_id=portfolio_id, seq=seq + i, source="csv", **t.model_dump()))

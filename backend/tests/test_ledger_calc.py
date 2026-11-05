@@ -66,6 +66,12 @@ def test_split_scales_lots_and_selling_more_than_held_never_shorts():
     assert st.warnings and "only 20 were held" in st.warnings[0]
 
 
+def test_selling_with_nothing_held_says_the_buy_is_missing():
+    st = replay([T("2024-07-01", "SELL", "XYZ", 25, 60)])
+    assert st.realised == []
+    assert "no XYZ" in st.warnings[0] and "buy" in st.warnings[0] and "were held" not in st.warnings[0]
+
+
 def test_accounts_are_kept_apart():
     st = replay([T("2024-01-02", "BUY", "AAA", 5, 10, account="IRA"), T("2024-01-03", "BUY", "AAA", 5, 20, account="Taxable"),
                  T("2024-02-01", "SELL", "AAA", 5, 30, account="Taxable")])

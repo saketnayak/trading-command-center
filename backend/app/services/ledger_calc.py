@@ -187,6 +187,9 @@ def replay(txs: list[Tx], method: Method = "fifo") -> LedgerState:
             qty = tx.quantity
             if qty > held + QTY_EPS:
                 st.warnings.append(
+                    f"{tx.date.isoformat()}: sold {qty:g} {tx.symbol} in {acct} but the ledger has no {tx.symbol} "
+                    "by then; record the buy first, or this sale isn't counted (no short positions)."
+                    if held <= QTY_EPS else
                     f"{tx.date.isoformat()}: sold {qty:g} {tx.symbol} in {acct} but only {held:g} were held; "
                     "only the held quantity counts (no short positions)."
                 )
