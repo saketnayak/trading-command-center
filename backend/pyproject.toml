@@ -26,6 +26,7 @@ dependencies = [
     "scipy>=1.13.1",
     "yfinance>=0.2.54",
     "pykalman>=0.11.2",
+    "mcp>=1.27,<2",
 ]
 
 [project.optional-dependencies]
@@ -41,6 +42,13 @@ dev = [
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv.sources]
+# Every tradingagents release has been removed from the PyPI index (the project
+# page lists no files), so `uv lock` cannot resolve it from the registry. Pin the
+# exact 0.7.0 wheel, which is still served by PyPI's file host; uv.lock keeps
+# its sha256.
+tradingagents = { url = "https://files.pythonhosted.org/packages/2d/12/00736cc7d5092137da186c4a3efe4a827acefee388bbe9c255c8fb80fd84/tradingagents-0.7.0-py3-none-any.whl" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["app", "elliott_wave", "jev_loop"]
