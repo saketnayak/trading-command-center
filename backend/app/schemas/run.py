@@ -59,5 +59,9 @@ class RunResponse(BaseModel):
     suggested_stop: str | None = None
     suggested_target: str | None = None
     price_currency: str | None = None
+    # The model's known training cutoff, and whether the analysis date is on or before it
+    # (the model may already know what happened next).
+    training_cutoff: str | None = None
+    hindsight_risk: bool = False
 
     model_config = ConfigDict(from_attributes=True)

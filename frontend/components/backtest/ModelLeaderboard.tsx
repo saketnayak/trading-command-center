@@ -62,6 +62,7 @@ export function ModelLeaderboard() {
       {q.data && (
         <p className="mt-2 text-[11px] leading-relaxed text-muted">
           {q.data.note} Numbers in brackets are the BUY/SELL calls scored.
+          {q.data.excluded_in_sample > 0 && ` ${q.data.excluded_in_sample} run${q.data.excluded_in_sample === 1 ? "" : "s"} on dates before the model's training cutoff are left out: the model may have known the outcome.`}
           {!q.data.benchmark_available && q.data.groups.length > 0 && " SPY prices aren't available, so excess return is blank."}
         </p>
       )}

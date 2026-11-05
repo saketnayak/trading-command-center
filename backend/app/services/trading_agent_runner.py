@@ -203,7 +203,12 @@ async def execute_run(run_id: str, config: dict) -> None:
 
         stored_key = await _get_stored_key(provider)
 
+        # With the learning loop on, the run reads (only) its owner's own memories.
+        from app.services.learning_service import live_results_dir
+        owner_results = await live_results_dir(run_id)
+
         ta_config = TradingAgentsConfig(
+            **({"results_dir": owner_results} if owner_results else {}),
             llm_provider=ta_provider,
             deep_think_llm=model,
             quick_think_llm=model,

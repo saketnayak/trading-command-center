@@ -9,6 +9,7 @@ import type { IncomeReport } from "./income";
 import type { ReplacementIdeas, TaxReport } from "./tax";
 import type { NetWorthItemInput, NetWorthRange, NetWorthReport } from "./netWorth";
 import type { BacktestDetail, BacktestInput, BacktestMeta, BacktestSummary, Leaderboard } from "./backtest";
+import type { LearningStatus } from "./learning";
 import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
 import type { CostBasisMethod, ImportResult, LedgerSummary, LedgerTx, TxInput } from "./ledger";
 import type { ResponseLanguage } from "./responseLanguage";
@@ -1089,3 +1090,14 @@ export const deleteBacktest = (id: string) => apiJson<void>(`/backtests/${id}`, 
 
 export const getLeaderboard = (groupBy: "model" | "depth" | "analysts") =>
   apiJson<Leaderboard>(`/runs/leaderboard?group_by=${groupBy}`);
+
+// ── Learning loop ─────────────────────────────────────────────────────────────
+
+export const getLearning = () => apiJson<LearningStatus>("/learning");
+
+export const putLearning = (body: { enabled: boolean; horizon_days: number }) =>
+  apiJson<LearningStatus>("/learning", { method: "PUT", body: JSON.stringify(body) });
+
+export const runLearning = () => apiJson<{ status: string }>("/learning/run", { method: "POST" });
+
+export const clearLearningMemories = () => apiJson<void>("/learning/memories", { method: "DELETE" });
