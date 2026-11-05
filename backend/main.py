@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,9 +6,10 @@ from sqlalchemy import update
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.run import Run, RunStatus
-from app.routers import auth, runs, api_keys, users, llm_providers, watchlist, portfolio, ticker, tickers, admin, market, investor_profile, regime, wave, kalman, jev, settings as settings_router
+from app.routers import auth, runs, api_keys, users, llm_providers, watchlist, portfolio, ticker, tickers, admin, market, investor_profile, regime, wave, kalman, jev, portfolio_performance, portfolio_risk, portfolio_rebalance, alerts, mcp_tokens, portfolio_ledger, portfolio_income, portfolio_tax, net_worth, backtests, learning, filings, settings as settings_router
 from app.services.jev_session_manager import recover_interrupted_sessions
 from app.services.scheduler import start_scheduler, stop_scheduler
+from app.mcp_server import McpDispatch, mcp_server
 
 
 @asynccontextmanager
@@ -21,12 +22,21 @@ async def lifespan(_app: FastAPI):
         )
         await db.commit()
     await recover_interrupted_sessions()
+    from app.services.backtest_runner import recover_interrupted_backtests
+    await recover_interrupted_backtests()
     await start_scheduler()
-    yield
+    async with AsyncExitStack() as stack:
+        if mcp_server is not None:  # the MCP session manager needs its task group running
+            mcp_server.streamable_http_app()
+            await stack.enter_async_context(mcp_server.session_manager.run())
+        yield
     await stop_scheduler()
 
 
 app = FastAPI(title="AgentFloor API", lifespan=lifespan)
+
+# /mcp is the MCP server (Streamable HTTP, personal-access-token auth); see app/mcp_server.py.
+app.add_middleware(McpDispatch)
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,6 +63,18 @@ app.include_router(wave.router, tags=["wave"])
 app.include_router(kalman.router, tags=["kalman"])
 app.include_router(settings_router.router, tags=["settings"])
 app.include_router(jev.router, tags=["jev"])
+app.include_router(portfolio_performance.router, tags=["portfolio"])
+app.include_router(portfolio_risk.router, tags=["portfolio"])
+app.include_router(alerts.router, tags=["alerts"])
+app.include_router(portfolio_rebalance.router, tags=["portfolio"])
+app.include_router(mcp_tokens.router, tags=["mcp"])
+app.include_router(portfolio_ledger.router, tags=["portfolio"])
+app.include_router(portfolio_income.router, tags=["portfolio"])
+app.include_router(portfolio_tax.router, tags=["portfolio"])
+app.include_router(net_worth.router, tags=["net-worth"])
+app.include_router(backtests.router, tags=["backtests"])
+app.include_router(learning.router, tags=["learning"])
+app.include_router(filings.router, tags=["filings"])
 
 
 @app.get("/health")

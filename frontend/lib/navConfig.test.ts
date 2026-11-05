@@ -18,6 +18,9 @@ describe("navConfig", () => {
     expect(isNavItemActive("/runs/abc", "/runs")).toBe(true);
     expect(isNavItemActive("/runs/new", "/runs")).toBe(false);
     expect(isNavItemActive("/runs/compare", "/runs")).toBe(false);
+    expect(isNavItemActive("/runs/backtest", "/runs")).toBe(false);
+    expect(isNavItemActive("/runs/backtest/abc", "/runs")).toBe(false);
+    expect(isNavItemActive("/runs/backtest/abc", "/runs/backtest")).toBe(true);
   });
 
   it("marks compare only on compare routes", () => {

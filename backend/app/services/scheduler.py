@@ -14,6 +14,12 @@ from app.models.run import Run, RunStatus
 from app.models.watchlist import WatchlistItem, Watchlist
 from app.services.job_manager import start_run
 from app.services.jev_session_manager import prune_old_ticks
+from app.services.price_history_service import refresh_tracked_price_history
+from app.services.alert_engine import evaluate_all_alerts
+from app.services.dividend_service import refresh_tracked_dividends
+from app.services.wallet_service import sync_all_wallets
+from app.services.learning_service import run_learning_pass
+from app.services.filing_digest_service import refresh_all_holdings as refresh_sec_filings
 from app.utils.cron_validation import normalize_schedule_cron, parse_cron_trigger
 
 logger = logging.getLogger(__name__)
@@ -285,6 +291,48 @@ async def start_scheduler() -> AsyncScheduler:
         prune_old_ticks,
         CronTrigger(hour=3, minute=30),
         id="jev_tick_retention",
+        conflict_policy="replace",
+    )
+    # Daily adjusted closes for portfolio performance, after the US close
+    await _scheduler.add_schedule(
+        refresh_tracked_price_history,
+        CronTrigger(day_of_week="mon-fri", hour=22, minute=30),
+        id="price_history_refresh",
+        conflict_policy="replace",
+    )
+    # Dividend history for the Income tab, after the price refresh
+    await _scheduler.add_schedule(
+        refresh_tracked_dividends,
+        CronTrigger(day_of_week="mon-fri", hour=23, minute=5),
+        id="dividend_refresh",
+        conflict_policy="replace",
+    )
+    # Crypto wallet balances for Net worth, daily
+    await _scheduler.add_schedule(
+        sync_all_wallets,
+        CronTrigger(hour=23, minute=20),
+        id="wallet_sync",
+        conflict_policy="replace",
+    )
+    # Learning loop: reflect on runs whose outcome horizon has passed (opt-in users)
+    await _scheduler.add_schedule(
+        run_learning_pass,
+        CronTrigger(hour=1, minute=10),
+        id="learning_reflections",
+        conflict_policy="replace",
+    )
+    # SEC filings and insider trades for held tickers, with cited digests (EDGAR posts until 22:00 ET)
+    await _scheduler.add_schedule(
+        refresh_sec_filings,
+        CronTrigger(day_of_week="mon-fri", hour=23, minute=40),
+        id="sec_filings_refresh",
+        conflict_policy="replace",
+    )
+    # Alert rules (price, regime, verdict, portfolio) every 15 minutes
+    await _scheduler.add_schedule(
+        evaluate_all_alerts,
+        CronTrigger(minute="*/15"),
+        id="alert_evaluation",
         conflict_policy="replace",
     )
     return _scheduler

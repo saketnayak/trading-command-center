@@ -83,6 +83,28 @@ _CLOUD_KEY_ENV: dict[str, str] = {
 }
 
 
+def provider_env(provider: str, stored_key: str | None) -> dict[str, str]:
+    """Environment variables TradingAgents needs for a provider: API keys for cloud
+    providers, server URLs for local inference. Empty without a stored key."""
+    env: dict[str, str] = {}
+    if not stored_key:
+        return env
+    if provider == "ionos":
+        env["OPENAI_BASE_URL"] = "https://openai.inference.de-txl.ionos.com/v1"
+        env["OPENAI_API_KEY"] = stored_key
+    elif provider == "groq":
+        env["OPENAI_BASE_URL"] = "https://api.groq.com/openai/v1"
+        env["OPENAI_API_KEY"] = stored_key
+    elif provider in _CLOUD_KEY_ENV:
+        env[_CLOUD_KEY_ENV[provider]] = stored_key
+    elif provider == "ollama":
+        env["OLLAMA_HOST"] = stored_key.rstrip("/")
+    elif is_openai_compatible_local_provider(provider):
+        env["OPENAI_BASE_URL"] = openai_compatible_base_url(stored_key)
+        env["OPENAI_API_KEY"] = provider
+    return env
+
+
 async def _get_stored_key(provider: str) -> str | None:
     """Return the decrypted stored API key for any provider, or None."""
     from app.database import AsyncSessionLocal
@@ -181,7 +203,12 @@ async def execute_run(run_id: str, config: dict) -> None:
 
         stored_key = await _get_stored_key(provider)
 
+        # With the learning loop on, the run reads (only) its owner's own memories.
+        from app.services.learning_service import live_results_dir
+        owner_results = await live_results_dir(run_id)
+
         ta_config = TradingAgentsConfig(
+            **({"results_dir": owner_results} if owner_results else {}),
             llm_provider=ta_provider,
             deep_think_llm=model,
             quick_think_llm=model,
@@ -191,20 +218,7 @@ async def execute_run(run_id: str, config: dict) -> None:
 
         # Patch env vars needed by TradingAgents: API keys for cloud providers,
         # server URLs for local inference.
-        env_patch: dict[str, str] = {}
-        if provider == "ionos" and stored_key:
-            env_patch["OPENAI_BASE_URL"] = "https://openai.inference.de-txl.ionos.com/v1"
-            env_patch["OPENAI_API_KEY"] = stored_key
-        elif provider == "groq" and stored_key:
-            env_patch["OPENAI_BASE_URL"] = "https://api.groq.com/openai/v1"
-            env_patch["OPENAI_API_KEY"] = stored_key
-        elif provider in _CLOUD_KEY_ENV and stored_key:
-            env_patch[_CLOUD_KEY_ENV[provider]] = stored_key
-        elif provider == "ollama" and stored_key:
-            env_patch["OLLAMA_HOST"] = stored_key.rstrip("/")
-        elif is_openai_compatible_local_provider(provider) and stored_key:
-            env_patch["OPENAI_BASE_URL"] = openai_compatible_base_url(stored_key)
-            env_patch["OPENAI_API_KEY"] = provider
+        env_patch = provider_env(provider, stored_key)
 
         needs_lock = bool(env_patch)
         prev_env: dict[str, str | None] = {k: os.environ.get(k) for k in env_patch}

@@ -33,6 +33,10 @@ export interface Run {
   suggested_stop: string | null;
   suggested_target: string | null;
   price_currency: string | null;
+  /** The model's known training cutoff (approximate), when known. */
+  training_cutoff?: string | null;
+  /** True when the analysis date is on or before that cutoff: the model may know what happened next. */
+  hindsight_risk?: boolean;
 }
 
 export interface AgentEventPayload {
@@ -202,6 +206,8 @@ export interface Portfolio {
   created_at: string;
   last_snapshot_at: string | null;
   holding_count: number;
+  /** "ledger" when holdings are derived from the transaction ledger (read-only on the Holdings tab). */
+  holdings_source?: "snapshot" | "ledger";
 }
 
 export interface PortfolioSnapshot {

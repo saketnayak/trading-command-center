@@ -8,6 +8,8 @@ export const SETTINGS_SECTIONS: SettingsNavItem[] = [
   { id: "profile", label: "Profile" },
   { id: "investor-dna", label: "Investor DNA" },
   { id: "strategy", label: "Strategy" },
+  { id: "mcp-access", label: "MCP access" },
+  { id: "learning", label: "Learning loop" },
   { id: "llm-providers", label: "LLM Providers", adminOnly: true },
   { id: "data-providers", label: "Data Providers", adminOnly: true },
   { id: "jev-lab", label: "JEV Lab", adminOnly: true },

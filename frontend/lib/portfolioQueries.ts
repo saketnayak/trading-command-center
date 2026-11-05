@@ -10,6 +10,17 @@ export const portfolioQueryKeys = {
   trimSignals: (id: string) => ["portfolio-trim-signals", id] as const,
   earnings: (id: string) => ["portfolio-earnings", id] as const,
   news: (id: string) => ["portfolio-news", id] as const,
+  performance: (id: string, mode: string, range: string, benchmark: string) =>
+    ["portfolio-performance", id, mode, range, benchmark] as const,
+  risk: (id: string, lookback: string, benchmark: string) =>
+    ["portfolio-risk", id, lookback, benchmark] as const,
+  transactions: (id: string) => ["portfolio-transactions", id] as const,
+  ledger: (id: string) => ["portfolio-ledger", id] as const,
+  income: (id: string) => ["portfolio-income", id] as const,
+  tax: (id: string, year: number | null, minLoss: number) => ["portfolio-tax", id, year, minLoss] as const,
+  taxReplacements: (id: string, symbol: string) => ["portfolio-tax-replacements", id, symbol] as const,
+  rebalance: (id: string, mode: string, amount: number, wholeShares: boolean) =>
+    ["portfolio-rebalance", id, mode, amount, wholeShares] as const,
   behavioralAlerts: (id: string) => ["behavioralAlerts", id] as const,
   insightLatest: (id: string) => ["insight-latest", id] as const,
   insightsList: (id: string) => ["insights-list", id] as const,
@@ -29,6 +40,9 @@ export const PORTFOLIO_STALE_TIMES = {
   trimSignals: 30 * 60_000,
   earnings: 30 * 60_000,
   news: 15 * 60_000,
+  performance: 30 * 60_000,
+  risk: 30 * 60_000,
+  income: 30 * 60_000,
   behavioralAlerts: 5 * 60_000,
 } as const;
 
@@ -56,6 +70,13 @@ function appendPortfolioTabCacheKeys(
 
 export type PortfolioTab =
   | "holdings"
+  | "performance"
+  | "risk"
+  | "rebalance"
+  | "transactions"
+  | "income"
+  | "tax"
+  | "filings"
   | "insights"
   | "earnings"
   | "news"

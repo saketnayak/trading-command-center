@@ -36,6 +36,7 @@ type HoldingsMobileCardsProps = {
   editingId: string | null;
   editDraft: DraftRow;
   setEditDraft: React.Dispatch<React.SetStateAction<DraftRow>>;
+  readOnly?: boolean;
   onStartEdit: (holding: PortfolioHolding) => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
@@ -121,6 +122,7 @@ export function HoldingsMobileCards({
   editingId,
   editDraft,
   setEditDraft,
+  readOnly = false,
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
@@ -294,22 +296,26 @@ export function HoldingsMobileCards({
                     tone="primary"
                   />
                   <WatchButton ticker={holding.ticker} compact />
-                  <IconButton
-                    icon={Pencil}
-                    label={`Edit ${holding.ticker} holding`}
-                    title="Edit"
-                    tone="default"
-                    onClick={() => onStartEdit(holding)}
-                  />
-                  <IconButton
-                    icon={deletePending ? LoaderCircle : Trash2}
-                    label={`Delete ${holding.ticker} holding`}
-                    title="Delete"
-                    tone="danger"
-                    onClick={() => onDelete(holding.id)}
-                    disabled={deletePending}
-                    iconClassName={deletePending ? "animate-spin" : undefined}
-                  />
+                  {!readOnly && (
+                    <>
+                      <IconButton
+                        icon={Pencil}
+                        label={`Edit ${holding.ticker} holding`}
+                        title="Edit"
+                        tone="default"
+                        onClick={() => onStartEdit(holding)}
+                      />
+                      <IconButton
+                        icon={deletePending ? LoaderCircle : Trash2}
+                        label={`Delete ${holding.ticker} holding`}
+                        title="Delete"
+                        tone="danger"
+                        onClick={() => onDelete(holding.id)}
+                        disabled={deletePending}
+                        iconClassName={deletePending ? "animate-spin" : undefined}
+                      />
+                    </>
+                  )}
                 </>
               )}
             </div>

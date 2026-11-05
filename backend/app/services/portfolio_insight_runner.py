@@ -17,6 +17,7 @@ from app.models.portfolio import Portfolio, PortfolioSnapshot
 from app.models.portfolio_insight import PortfolioInsight, InsightStatus, InsightStance
 from app.models.run import Run, RunStatus
 from app.models.api_key import ApiKey
+from app.services import insight_metrics
 from app.services.encryption import decrypt_key
 from app.services.llm_provider_registry import (
     LOCAL_PROVIDER_LABELS,
@@ -324,6 +325,7 @@ def _build_prompt(
     holdings: list[dict],
     investor_profile=None,
     regime_map: Optional[dict] = None,
+    measured_block: str = "",
 ) -> str:
     rows = []
     for h in holdings:
@@ -429,7 +431,7 @@ Number of holdings: {len(holdings)}
 {profile_block}
 Holdings:
 {holdings_text}
-{regime_block}
+{regime_block}{measured_block}
 Your analysis should:
 1. Identify concentration risk (positions >20% of portfolio)
 2. Flag significant unrealized losses (>15% drawdown)
@@ -440,6 +442,8 @@ Your analysis should:
 7. Respect the investor's anti-portfolio rules — never recommend buying excluded sectors/assets
 8. Frame urgency and risk relative to the investor's stated time horizon and risk tolerance
 9. Where regime data is provided, note regime-conflicted positions (e.g. AI said Buy but regime is Bear) and regime-supported positions
+10. Where MEASURED figures are provided, use them for risk alerts and the summary: quote them exactly, raise "correlated_positions" for listed clusters, treat a holding whose risk share far exceeds its value share as concentration risk, and never state a return, volatility or drawdown figure that is not in the data
+11. Where RECENT SEC FILINGS are provided, mention material ones (form and date) in risk alerts or action items; describe them only as given, never add details
 
 Respond ONLY with a single valid JSON object matching this exact schema (no markdown, no explanation):
 {{
@@ -487,6 +491,37 @@ def _parse_insight_json(raw: str) -> dict:
     if start == -1 or end == 0:
         raise ValueError("No JSON object found in LLM response")
     return json.loads(text[start:end])
+
+
+async def _filings_block(portfolio_id) -> str:
+    """Recent SEC filings and insider trades for the holdings (stored data only), or "".
+    Never raises."""
+    from app.services import edgar_service, filing_calc, filing_digest_service
+
+    try:
+        async with AsyncSessionLocal() as fdb:
+            tickers = await edgar_service.held_tickers(fdb, portfolio_id)
+            report = await filing_digest_service.report(fdb, tickers, days=30)
+        return filing_calc.prompt_block(report)
+    except Exception:  # noqa: BLE001
+        logger.warning("filings unavailable for portfolio %s", portfolio_id, exc_info=True)
+        return ""
+
+
+async def _measured_metrics(portfolio_id, display_currency: str) -> Optional[dict]:
+    """1-year performance and risk summaries, or None if they cannot be computed.
+    Never raises: a brief without measured numbers beats no brief."""
+    from app.services.portfolio_performance_service import build_performance_report
+    from app.services.portfolio_risk_service import build_risk_report
+
+    try:
+        async with AsyncSessionLocal() as mdb:
+            perf = await build_performance_report(mdb, portfolio_id, display_currency=display_currency)
+            risk = await build_risk_report(mdb, portfolio_id, display_currency=display_currency)
+        return insight_metrics.summarize(perf, risk)
+    except Exception:  # noqa: BLE001
+        logger.warning("measured metrics unavailable for portfolio %s", portfolio_id, exc_info=True)
+        return None
 
 
 async def generate_portfolio_insight(insight_id: str) -> None:
@@ -642,6 +677,11 @@ async def generate_portfolio_insight(insight_id: str) -> None:
             total_pnl = (total_market_value - total_cost) if has_price and total_cost else None
             total_pnl_pct = ((total_market_value / total_cost - 1) * 100) if has_price and total_cost else None
 
+            # Measured performance and risk (from the price-history store), so the
+            # brief quotes computed numbers instead of guessing. Own session: the
+            # price refresh commits, and must not commit this insight's changes.
+            measured = await _measured_metrics(portfolio.id, pref_currency)
+
             # Build prompt and call LLM
             prompt = _build_prompt(
                 portfolio_name=portfolio.name,
@@ -652,6 +692,7 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                 holdings=enriched,
                 investor_profile=investor_profile,
                 regime_map=regime_map,
+                measured_block=insight_metrics.prompt_block(measured, pref_currency) + await _filings_block(portfolio.id),
             )
 
             raw_response = await _call_llm(llm_provider, llm_model, llm_key, prompt)
@@ -681,6 +722,7 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                 "total_pnl": round(total_pnl, 2) if total_pnl is not None else None,
                 "total_pnl_pct": round(total_pnl_pct, 2) if total_pnl_pct is not None else None,
                 "holdings": enriched,
+                "measured": measured,
             }
             insight.status = InsightStatus.completed
             _completed = True

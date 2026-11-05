@@ -10,14 +10,19 @@ import {
 describe("portfolioTabs", () => {
   it("recognizes valid tab ids", () => {
     expect(isPortfolioTab("holdings")).toBe(true);
+    expect(isPortfolioTab("performance")).toBe(true);
+    expect(isPortfolioTab("risk")).toBe(true);
+    expect(isPortfolioTab("rebalance")).toBe(true);
+    expect(isPortfolioTab("transactions")).toBe(true);
+    expect(isPortfolioTab("income")).toBe(true);
     expect(isPortfolioTab("trending")).toBe(false);
     expect(isPortfolioTab("invalid")).toBe(false);
   });
 
   it("splits primary and overflow tabs", () => {
     const groups = buildPortfolioTabGroups({ allCrypto: false });
-    expect(groups.primary.map((t) => t.id)).toEqual(["holdings", "insights", "earnings", "news"]);
-    expect(groups.overflow.map((t) => t.id)).toEqual(["chat", "thesis"]);
+    expect(groups.primary.map((t) => t.id)).toEqual(["holdings", "performance", "risk", "rebalance", "transactions", "income", "insights", "earnings", "news"]);
+    expect(groups.overflow.map((t) => t.id)).toEqual(["chat", "thesis", "filings", "tax"]);
   });
 
   it("hides earnings when portfolio is all crypto", () => {

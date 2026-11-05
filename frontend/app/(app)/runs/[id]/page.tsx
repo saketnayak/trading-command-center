@@ -183,6 +183,14 @@ export default function RunResultsPage() {
         }
       />
 
+      {run.hindsight_risk && (
+        <div className="rounded-lg border border-amber-700/40 bg-amber-900/10 px-4 py-3 text-sm text-amber-700 dark:text-amber-300" role="note">
+          This analyses {run.analysis_date}, on or before {run.llm_model}&apos;s training cutoff ({run.training_cutoff}, approximate).
+          The model may already know what happened next, so treat the call as a replay rather than a forecast. It is left out of the
+          model leaderboard.
+        </div>
+      )}
+
       {isRunning && (
         <div className="bg-surface border border-input-border rounded-lg px-4 py-3 text-sm text-fg-secondary">
           Run in progress —{" "}

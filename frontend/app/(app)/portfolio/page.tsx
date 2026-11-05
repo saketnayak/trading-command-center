@@ -48,6 +48,12 @@ import { PortfolioActions } from "@/components/portfolio/PortfolioActions";
 import { PortfolioHeader } from "@/components/portfolio/PortfolioHeader";
 import { UploadDrawer } from "@/components/portfolio/UploadDrawer";
 import { HoldingsTable } from "@/components/portfolio/HoldingsTable";
+import { PerformancePanel } from "@/components/portfolio/PerformancePanel";
+import { PortfolioRiskPanel } from "@/components/portfolio/PortfolioRiskPanel";
+import { RebalancePanel } from "@/components/portfolio/RebalancePanel";
+import { TransactionsPanel } from "@/components/portfolio/TransactionsPanel";
+import { IncomePanel } from "@/components/portfolio/IncomePanel";
+import { TaxPanel } from "@/components/portfolio/TaxPanel";
 import { InsightsDashboard } from "@/components/portfolio/InsightsDashboard";
 import { PortfolioStatsBar } from "@/components/portfolio/PortfolioStatsBar";
 import { EarningsPanel } from "@/components/portfolio/EarningsPanel";
@@ -58,6 +64,7 @@ import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsModal";
 import { SellCandidatesPanel } from "@/components/portfolio/SellCandidatesPanel";
 import { MorningBriefStrip } from "@/components/portfolio/MorningBriefStrip";
+import { FilingsPanel } from "@/components/portfolio/FilingsPanel";
 import { PortfolioTotalsSummary } from "@/components/portfolio/PortfolioTotalsSummary";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Briefcase } from "lucide-react";
@@ -461,6 +468,13 @@ function PortfolioPageContent() {
   });
 
   const selectedPortfolio = portfolios.find((p) => p.id === selectedId) ?? null;
+  const ledgerBacked = selectedPortfolio?.holdings_source === "ledger";
+  // Ledger-backed holdings are derived from transactions: "Import" opens the
+  // Transactions tab (CSV of transactions) instead of a holdings upload.
+  const openImport = useCallback(() => {
+    if (ledgerBacked) setTab("transactions");
+    else setUploadOpen(true);
+  }, [ledgerBacked, setTab]);
 
   async function handleExport() {
     if (!selectedId || !selectedPortfolio) return;
@@ -538,7 +552,7 @@ function PortfolioPageContent() {
                 isSyncing={isSyncing}
                 onRefreshClick={() => refetchCurrent()}
                 onSyncAllClick={() => syncAll()}
-                onUploadClick={() => setUploadOpen(true)}
+                onUploadClick={openImport}
                 onExportClick={handleExport}
                 onDeliveryClick={() => setDeliveryOpen(true)}
               />
@@ -612,6 +626,7 @@ function PortfolioPageContent() {
                 <MorningBriefStrip
                   portfolioId={selectedId}
                   onOpenInsights={() => setTab("insights")}
+                  onOpenFilings={allCrypto ? undefined : () => setTab("filings")}
                 />
                 {hasHoldings && (
                   <PortfolioStatsBar
@@ -640,7 +655,17 @@ function PortfolioPageContent() {
                     computedAt={trimSignals?.computed_at}
                   />
                 )}
+                {ledgerBacked && (
+                  <p className="rounded-md border border-blue-500/30 bg-blue-500/5 px-3 py-2 text-xs text-fg-secondary">
+                    These holdings come from your transaction ledger.{" "}
+                    <button type="button" className="text-blue-500 underline hover:text-blue-400" onClick={() => setTab("transactions")}>
+                      Record a trade in Transactions
+                    </button>{" "}
+                    to change them.
+                  </p>
+                )}
                 <HoldingsTable
+                  readOnly={ledgerBacked}
                   portfolioId={selectedId}
                   holdings={current.holdings}
                   priceUnavailableReason={current.price_unavailable_reason}
@@ -652,8 +677,81 @@ function PortfolioPageContent() {
                   trimSignals={markovEnabled ? trimByHoldingId : undefined}
                   tickerMetadata={tickerMetadata}
                   onTickerClick={setDrawerHolding}
-                  onUploadClick={() => setUploadOpen(true)}
+                  onUploadClick={openImport}
                 />
+              </div>
+            )}
+
+            {tab === "performance" && (
+              <div
+                id="portfolio-panel-performance"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-performance"
+              >
+                <PerformancePanel portfolioId={selectedId} />
+              </div>
+            )}
+
+            {tab === "risk" && (
+              <div
+                id="portfolio-panel-risk"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-risk"
+              >
+                <PortfolioRiskPanel portfolioId={selectedId} />
+              </div>
+            )}
+
+            {tab === "rebalance" && (
+              <div
+                id="portfolio-panel-rebalance"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-rebalance"
+              >
+                <RebalancePanel
+                  portfolioId={selectedId}
+                  trimEntries={markovEnabled ? trimSignals?.entries : undefined}
+                />
+              </div>
+            )}
+
+            {tab === "transactions" && (
+              <div
+                id="portfolio-panel-transactions"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-transactions"
+              >
+                <TransactionsPanel portfolioId={selectedId} hasHoldings={hasHoldings} />
+              </div>
+            )}
+
+            {tab === "income" && (
+              <div
+                id="portfolio-panel-income"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-income"
+              >
+                <IncomePanel portfolioId={selectedId} />
+              </div>
+            )}
+
+            {tab === "tax" && (
+              <div
+                id="portfolio-panel-tax"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-tax"
+              >
+                <TaxPanel portfolioId={selectedId} onOpenTransactions={() => setTab("transactions")} />
+              </div>
+            )}
+
+            {tab === "filings" && (
+              <div
+                id="portfolio-panel-filings"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-filings"
+              >
+                <FilingsPanel portfolioId={selectedId} />
               </div>
             )}
 

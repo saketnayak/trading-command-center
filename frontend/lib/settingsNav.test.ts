@@ -4,7 +4,7 @@ import { visibleSettingsSections } from "./settingsNav";
 describe("settingsNav", () => {
   it("shows core sections for all users", () => {
     const sections = visibleSettingsSections(false);
-    expect(sections.map((s) => s.id)).toEqual(["profile", "investor-dna", "strategy"]);
+    expect(sections.map((s) => s.id)).toEqual(["profile", "investor-dna", "strategy", "mcp-access", "learning"]);
   });
 
   it("includes admin sections for admins", () => {

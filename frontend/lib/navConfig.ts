@@ -2,6 +2,8 @@ export type NavItem = {
   href: string;
   label: string;
   prefetchPortfolio?: boolean;
+  /** Show the unread-alert count next to this item. */
+  alertBadge?: boolean;
 };
 
 export const RESEARCH_NAV: NavItem[] = [
@@ -9,6 +11,7 @@ export const RESEARCH_NAV: NavItem[] = [
   { href: "/runs", label: "History" },
   { href: "/runs/performance", label: "Performance" },
   { href: "/runs/compare", label: "Compare" },
+  { href: "/runs/backtest", label: "Backtest" },
 ];
 
 /** Appended to Research only while the JEV Lab module is enabled in Settings. */
@@ -16,8 +19,10 @@ export const JEV_NAV_ITEM: NavItem = { href: "/jev", label: "JEV Lab" };
 
 export const PRIMARY_NAV: NavItem[] = [
   { href: "/portfolio", label: "Portfolio", prefetchPortfolio: true },
+  { href: "/net-worth", label: "Net worth" },
   { href: "/watchlist", label: "Watchlist" },
   { href: "/market", label: "Market" },
+  { href: "/alerts", label: "Alerts", alertBadge: true },
   { href: "/settings", label: "Settings" },
 ];
 
@@ -49,7 +54,8 @@ export function isNavItemActive(path: string, href: string): boolean {
       (path.startsWith("/runs/") &&
         path !== "/runs/new" &&
         path !== "/runs/performance" &&
-        path !== "/runs/compare")
+        path !== "/runs/compare" &&
+        !path.startsWith("/runs/backtest"))
     );
   }
   if (href === "/portfolio") {

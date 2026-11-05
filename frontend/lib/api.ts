@@ -1,6 +1,18 @@
 import { getSession, signOut } from "next-auth/react";
 import type { Run, AgentEventPayload, CreateRunRequest, ApiKeyStatus, User, Report, RunStats, CompareResult, RunOutcome, PerformanceStats, Watchlist, WatchlistItem, AddWatchlistItemRequest, SchedulerJobsResponse, Portfolio, PortfolioSnapshot, PortfolioCurrentResponse, PortfolioInsight, GenerateInsightRequest, EarningsEvent, FundamentalsData, NewsArticle, BatchRunResult, TickerSnapshot, TickerMetadataResponse, MarketTicker, MoversResponse, SectorData, InvestorProfile, InvestorProfileUpsertRequest, ThesisCrossRef, BehavioralAlertsResponse, DeliverySettings, UpdateDeliverySettingsRequest, RegimeData, KalmanData, TrimSignalsResponse, WaveSummary, PortfolioEarningsResponse, PortfolioFundamentalsResponse, PortfolioNewsResponse } from "./types";
 import type { AnalyzeResponse } from "./wave/types";
+import { performanceQueryParams, type PerformanceMode, type PerformanceRange, type PortfolioPerformance } from "./performance";
+import type { PortfolioRisk, RiskLookback } from "./risk";
+import type { AlertCheck, AlertEvent, AlertRule, CompileResult, CreateAlertRuleRequest } from "./alerts";
+import type { FilingsReport } from "./filings";
+import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
+import type { IncomeReport } from "./income";
+import type { ReplacementIdeas, TaxReport } from "./tax";
+import type { NetWorthItemInput, NetWorthRange, NetWorthReport } from "./netWorth";
+import type { BacktestDetail, BacktestInput, BacktestMeta, BacktestSummary, Leaderboard } from "./backtest";
+import type { LearningStatus } from "./learning";
+import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
+import type { CostBasisMethod, ImportResult, LedgerSummary, LedgerTx, TxInput } from "./ledger";
 import type { ResponseLanguage } from "./responseLanguage";
 import type { AppSettings } from "./appSettings";
 import type { CreateJevSessionRequest, JevCalibration, JevMeta, JevSession, JevSymbolSpec, JevTick } from "./jev/types";
@@ -584,6 +596,48 @@ export async function getPortfolioTrimSignals(
   return data ?? { entries: [], computed_at: "" };
 }
 
+export async function getPortfolioPerformance(
+  portfolioId: string,
+  mode: PerformanceMode,
+  range: PerformanceRange,
+  benchmark: string
+): Promise<PortfolioPerformance> {
+  const r = await fetchWithAuth(
+    `/portfolio/${portfolioId}/performance?${performanceQueryParams(mode, range, benchmark)}`
+  );
+  if (!r.ok) {
+    let detail = `Failed to load performance (${r.status})`;
+    try {
+      const body = await r.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      /* keep the generic message */
+    }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
+export async function getPortfolioRisk(
+  portfolioId: string,
+  lookback: RiskLookback,
+  benchmark: string
+): Promise<PortfolioRisk> {
+  const params = new URLSearchParams({ lookback, benchmark: benchmark.trim().toUpperCase() });
+  const r = await fetchWithAuth(`/portfolio/${portfolioId}/risk?${params.toString()}`);
+  if (!r.ok) {
+    let detail = `Failed to load risk (${r.status})`;
+    try {
+      const body = await r.json();
+      if (typeof body?.detail === "string") detail = body.detail;
+    } catch {
+      /* keep the generic message */
+    }
+    throw new Error(detail);
+  }
+  return r.json();
+}
+
 export async function getPortfolioNews(portfolioId: string, days = 7): Promise<PortfolioNewsResponse> {
   const r = await fetchWithAuth(`/portfolio/${portfolioId}/news?days=${days}`);
   if (!r.ok) throw new Error("Failed to fetch news");
@@ -881,3 +935,182 @@ export async function flattenJevSession(id: string): Promise<{ message: string; 
   if (!r.ok) throw await jevError(r, "Failed to flatten");
   return r.json();
 }
+
+// ── Alerts ────────────────────────────────────────────────────────────────────
+
+/** fetchWithAuth + JSON, throwing the API's `detail` message on errors. */
+async function apiJson<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const r = await fetchWithAuth(path, init);
+  if (!r.ok) {
+    const body = await r.json().catch(() => null);
+    const detail = body?.detail;
+    throw new Error(typeof detail === "string" ? detail : `Request failed (${r.status})`);
+  }
+  return r.status === 204 ? (undefined as T) : r.json();
+}
+
+export const listAlertRules = () => apiJson<AlertRule[]>("/alerts/rules");
+
+export const createAlertRule = (body: CreateAlertRuleRequest) =>
+  apiJson<AlertRule>("/alerts/rules", { method: "POST", body: JSON.stringify(body) });
+
+export const updateAlertRule = (
+  id: string,
+  body: Partial<Pick<AlertRule, "params" | "channels" | "cooldown_hours" | "enabled" | "rerun_analysis">>,
+) => apiJson<AlertRule>(`/alerts/rules/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+// ── SEC filings ──────────────────────────────────────────────────────────────
+
+export const getPortfolioFilings = (portfolioId: string, days = 90) =>
+  apiJson<FilingsReport>(`/portfolio/${portfolioId}/filings?days=${days}`);
+
+export const refreshPortfolioFilings = (portfolioId: string) =>
+  apiJson<{ started: boolean; syncing: boolean }>(`/portfolio/${portfolioId}/filings/refresh`, { method: "POST" });
+
+/** Turn a sentence into a proposed rule with the user's default LLM. Never saves. */
+export const compileAlertRule = (text: string) =>
+  apiJson<CompileResult>("/alerts/compile", { method: "POST", body: JSON.stringify({ text }) });
+
+export const deleteAlertRule = (id: string) => apiJson<void>(`/alerts/rules/${id}`, { method: "DELETE" });
+
+export const checkAlertRule = (id: string) => apiJson<AlertCheck>(`/alerts/rules/${id}/check`, { method: "POST" });
+
+export const listAlertEvents = (limit = 50) => apiJson<AlertEvent[]>(`/alerts/events?limit=${limit}`);
+
+export const getAlertUnreadCount = () => apiJson<{ unread: number }>("/alerts/unread-count");
+
+export const markAlertsRead = (body: { ids?: string[]; all?: boolean }) =>
+  apiJson<{ marked: number }>("/alerts/events/read", { method: "POST", body: JSON.stringify(body) });
+
+// ── Targets & rebalancing ─────────────────────────────────────────────────────
+
+export const getPortfolioTargets = (portfolioId: string) =>
+  apiJson<{ targets: TargetRow[]; default_band: number }>(`/portfolio/${portfolioId}/targets`);
+
+export const putPortfolioTargets = (portfolioId: string, targets: TargetRow[]) =>
+  apiJson<{ targets: TargetRow[]; default_band: number }>(`/portfolio/${portfolioId}/targets`, {
+    method: "PUT",
+    body: JSON.stringify({ targets }),
+  });
+
+export function getRebalancePlan(
+  portfolioId: string,
+  mode: RebalanceMode,
+  amount: number,
+  wholeShares: boolean,
+): Promise<RebalanceResponse> {
+  const params = new URLSearchParams({ mode, amount: String(amount || 0), whole_shares: String(wholeShares) });
+  return apiJson<RebalanceResponse>(`/portfolio/${portfolioId}/rebalance?${params.toString()}`);
+}
+
+// ── MCP access tokens ─────────────────────────────────────────────────────────
+
+/** The API base the browser uses (absolute in dev, "/api" behind nginx). */
+export const API_BASE_URL = BASE;
+
+export const listMcpTokens = () => apiJson<{ available: boolean; tokens: McpToken[] }>("/mcp-tokens");
+
+export const createMcpToken = (body: { name: string; scopes: McpScope[]; expires_in_days: number | null }) =>
+  apiJson<CreatedMcpToken>("/mcp-tokens", { method: "POST", body: JSON.stringify(body) });
+
+export const revokeMcpToken = (id: string) => apiJson<void>(`/mcp-tokens/${id}`, { method: "DELETE" });
+
+// ── Transaction ledger ────────────────────────────────────────────────────────
+
+export const listTransactions = (portfolioId: string) => apiJson<LedgerTx[]>(`/portfolio/${portfolioId}/transactions`);
+
+export const addTransaction = (portfolioId: string, tx: TxInput, replaceHoldings = false) =>
+  apiJson<LedgerTx & { warnings: string[] }>(`/portfolio/${portfolioId}/transactions${replaceHoldings ? "?replace_holdings=true" : ""}`, { method: "POST", body: JSON.stringify(tx) });
+
+export const deleteTransaction = (portfolioId: string, id: string) =>
+  apiJson<void>(`/portfolio/${portfolioId}/transactions/${id}`, { method: "DELETE" });
+
+export const importTransactions = (portfolioId: string, rows: TxInput[], dryRun: boolean, replaceHoldings = false) =>
+  apiJson<ImportResult>(`/portfolio/${portfolioId}/transactions/import`, {
+    method: "POST",
+    body: JSON.stringify({ rows, dry_run: dryRun, replace_holdings: replaceHoldings }),
+  });
+
+export const bootstrapLedger = (portfolioId: string, tradeDate: string) =>
+  apiJson<{ created: number; positions: number; warnings: string[] }>(`/portfolio/${portfolioId}/ledger/bootstrap`, {
+    method: "POST",
+    body: JSON.stringify({ trade_date: tradeDate }),
+  });
+
+export const getLedgerSummary = (portfolioId: string) => apiJson<LedgerSummary>(`/portfolio/${portfolioId}/ledger`);
+
+export const setCostBasisMethod = (portfolioId: string, method: CostBasisMethod) =>
+  apiJson<{ cost_basis_method: CostBasisMethod }>(`/portfolio/${portfolioId}/ledger/settings`, {
+    method: "PUT",
+    body: JSON.stringify({ cost_basis_method: method }),
+  });
+
+export const clearLedger = (portfolioId: string) => apiJson<void>(`/portfolio/${portfolioId}/ledger`, { method: "DELETE" });
+
+// ── Dividend income ───────────────────────────────────────────────────────────
+
+export const getPortfolioIncome = (portfolioId: string) => apiJson<IncomeReport>(`/portfolio/${portfolioId}/income`);
+
+export const setIncomeTarget = (portfolioId: string, monthly: number | null) =>
+  apiJson<{ monthly: number | null }>(`/portfolio/${portfolioId}/income/target`, {
+    method: "PUT",
+    body: JSON.stringify({ monthly }),
+  });
+
+// ── Tax tools ─────────────────────────────────────────────────────────────────
+
+export const getPortfolioTax = (portfolioId: string, year: number | null, minLoss: number) => {
+  const params = new URLSearchParams({ min_loss: String(minLoss) });
+  if (year) params.set("year", String(year));
+  return apiJson<TaxReport>(`/portfolio/${portfolioId}/tax?${params.toString()}`);
+};
+
+export const getTaxReplacements = (portfolioId: string, symbol: string) =>
+  apiJson<ReplacementIdeas>(`/portfolio/${portfolioId}/tax/replacements?symbol=${encodeURIComponent(symbol)}`);
+
+// ── Net worth ─────────────────────────────────────────────────────────────────
+
+export const getNetWorth = (range: NetWorthRange) => apiJson<NetWorthReport>(`/net-worth?range=${range}`);
+
+export const addNetWorthItem = (body: NetWorthItemInput) =>
+  apiJson<{ id: string; sync_error: string | null }>("/net-worth/items", { method: "POST", body: JSON.stringify(body) });
+
+export const updateNetWorthItem = (id: string, body: { name?: string; category?: string; notes?: string | null; value?: number; as_of?: string }) =>
+  apiJson<{ id: string }>(`/net-worth/items/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+export const deleteNetWorthItem = (id: string) => apiJson<void>(`/net-worth/items/${id}`, { method: "DELETE" });
+
+export const deleteNetWorthValuation = (id: string, date: string) =>
+  apiJson<void>(`/net-worth/items/${id}/valuations/${date}`, { method: "DELETE" });
+
+export const syncNetWorthWallet = (id: string) =>
+  apiJson<{ ok: boolean; sync_error: string | null }>(`/net-worth/items/${id}/sync`, { method: "POST" });
+
+// ── Backtest Lab and model leaderboard ───────────────────────────────────────
+
+export const getBacktestMeta = () => apiJson<BacktestMeta>("/backtests/meta");
+
+export const listBacktests = () => apiJson<BacktestSummary[]>("/backtests");
+
+export const getBacktest = (id: string) => apiJson<BacktestDetail>(`/backtests/${id}`);
+
+export const createBacktest = (body: BacktestInput) =>
+  apiJson<BacktestSummary>("/backtests", { method: "POST", body: JSON.stringify(body) });
+
+export const abortBacktest = (id: string) => apiJson<{ status: string }>(`/backtests/${id}/abort`, { method: "POST" });
+
+export const deleteBacktest = (id: string) => apiJson<void>(`/backtests/${id}`, { method: "DELETE" });
+
+export const getLeaderboard = (groupBy: "model" | "depth" | "analysts") =>
+  apiJson<Leaderboard>(`/runs/leaderboard?group_by=${groupBy}`);
+
+// ── Learning loop ─────────────────────────────────────────────────────────────
+
+export const getLearning = () => apiJson<LearningStatus>("/learning");
+
+export const putLearning = (body: { enabled: boolean; horizon_days: number }) =>
+  apiJson<LearningStatus>("/learning", { method: "PUT", body: JSON.stringify(body) });
+
+export const runLearning = () => apiJson<{ status: string }>("/learning/run", { method: "POST" });
+
+export const clearLearningMemories = () => apiJson<void>("/learning/memories", { method: "DELETE" });

@@ -45,6 +45,8 @@ import {
 import { PageShell } from "@/components/layout/PageShell";
 import { PageHeader, PageTitle } from "@/components/layout/PageHeader";
 import { SectionCard } from "@/components/settings/SectionCard";
+import { McpAccessSection } from "@/components/settings/McpAccessSection";
+import { LearningSection } from "@/components/settings/LearningSection";
 import { SettingsLayout } from "@/components/settings/SettingsLayout";
 import { visibleSettingsSections } from "@/lib/settingsNav";
 import {
@@ -647,6 +649,10 @@ export default function SettingsPage() {
         </SectionCard>
 
         <StrategySettingsPanel isAdmin={isAdmin} />
+
+        <McpAccessSection />
+
+        <LearningSection />
 
         {isAdmin && (
           <SectionCard id="llm-providers" title="LLM Providers" description="API keys and server URLs used when running analyses.">
