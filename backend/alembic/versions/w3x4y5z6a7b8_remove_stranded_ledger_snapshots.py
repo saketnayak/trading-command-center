@@ -4,8 +4,8 @@ Deleting a portfolio's only transaction used to leave its empty derived snapshot
 as the latest one, hiding the real holdings underneath with no way back in the
 app. These rows hold no data, so removing them only brings those holdings back.
 
-Revision ID: v2w3x4y5z6a7
-Revises: u1v2w3x4y5z6
+Revision ID: w3x4y5z6a7b8
+Revises: v2w3x4y5z6a7
 Create Date: 2026-11-05 15:00:00.000000
 
 """
@@ -14,8 +14,8 @@ from typing import Sequence, Union
 from alembic import op
 
 
-revision: str = "v2w3x4y5z6a7"
-down_revision: Union[str, Sequence[str], None] = "u1v2w3x4y5z6"
+revision: str = "w3x4y5z6a7b8"
+down_revision: Union[str, Sequence[str], None] = "v2w3x4y5z6a7"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
