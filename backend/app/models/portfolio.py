@@ -11,6 +11,10 @@ class Portfolio(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # "snapshot": holdings come from CSV uploads / inline edits. "ledger": they are
+    # derived from portfolio_transactions, and snapshot writes are refused.
+    holdings_source: Mapped[str] = mapped_column(String(16), default="snapshot", server_default="snapshot")
+    cost_basis_method: Mapped[str] = mapped_column(String(16), default="fifo", server_default="fifo")
 
     snapshots = relationship("PortfolioSnapshot", back_populates="portfolio", cascade="all, delete-orphan")
     insights = relationship("PortfolioInsight", back_populates="portfolio", cascade="all, delete-orphan")

@@ -6,6 +6,7 @@ import type { PortfolioRisk, RiskLookback } from "./risk";
 import type { AlertCheck, AlertEvent, AlertRule, CreateAlertRuleRequest } from "./alerts";
 import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
 import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
+import type { CostBasisMethod, ImportResult, LedgerSummary, LedgerTx, TxInput } from "./ledger";
 import type { ResponseLanguage } from "./responseLanguage";
 import type { AppSettings } from "./appSettings";
 import type { CreateJevSessionRequest, JevCalibration, JevMeta, JevSession, JevSymbolSpec, JevTick } from "./jev/types";
@@ -995,3 +996,35 @@ export const createMcpToken = (body: { name: string; scopes: McpScope[]; expires
   apiJson<CreatedMcpToken>("/mcp-tokens", { method: "POST", body: JSON.stringify(body) });
 
 export const revokeMcpToken = (id: string) => apiJson<void>(`/mcp-tokens/${id}`, { method: "DELETE" });
+
+// ── Transaction ledger ────────────────────────────────────────────────────────
+
+export const listTransactions = (portfolioId: string) => apiJson<LedgerTx[]>(`/portfolio/${portfolioId}/transactions`);
+
+export const addTransaction = (portfolioId: string, tx: TxInput) =>
+  apiJson<LedgerTx & { warnings: string[] }>(`/portfolio/${portfolioId}/transactions`, { method: "POST", body: JSON.stringify(tx) });
+
+export const deleteTransaction = (portfolioId: string, id: string) =>
+  apiJson<void>(`/portfolio/${portfolioId}/transactions/${id}`, { method: "DELETE" });
+
+export const importTransactions = (portfolioId: string, rows: TxInput[], dryRun: boolean) =>
+  apiJson<ImportResult>(`/portfolio/${portfolioId}/transactions/import`, {
+    method: "POST",
+    body: JSON.stringify({ rows, dry_run: dryRun }),
+  });
+
+export const bootstrapLedger = (portfolioId: string, tradeDate: string) =>
+  apiJson<{ created: number; positions: number; warnings: string[] }>(`/portfolio/${portfolioId}/ledger/bootstrap`, {
+    method: "POST",
+    body: JSON.stringify({ trade_date: tradeDate }),
+  });
+
+export const getLedgerSummary = (portfolioId: string) => apiJson<LedgerSummary>(`/portfolio/${portfolioId}/ledger`);
+
+export const setCostBasisMethod = (portfolioId: string, method: CostBasisMethod) =>
+  apiJson<{ cost_basis_method: CostBasisMethod }>(`/portfolio/${portfolioId}/ledger/settings`, {
+    method: "PUT",
+    body: JSON.stringify({ cost_basis_method: method }),
+  });
+
+export const clearLedger = (portfolioId: string) => apiJson<void>(`/portfolio/${portfolioId}/ledger`, { method: "DELETE" });

@@ -163,7 +163,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 
 ### Phase 2: "Real books" (data-model upgrade)
 
-#### 2.1 Transaction ledger & tax lots (L)
+#### 2.1 Transaction ledger & tax lots (L) ✅ shipped (ledger, FIFO/HIFO/average lots, realised gains, income, cash, CSV import with column mapping, ledger-driven performance + MWR; still open: an accounts table with account types, the LLM-assisted mapper and per-broker presets)
 - `accounts(portfolio_id, name, type: taxable|ira|roth|isa|crypto, currency)` and `transactions(account_id, ts, type: BUY|SELL|DIVIDEND|INTEREST|FEE|SPLIT|DEPOSIT|WITHDRAWAL|TRANSFER, symbol, qty, price, fees, currency, fx_rate, source)`.
 - Holdings become a **derived view**, with lots chosen by FIFO, average cost or HIFO per account.
 - **Backward compatible**: a CSV snapshot upload still works. It is diffed against the derived holdings and turned into synthetic BUY/SELL transactions marked `source=snapshot`, so existing users lose nothing.

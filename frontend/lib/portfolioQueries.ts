@@ -14,6 +14,8 @@ export const portfolioQueryKeys = {
     ["portfolio-performance", id, mode, range, benchmark] as const,
   risk: (id: string, lookback: string, benchmark: string) =>
     ["portfolio-risk", id, lookback, benchmark] as const,
+  transactions: (id: string) => ["portfolio-transactions", id] as const,
+  ledger: (id: string) => ["portfolio-ledger", id] as const,
   rebalance: (id: string, mode: string, amount: number, wholeShares: boolean) =>
     ["portfolio-rebalance", id, mode, amount, wholeShares] as const,
   behavioralAlerts: (id: string) => ["behavioralAlerts", id] as const,
@@ -67,6 +69,7 @@ export type PortfolioTab =
   | "performance"
   | "risk"
   | "rebalance"
+  | "transactions"
   | "insights"
   | "earnings"
   | "news"

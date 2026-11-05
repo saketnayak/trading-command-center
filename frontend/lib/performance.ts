@@ -50,6 +50,10 @@ export interface PerformanceStats {
   beta?: number | null;
   correlation?: number | null;
   excess_return?: number | null;
+  /** Money-weighted return (IRR) over the window; only for ledger-backed portfolios. */
+  mwr_period?: number | null;
+  /** Annualised IRR; only when the window spans at least a year. */
+  mwr_annualised?: number | null;
 }
 
 export interface PerformanceHolding {
@@ -67,6 +71,7 @@ export interface PortfolioPerformance {
   range: PerformanceRange;
   benchmark: string;
   display_currency: string;
+  holdings_source?: "snapshot" | "ledger";
   methodology: string;
   history_days: number;
   warnings: string[];

@@ -317,3 +317,32 @@ def _empty(message: str) -> dict:
         "period_returns": None, "benchmark_period_returns": None, "holdings": [], "unpriced": [],
         "message": message,
     }
+
+
+def xirr(flows: list[tuple[date, float]]) -> float | None:
+    """Annualised money-weighted return (IRR) of dated cash flows, from the
+    investor's side: money put in is negative, money taken out (and the
+    ending value) positive. Bisection on NPV, so it can't diverge; None when
+    there is no sign change or the root lies outside -99.99% … +1,000,000%."""
+    flows = [(d, a) for d, a in flows if a]
+    if len(flows) < 2 or not any(a > 0 for _, a in flows) or not any(a < 0 for _, a in flows):
+        return None
+    t0 = min(d for d, _ in flows)
+
+    def npv(rate: float) -> float:
+        return sum(a / (1 + rate) ** ((d - t0).days / 365.25) for d, a in flows)
+
+    lo, hi = -0.9999, 10_000.0
+    f_lo, f_hi = npv(lo), npv(hi)
+    if f_lo * f_hi > 0:
+        return None
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        f_mid = npv(mid)
+        if abs(f_mid) < 1e-9 or hi - lo < 1e-12:
+            break
+        if f_lo * f_mid < 0:
+            hi, f_hi = mid, f_mid
+        else:
+            lo, f_lo = mid, f_mid
+    return (lo + hi) / 2

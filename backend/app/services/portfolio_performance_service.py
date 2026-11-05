@@ -20,8 +20,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.portfolio import PortfolioSnapshot
-from app.services.performance_calc import HoldingsPeriod, compute_performance
+from app.models.portfolio import Portfolio, PortfolioSnapshot
+from app.services.performance_calc import HoldingsPeriod, compute_performance, xirr
+from app.services import ledger_service
+from app.services.ledger_calc import holdings_timeline
 from app.services.portfolio_pricing import aggregate_shares, fx_factors
 from app.services.price_history_service import get_closes
 
@@ -73,15 +75,23 @@ async def build_performance_report(
         "methodology": METHODOLOGY,
     }
 
-    # One period per upload day; a later upload on the same day replaces an earlier one.
+    source = (await db.execute(select(Portfolio.holdings_source).where(Portfolio.id == portfolio_id))).scalar_one_or_none()
+    txs = await ledger_service.load_txs(db, portfolio_id) if source == "ledger" else []
+    base["holdings_source"] = "ledger" if txs else "snapshot"
+
     by_day: dict[date, dict[str, float]] = {}
-    for snap in snapshots:
-        by_day[snap.uploaded_at.astimezone(timezone.utc).date()] = aggregate_shares(snap.holdings)
+    if txs:
+        # Ledger-backed: holdings change on the real trade dates.
+        by_day = dict(holdings_timeline(txs))
+    else:
+        # One period per upload day; a later upload on the same day replaces an earlier one.
+        for snap in snapshots:
+            by_day[snap.uploaded_at.astimezone(timezone.utc).date()] = aggregate_shares(snap.holdings)
     history_start = min(by_day) if by_day else None
     history_days = (today - history_start).days if history_start else 0
     latest = by_day[max(by_day)] if by_day else {}
 
-    if not latest:
+    if not latest and not (txs and mode != "current"):
         return {**base, "mode": mode if mode != "auto" else "current", "history_days": history_days,
                 "warnings": [], "series": [], "stats": None, "benchmark_stats": None, "period_returns": None,
                 "benchmark_period_returns": None, "holdings": [], "start": None, "end": None,
@@ -97,7 +107,8 @@ async def build_performance_report(
         if history_start > start:
             start = history_start
             warnings.append(
-                f"Upload history starts on {history_start.isoformat()}, so the chart starts there."
+                f"{'Transactions start' if txs else 'Upload history starts'} on {history_start.isoformat()}, "
+                "so the chart starts there."
             )
     else:
         periods = [HoldingsPeriod(start=date.min, shares=latest)]
@@ -135,4 +146,40 @@ async def build_performance_report(
     if len({currencies[s] for s in symbols}) > 1:
         warnings.append("Holdings trade in more than one currency; returns exclude FX moves.")
 
+    if txs and mode == "actual" and result.get("series"):
+        result["stats"].update(_money_weighted(txs, result["series"], fx))
+        base["methodology"] = METHODOLOGY + " " + MWR_NOTE
+
     return {**base, "mode": mode, "history_days": history_days, "warnings": warnings, **result}
+
+
+MWR_NOTE = (
+    "Money-weighted return (IRR) uses the ledger's trades as cash flows at their trade prices and fees; "
+    "dividends are already in the adjusted prices, so they are not counted again as flows."
+)
+
+
+def _money_weighted(txs, series: list[dict], fx: dict[str, float]) -> dict:
+    """IRR over the charted window: the opening value goes in, each later buy goes in and
+    each sale comes out (trade price ± fees, converted like the holdings), and the
+    ending value comes out."""
+    d0 = date.fromisoformat(series[0]["date"])
+    d1 = date.fromisoformat(series[-1]["date"])
+    flows: list[tuple[date, float]] = [(d0, -series[0]["value"])]
+    for t in txs:
+        if not (d0 < t.date <= d1) or t.type not in ("BUY", "SELL"):
+            continue
+        f = fx.get(t.symbol, 1.0)
+        if t.type == "BUY":
+            flows.append((t.date, -(t.quantity * t.price + t.fees) * f))
+        else:
+            flows.append((t.date, (t.quantity * t.price - t.fees) * f))
+    flows.append((d1, series[-1]["value"]))
+    annual = xirr(flows)
+    span = (d1 - d0).days
+    if annual is None or span <= 0:
+        return {"mwr_annualised": None, "mwr_period": None}
+    return {
+        "mwr_annualised": round(annual, 6) if span >= 365 else None,
+        "mwr_period": round((1 + annual) ** (span / 365.25) - 1, 6),
+    }

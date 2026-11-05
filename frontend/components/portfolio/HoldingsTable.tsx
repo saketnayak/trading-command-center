@@ -29,6 +29,8 @@ interface HoldingsTableProps {
   tickerMetadata?: Record<string, TickerMetadata>;
   onTickerClick?: (holding: PortfolioHolding) => void;
   onUploadClick?: () => void;
+  /** Holdings derived from the transaction ledger: no inline add/edit/delete. */
+  readOnly?: boolean;
 }
 
 interface DraftRow {
@@ -348,7 +350,7 @@ function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, fundamentalsUnavailableReason, displayCurrency, fundamentals, regime, wave, trimSignals, tickerMetadata = {}, onTickerClick, onUploadClick }: HoldingsTableProps) {
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, fundamentalsUnavailableReason, displayCurrency, fundamentals, regime, wave, trimSignals, tickerMetadata = {}, onTickerClick, onUploadClick, readOnly = false }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "", currency: displayCurrency });
@@ -764,6 +766,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
             editingId={editingId}
             editDraft={editDraft}
             setEditDraft={setEditDraft}
+            readOnly={readOnly}
             onStartEdit={startEdit}
             onCancelEdit={cancelEdit}
             onSaveEdit={saveEdit}
@@ -1058,22 +1061,26 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                               tone="primary"
                             />
                             <WatchButton ticker={h.ticker} compact />
-                            <IconButton
-                              icon={Pencil}
-                              label={`Edit ${h.ticker} holding`}
-                              title="Edit"
-                              tone="default"
-                              onClick={() => startEdit(h)}
-                            />
-                            <IconButton
-                              icon={deleteMutation.isPending ? LoaderCircle : Trash2}
-                              label={`Delete ${h.ticker} holding`}
-                              title="Delete holding"
-                              tone="danger"
-                              onClick={() => deleteMutation.mutate(h.id)}
-                              disabled={deleteMutation.isPending}
-                              iconClassName={deleteMutation.isPending ? "animate-spin" : undefined}
-                            />
+                            {!readOnly && (
+                              <>
+                                <IconButton
+                                  icon={Pencil}
+                                  label={`Edit ${h.ticker} holding`}
+                                  title="Edit"
+                                  tone="default"
+                                  onClick={() => startEdit(h)}
+                                />
+                                <IconButton
+                                  icon={deleteMutation.isPending ? LoaderCircle : Trash2}
+                                  label={`Delete ${h.ticker} holding`}
+                                  title="Delete holding"
+                                  tone="danger"
+                                  onClick={() => deleteMutation.mutate(h.id)}
+                                  disabled={deleteMutation.isPending}
+                                  iconClassName={deleteMutation.isPending ? "animate-spin" : undefined}
+                                />
+                              </>
+                            )}
                           </div>
                         )}
                       </td>
@@ -1166,7 +1173,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
         </>
       )}
 
-      {!addingNew && sortedHoldings.length > 0 && (
+      {!readOnly && !addingNew && sortedHoldings.length > 0 && (
         <button
           onClick={() => setAddingNew(true)}
           className="inline-flex items-center gap-1.5 text-xs text-muted hover:text-fg-secondary border border-dashed border-input-border hover:border-border-strong rounded-sm px-3 py-1.5 transition-colors"
