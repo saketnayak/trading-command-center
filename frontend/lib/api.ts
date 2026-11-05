@@ -1005,16 +1005,16 @@ export const revokeMcpToken = (id: string) => apiJson<void>(`/mcp-tokens/${id}`,
 
 export const listTransactions = (portfolioId: string) => apiJson<LedgerTx[]>(`/portfolio/${portfolioId}/transactions`);
 
-export const addTransaction = (portfolioId: string, tx: TxInput) =>
-  apiJson<LedgerTx & { warnings: string[] }>(`/portfolio/${portfolioId}/transactions`, { method: "POST", body: JSON.stringify(tx) });
+export const addTransaction = (portfolioId: string, tx: TxInput, replaceHoldings = false) =>
+  apiJson<LedgerTx & { warnings: string[] }>(`/portfolio/${portfolioId}/transactions${replaceHoldings ? "?replace_holdings=true" : ""}`, { method: "POST", body: JSON.stringify(tx) });
 
 export const deleteTransaction = (portfolioId: string, id: string) =>
   apiJson<void>(`/portfolio/${portfolioId}/transactions/${id}`, { method: "DELETE" });
 
-export const importTransactions = (portfolioId: string, rows: TxInput[], dryRun: boolean) =>
+export const importTransactions = (portfolioId: string, rows: TxInput[], dryRun: boolean, replaceHoldings = false) =>
   apiJson<ImportResult>(`/portfolio/${portfolioId}/transactions/import`, {
     method: "POST",
-    body: JSON.stringify({ rows, dry_run: dryRun }),
+    body: JSON.stringify({ rows, dry_run: dryRun, replace_holdings: replaceHoldings }),
   });
 
 export const bootstrapLedger = (portfolioId: string, tradeDate: string) =>

@@ -61,6 +61,69 @@ async def test_bootstrap_locks_snapshot_writes_and_derives_holdings():
         assert {p["symbol"] for p in summary["positions"]} == {"AAA", "BBB", "CCC"}
 
 
+ACN_SELL = {"type": "SELL", "symbol": "ACN", "quantity": 123, "price": 280.4, "fees": 5.21}
+OPENING = {"ACN": (398.0, 100.0), "BBB": (4.0, 100.0)}
+
+
+async def test_first_transaction_cannot_silently_replace_holdings():
+    async with _client() as c:
+        h = await _token(c, "led7@example.com")
+        pid = await _portfolio(c, h, [(180, {"ACN": 398, "BBB": 4})])
+        url = f"/portfolio/{pid}/transactions"
+        sell = {**ACN_SELL, "trade_date": _d(34)}
+
+        for body in (sell, {"trade_date": _d(34), "type": "DEPOSIT", "amount": 100}):
+            refused = await c.post(url, headers=h, json=body)
+            assert refused.status_code == 409 and "replace" in refused.json()["detail"]
+        assert (await c.post(f"{url}/import", headers=h, json={"rows": [sell], "dry_run": True})).status_code == 200
+        assert (await c.post(f"{url}/import", headers=h, json={"rows": [sell], "dry_run": False})).status_code == 409
+
+        assert await _holdings(pid) == OPENING
+        assert await _source(c, h, pid) == "snapshot"
+        assert (await c.get(url, headers=h)).json() == []
+
+        # The intended route: start from the holdings, then record the sale.
+        r = await c.post(f"/portfolio/{pid}/ledger/bootstrap", headers=h, json={"trade_date": _d(100)})
+        assert r.status_code == 201, r.text
+        added = await c.post(url, headers=h, json=sell)
+        assert added.status_code == 201 and added.json()["warnings"] == []
+        assert await _holdings(pid) == {"ACN": (275.0, 100.0), "BBB": (4.0, 100.0)}
+
+
+async def test_confirmed_replace_can_be_undone():
+    async with _client() as c:
+        h = await _token(c, "led8@example.com")
+        pid = await _portfolio(c, h, [(180, {"ACN": 398, "BBB": 4})])
+        url = f"/portfolio/{pid}/transactions"
+
+        sell = await c.post(f"{url}?replace_holdings=true", headers=h, json={**ACN_SELL, "trade_date": _d(34)})
+        assert sell.status_code == 201, sell.text
+        assert "no ACN" in sell.json()["warnings"][0]
+        assert await _holdings(pid) == {}
+        assert (await c.delete(f"{url}/{sell.json()['id']}", headers=h)).status_code == 204
+        assert await _source(c, h, pid) == "snapshot"
+        assert await _holdings(pid) == OPENING
+
+        # Also when the ledger had derived something: no holding outlives its only transaction.
+        buy = await c.post(f"{url}?replace_holdings=true", headers=h, json={
+            "trade_date": _d(5), "type": "BUY", "symbol": "ZZZ", "quantity": 2, "price": 10})
+        assert await _holdings(pid) == {"ZZZ": (2.0, 10.0)}
+        assert (await c.delete(f"{url}/{buy.json()['id']}", headers=h)).status_code == 204
+        assert await _holdings(pid) == OPENING
+
+
+async def test_stopping_an_empty_ledger_restores_holdings():
+    async with _client() as c:
+        h = await _token(c, "led9@example.com")
+        pid = await _portfolio(c, h, [(180, {"ACN": 398, "BBB": 4})])
+        rows = [{**ACN_SELL, "trade_date": _d(34)}]
+        done = await c.post(f"/portfolio/{pid}/transactions/import", headers=h,
+                            json={"rows": rows, "dry_run": False, "replace_holdings": True})
+        assert done.json()["imported"] == 1 and await _holdings(pid) == {}
+        assert (await c.delete(f"/portfolio/{pid}/ledger", headers=h)).status_code == 204
+        assert await _holdings(pid) == OPENING
+
+
 async def test_validation_oversell_and_edit_delete():
     async with _client() as c:
         h = await _token(c, "led2@example.com")

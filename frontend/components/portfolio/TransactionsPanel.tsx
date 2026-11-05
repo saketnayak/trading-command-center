@@ -30,6 +30,9 @@ import {
 
 const CARD = "rounded-lg border border-border bg-surface p-3";
 const today = () => new Date().toISOString().slice(0, 10);
+const REPLACE_HOLDINGS_WARNING =
+  "This replaces your holdings with only what your transactions add up to, so anything without a recorded buy disappears.\n\n" +
+  "To keep your holdings, cancel and use \"Start from current holdings\" first. You can undo this by deleting these transactions from the list.";
 
 interface Props {
   portfolioId: string;
@@ -43,9 +46,11 @@ export function TransactionsPanel({ portfolioId, hasHoldings }: Props) {
   const summary = useQuery({ queryKey: portfolioQueryKeys.ledger(portfolioId), queryFn: () => getLedgerSummary(portfolioId) });
   const [importing, setImporting] = useState(false);
   const [notice, setNotice] = useState<string[]>([]);
+  const [replaceHoldings, setReplaceHoldings] = useState(false);
 
   /** Every ledger change re-derives holdings, so refresh everything that reads them. */
   function refreshAll() {
+    setReplaceHoldings(false);  // a confirmation only covers the change it was given for
     for (const prefix of ["portfolio-transactions", "portfolio-ledger", "portfolio-current", "portfolios", "portfolio-performance",
       "portfolio-risk", "portfolio-rebalance", "portfolio-income", "portfolio-tax", "portfolio-trim-signals", "portfolio-regime", "portfolio-wave", "portfolio-fundamentals"]) {
       qc.invalidateQueries({ queryKey: [prefix] });
@@ -64,7 +69,8 @@ export function TransactionsPanel({ portfolioId, hasHoldings }: Props) {
 
   if (rows.length === 0 && !importing) {
     return (
-      <EmptyLedger portfolioId={portfolioId} hasHoldings={hasHoldings} onImport={() => setImporting(true)}
+      <EmptyLedger portfolioId={portfolioId} hasHoldings={hasHoldings} replaceHoldings={replaceHoldings}
+        onReplaceConfirmed={() => setReplaceHoldings(true)} onImport={() => setImporting(true)}
         onChanged={(w) => { setNotice(w); refreshAll(); }} />
     );
   }
@@ -90,11 +96,11 @@ export function TransactionsPanel({ portfolioId, hasHoldings }: Props) {
       </div>
 
       {importing && (
-        <ImportTransactions portfolioId={portfolioId} onCancel={() => setImporting(false)}
+        <ImportTransactions portfolioId={portfolioId} replaceHoldings={replaceHoldings} onCancel={() => setImporting(false)}
           onDone={() => { setImporting(false); refreshAll(); }} />
       )}
 
-      <AddTransactionForm portfolioId={portfolioId} onAdded={(w) => { setNotice(w); refreshAll(); }} />
+      <AddTransactionForm portfolioId={portfolioId} replaceHoldings={replaceHoldings} onAdded={(w) => { setNotice(w); refreshAll(); }} />
 
       <section className={CARD}>
         <h3 className="mb-2 text-sm font-medium text-fg">Transactions <span className="font-normal text-muted">({rows.length})</span></h3>
@@ -119,12 +125,21 @@ export function TransactionsPanel({ portfolioId, hasHoldings }: Props) {
   );
 }
 
-function EmptyLedger({ portfolioId, hasHoldings, onImport, onChanged }: {
-  portfolioId: string; hasHoldings: boolean; onImport: () => void; onChanged: (warnings: string[]) => void;
+function EmptyLedger({ portfolioId, hasHoldings, replaceHoldings, onReplaceConfirmed, onImport, onChanged }: {
+  portfolioId: string; hasHoldings: boolean; replaceHoldings: boolean; onReplaceConfirmed: () => void;
+  onImport: () => void; onChanged: (warnings: string[]) => void;
 }) {
   const [date, setDate] = useState(() => new Date(Date.now() - 365 * 864e5).toISOString().slice(0, 10));
   const [adding, setAdding] = useState(false);
   const boot = useMutation({ mutationFn: () => bootstrapLedger(portfolioId, date), onSuccess: (r) => onChanged(r.warnings) });
+  /** Starting without opening buys drops the existing holdings, so that has to be a choice. */
+  function startWithoutHoldings(start: () => void) {
+    if (hasHoldings) {
+      if (!window.confirm(REPLACE_HOLDINGS_WARNING)) return;
+      onReplaceConfirmed();
+    }
+    start();
+  }
   return (
     <div className="space-y-4">
       <section className={`${CARD} space-y-3`}>
@@ -146,17 +161,18 @@ function EmptyLedger({ portfolioId, hasHoldings, onImport, onChanged }: {
               </button>
             </div>
           )}
-          <button type="button" className={BTN_SECONDARY_CLASS} onClick={onImport}>Import CSV</button>
-          <button type="button" className={BTN_SECONDARY_CLASS} onClick={() => setAdding(true)}>Add a transaction</button>
+          <button type="button" className={BTN_SECONDARY_CLASS} onClick={() => startWithoutHoldings(onImport)}>Import CSV</button>
+          <button type="button" className={BTN_SECONDARY_CLASS} onClick={() => startWithoutHoldings(() => setAdding(true))}>Add a transaction</button>
         </div>
         {hasHoldings && (
           <p className="text-[11px] text-muted">
             &ldquo;Start from current holdings&rdquo; records one opening buy per holding at its average cost on the opening date.
+            Importing or adding a transaction instead replaces your holdings with only what those transactions add up to.
           </p>
         )}
         {boot.isError && <div className={ALERT_BANNER_CLASS} role="alert">{(boot.error as Error).message}</div>}
       </section>
-      {adding && <AddTransactionForm portfolioId={portfolioId} onAdded={onChanged} />}
+      {adding && <AddTransactionForm portfolioId={portfolioId} replaceHoldings={replaceHoldings} onAdded={onChanged} />}
     </div>
   );
 }
@@ -209,12 +225,12 @@ function CostBasis({ portfolioId, method, onChanged }: { portfolioId: string; me
   );
 }
 
-function AddTransactionForm({ portfolioId, onAdded }: { portfolioId: string; onAdded: (warnings: string[]) => void }) {
+function AddTransactionForm({ portfolioId, replaceHoldings, onAdded }: { portfolioId: string; replaceHoldings: boolean; onAdded: (warnings: string[]) => void }) {
   const [type, setType] = useState<TxType>("BUY");
   const [form, setForm] = useState({ trade_date: today(), symbol: "", quantity: "", price: "", amount: "", fees: "", account: "Main", currency: "USD" });
   const spec = TX_TYPES.find((t) => t.type === type)!;
   const add = useMutation({
-    mutationFn: (tx: TxInput) => addTransaction(portfolioId, tx),
+    mutationFn: (tx: TxInput) => addTransaction(portfolioId, tx, replaceHoldings),
     onSuccess: (r) => {
       onAdded(r.warnings);
       setForm((f) => ({ ...f, symbol: type === "DIVIDEND" ? f.symbol : "", quantity: "", price: "", amount: "", fees: "" }));

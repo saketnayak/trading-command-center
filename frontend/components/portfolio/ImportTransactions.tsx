@@ -23,12 +23,14 @@ import {
 
 interface Props {
   portfolioId: string;
+  /** The user accepted that these transactions replace the current holdings. */
+  replaceHoldings: boolean;
   onDone: () => void;
   onCancel: () => void;
 }
 
 /** CSV → column mapping → server dry run → import (all rows or none). */
-export function ImportTransactions({ portfolioId, onDone, onCancel }: Props) {
+export function ImportTransactions({ portfolioId, replaceHoldings, onDone, onCancel }: Props) {
   const [fileName, setFileName] = useState("");
   const [header, setHeader] = useState<string[]>([]);
   const [body, setBody] = useState<string[][]>([]);
@@ -48,7 +50,7 @@ export function ImportTransactions({ portfolioId, onDone, onCancel }: Props) {
     onSuccess: setCheck,
   });
   const commit = useMutation({
-    mutationFn: (rows: TxInput[]) => importTransactions(portfolioId, rows, false),
+    mutationFn: (rows: TxInput[]) => importTransactions(portfolioId, rows, false, replaceHoldings),
     onSuccess: (r) => {
       if (r.imported) onDone();
       else setCheck(r);
