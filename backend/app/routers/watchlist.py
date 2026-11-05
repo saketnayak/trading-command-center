@@ -127,17 +127,20 @@ class WatchlistResponse(BaseModel):
 
 
 async def _get_or_create_watchlist(user_id: UUID, db: AsyncSession) -> Watchlist:
-    result = await db.execute(
+    query = (
         select(Watchlist)
         .where(Watchlist.created_by == user_id)
         .options(selectinload(Watchlist.items))
     )
-    wl = result.scalar_one_or_none()
+    wl = (await db.execute(query)).scalar_one_or_none()
     if not wl:
-        wl = Watchlist(created_by=user_id)
-        db.add(wl)
+        db.add(Watchlist(created_by=user_id))
         await db.commit()
-        await db.refresh(wl)
+        # Re-select with `items` eager-loaded: a plain refresh leaves the
+        # relationship unloaded, and serialising WatchlistResponse would then
+        # lazy-load it outside the async greenlet (MissingGreenlet -> 500 on a
+        # new user's first request).
+        wl = (await db.execute(query)).scalar_one()
     return wl
 
 
