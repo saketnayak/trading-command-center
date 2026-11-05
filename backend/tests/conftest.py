@@ -158,7 +158,7 @@ async def clean_db(request, temporary_database):
             "TRUNCATE users, runs, agent_events, reports, api_keys, run_outcomes, "
             "watchlists, watchlist_items, portfolios, portfolio_snapshots, portfolio_holdings, "
             "investor_profiles, portfolio_thesis_crossrefs, portfolio_delivery_settings, "
-            "ticker_metadata, settings, jev_sessions, jev_ticks, price_bars, alert_rules, alert_events, portfolio_targets, mcp_tokens, portfolio_transactions, dividend_history, dividend_sync, net_worth_items, net_worth_valuations, backtests, run_reflections "
+            "ticker_metadata, settings, jev_sessions, jev_ticks, price_bars, alert_rules, alert_events, portfolio_targets, mcp_tokens, portfolio_transactions, dividend_history, dividend_sync, net_worth_items, net_worth_valuations, backtests, run_reflections, sec_ciks, sec_filings, sec_filing_texts, sec_insider_trades, sec_sync "
             "RESTART IDENTITY CASCADE"
         ))
     yield

@@ -4,6 +4,7 @@ import type { AnalyzeResponse } from "./wave/types";
 import { performanceQueryParams, type PerformanceMode, type PerformanceRange, type PortfolioPerformance } from "./performance";
 import type { PortfolioRisk, RiskLookback } from "./risk";
 import type { AlertCheck, AlertEvent, AlertRule, CompileResult, CreateAlertRuleRequest } from "./alerts";
+import type { FilingsReport } from "./filings";
 import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
 import type { IncomeReport } from "./income";
 import type { ReplacementIdeas, TaxReport } from "./tax";
@@ -957,6 +958,14 @@ export const updateAlertRule = (
   id: string,
   body: Partial<Pick<AlertRule, "params" | "channels" | "cooldown_hours" | "enabled" | "rerun_analysis">>,
 ) => apiJson<AlertRule>(`/alerts/rules/${id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+// ── SEC filings ──────────────────────────────────────────────────────────────
+
+export const getPortfolioFilings = (portfolioId: string, days = 90) =>
+  apiJson<FilingsReport>(`/portfolio/${portfolioId}/filings?days=${days}`);
+
+export const refreshPortfolioFilings = (portfolioId: string) =>
+  apiJson<{ started: boolean; syncing: boolean }>(`/portfolio/${portfolioId}/filings/refresh`, { method: "POST" });
 
 /** Turn a sentence into a proposed rule with the user's default LLM. Never saves. */
 export const compileAlertRule = (text: string) =>

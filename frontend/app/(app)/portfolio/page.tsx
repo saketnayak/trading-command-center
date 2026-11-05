@@ -64,6 +64,7 @@ import { TickerDrawer } from "@/components/portfolio/TickerDrawer";
 import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsModal";
 import { SellCandidatesPanel } from "@/components/portfolio/SellCandidatesPanel";
 import { MorningBriefStrip } from "@/components/portfolio/MorningBriefStrip";
+import { FilingsPanel } from "@/components/portfolio/FilingsPanel";
 import { PortfolioTotalsSummary } from "@/components/portfolio/PortfolioTotalsSummary";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Briefcase } from "lucide-react";
@@ -625,6 +626,7 @@ function PortfolioPageContent() {
                 <MorningBriefStrip
                   portfolioId={selectedId}
                   onOpenInsights={() => setTab("insights")}
+                  onOpenFilings={allCrypto ? undefined : () => setTab("filings")}
                 />
                 {hasHoldings && (
                   <PortfolioStatsBar
@@ -740,6 +742,16 @@ function PortfolioPageContent() {
                 aria-labelledby="portfolio-tab-tax"
               >
                 <TaxPanel portfolioId={selectedId} onOpenTransactions={() => setTab("transactions")} />
+              </div>
+            )}
+
+            {tab === "filings" && (
+              <div
+                id="portfolio-panel-filings"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-filings"
+              >
+                <FilingsPanel portfolioId={selectedId} />
               </div>
             )}
 

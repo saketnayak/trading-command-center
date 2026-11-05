@@ -43,6 +43,7 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
       SMTP_FROM: "${SMTP_FROM:-noreply@agentfloor.local}"
+      SEC_USER_AGENT: "${SEC_USER_AGENT:-AgentFloor self-hosted research app}"
       FRONTEND_URL: "${NEXTAUTH_URL:-http://localhost}"
       LOGO_CACHE_DIR: /data/logos
     volumes:

@@ -19,6 +19,7 @@ from app.services.alert_engine import evaluate_all_alerts
 from app.services.dividend_service import refresh_tracked_dividends
 from app.services.wallet_service import sync_all_wallets
 from app.services.learning_service import run_learning_pass
+from app.services.filing_digest_service import refresh_all_holdings as refresh_sec_filings
 from app.utils.cron_validation import normalize_schedule_cron, parse_cron_trigger
 
 logger = logging.getLogger(__name__)
@@ -318,6 +319,13 @@ async def start_scheduler() -> AsyncScheduler:
         run_learning_pass,
         CronTrigger(hour=1, minute=10),
         id="learning_reflections",
+        conflict_policy="replace",
+    )
+    # SEC filings and insider trades for held tickers, with cited digests (EDGAR posts until 22:00 ET)
+    await _scheduler.add_schedule(
+        refresh_sec_filings,
+        CronTrigger(day_of_week="mon-fri", hour=23, minute=40),
+        id="sec_filings_refresh",
         conflict_policy="replace",
     )
     # Alert rules (price, regime, verdict, portfolio) every 15 minutes
