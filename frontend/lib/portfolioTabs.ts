@@ -18,6 +18,7 @@ const VALID_TABS: readonly PortfolioTab[] = [
   "news",
   "chat",
   "thesis",
+  "tax",
 ];
 
 export interface PortfolioTabDefinition {
@@ -44,6 +45,7 @@ const BASE_TAB_DEFINITIONS: PortfolioTabDefinition[] = [
   { id: "news", label: "News", tier: "primary" },
   { id: "chat", label: "Chat", tier: "overflow" },
   { id: "thesis", label: "Thesis", tier: "overflow" },
+  { id: "tax", label: "Tax", tier: "overflow" },
 ];
 
 export interface PortfolioTabGroups {

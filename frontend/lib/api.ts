@@ -6,6 +6,7 @@ import type { PortfolioRisk, RiskLookback } from "./risk";
 import type { AlertCheck, AlertEvent, AlertRule, CreateAlertRuleRequest } from "./alerts";
 import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
 import type { IncomeReport } from "./income";
+import type { ReplacementIdeas, TaxReport } from "./tax";
 import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
 import type { CostBasisMethod, ImportResult, LedgerSummary, LedgerTx, TxInput } from "./ledger";
 import type { ResponseLanguage } from "./responseLanguage";
@@ -1039,3 +1040,14 @@ export const setIncomeTarget = (portfolioId: string, monthly: number | null) =>
     method: "PUT",
     body: JSON.stringify({ monthly }),
   });
+
+// ── Tax tools ─────────────────────────────────────────────────────────────────
+
+export const getPortfolioTax = (portfolioId: string, year: number | null, minLoss: number) => {
+  const params = new URLSearchParams({ min_loss: String(minLoss) });
+  if (year) params.set("year", String(year));
+  return apiJson<TaxReport>(`/portfolio/${portfolioId}/tax?${params.toString()}`);
+};
+
+export const getTaxReplacements = (portfolioId: string, symbol: string) =>
+  apiJson<ReplacementIdeas>(`/portfolio/${portfolioId}/tax/replacements?symbol=${encodeURIComponent(symbol)}`);

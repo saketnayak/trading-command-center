@@ -82,6 +82,7 @@ class Lot:
     open_date: date
     quantity: float
     cost_per_share: float  # includes the buy's fees
+    tx_id: str | None = None  # the BUY that opened it (wash-sale matching)
 
 
 @dataclass
@@ -94,6 +95,8 @@ class Realised:
     proceeds: float  # after sale fees
     cost: float
     open_date: date
+    open_tx_id: str | None = None  # the BUY the shares came from
+    sell_tx_id: str | None = None  # the SELL that closed them
 
     @property
     def gain(self) -> float:
@@ -171,7 +174,7 @@ def replay(txs: list[Tx], method: Method = "fifo") -> LedgerState:
             key = (acct, tx.symbol)
             st.currency_of[tx.symbol] = ccy
             st.lots.setdefault(key, []).append(
-                Lot(tx.date, tx.quantity, (tx.quantity * tx.price + tx.fees) / tx.quantity)
+                Lot(tx.date, tx.quantity, (tx.quantity * tx.price + tx.fees) / tx.quantity, tx.id)
             )
             if method == "average":
                 _average(st.lots[key])
@@ -198,6 +201,8 @@ def replay(txs: list[Tx], method: Method = "fifo") -> LedgerState:
                         proceeds=(gross - fee_share) * q / qty,
                         cost=q * lot.cost_per_share,
                         open_date=lot.open_date,
+                        open_tx_id=lot.tx_id,
+                        sell_tx_id=tx.id,
                     ))
                     lot.quantity -= q
                 st.lots[key] = [lot for lot in lots if lot.quantity > QTY_EPS]
