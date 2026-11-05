@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.watchlist import Watchlist, WatchlistItem
@@ -135,7 +136,11 @@ async def _get_or_create_watchlist(user_id: UUID, db: AsyncSession) -> Watchlist
     wl = (await db.execute(query)).scalar_one_or_none()
     if not wl:
         db.add(Watchlist(created_by=user_id))
-        await db.commit()
+        try:
+            await db.commit()
+        except IntegrityError:
+            # A concurrent first request created it first; use that one.
+            await db.rollback()
         # Re-select with `items` eager-loaded: a plain refresh leaves the
         # relationship unloaded, and serialising WatchlistResponse would then
         # lazy-load it outside the async greenlet (MissingGreenlet -> 500 on a
