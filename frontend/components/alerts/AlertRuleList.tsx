@@ -45,6 +45,7 @@ function RuleRow({ rule }: { rule: AlertRule }) {
             {rule.cooldown_hours ? ` · at most every ${rule.cooldown_hours} h` : ""}
             {" · "}last fired {timeAgo(rule.last_triggered_at)}
             {rule.portfolio_name && rule.ticker ? ` · webhook via ${rule.portfolio_name}` : ""}
+            {rule.rerun_analysis ? " · re-runs the analysis" : ""}
           </p>
           {rule.last_error && <p className="mt-0.5 text-[11px] text-amber-600 dark:text-amber-400">Last check: {rule.last_error}</p>}
         </div>

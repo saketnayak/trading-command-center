@@ -191,6 +191,8 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 
 ### Phase 3: AI that earns trust
 
+> **Status (2026-11-05):** Phases 1–2, 3.1 and 3.2 are shipped. Next up is 3.3. Leftovers, existing issues, dev setup and a continuation prompt are in [`docs/handoffs/2026-11-05-roadmap-phase3-handoff.md`](handoffs/2026-11-05-roadmap-phase3-handoff.md).
+
 #### 3.1 Agent Backtest Lab + learning loop (M) ✅ shipped (Backtest Lab with dry runs, budget cap, baselines, training-cutoff contamination labels with out-of-sample headlines and isolated walk-forward memory; the model leaderboard; the opt-in per-user learning loop with nightly reflections, retries and hindsight flags on past-dated live runs)
 - New `/runs/backtest`: choose tickers, a date grid, provider and model, analysts, depth, and a **budget cap in USD**. The job wraps `tradingagents.backtest.Backtester` (already installed, unused), inside `job_manager` and `asyncio.to_thread` like live runs.
 - Persist the `BacktestReport` and show:
@@ -202,7 +204,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 - **Learning loop**: when `outcome_service` resolves a run's +7d/+30d outcome, optionally call `reflect_and_remember` so the agents' BM25 memories pick up lessons. Gate it behind a setting and keep memories per user.
 - **Model leaderboard**: extend `/runs/performance` to group accuracy and excess return vs SPY by provider, model, depth and analyst set. This answers "is Opus worth 10× the cost of a local model *for my tickers*?".
 
-#### 3.2 Natural-language watch rules (M; needs 1.5)
+#### 3.2 Natural-language watch rules (M; needs 1.5) ✅ shipped (compound AND/OR rules over one ticker or a portfolio's holdings with a sector/industry filter, firing per newly matching holding; `POST /alerts/compile` with the user's default LLM, validated like manual rules and never saved; the "Describe an alert" approve-then-save card; the optional "re-run the analysis when it fires" action on any ticker rule, with the new verdict shown on the inbox event; still open: an MCP `compile_alert` tool, editing condition values in the approval card, and valuation/earnings/Elliott conditions)
 - "Tell me if any semiconductor holding goes Bear on Markov *and* drops below its 200-day."
 - An LLM compiles the sentence to the 1.5 rule DSL. The user reviews the compiled rule (the same approval idea as Public's Agents). A deterministic evaluator runs it, so the LLM is never in the hot path.
 - Optional action: **re-run the TradingAgents analysis** when the rule fires, and attach the new verdict to the alert. This stays research-only and never places an order.

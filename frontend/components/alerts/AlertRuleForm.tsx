@@ -8,6 +8,7 @@ import {
   ALERT_KINDS,
   ALERT_RULES_QUERY_KEY,
   CHANNEL_LABELS,
+  canRerun,
   defaultParams,
   describeRule,
   kindOption,
@@ -28,6 +29,7 @@ export function AlertRuleForm({ initialTicker = "", initialKind }: { initialTick
   const [values, setValues] = useState<Record<string, number | string>>(() => defaultParams(initialKind ?? "price_above"));
   const [channels, setChannels] = useState<AlertChannel[]>(["inbox"]);
   const [cooldown, setCooldown] = useState(6);
+  const [rerun, setRerun] = useState(false);
 
   const opt = kindOption(kind);
   const { data: portfolios = [] } = useQuery({ queryKey: portfolioQueryKeys.list, queryFn: listPortfolios });
@@ -41,6 +43,7 @@ export function AlertRuleForm({ initialTicker = "", initialKind }: { initialTick
         params: toApiParams(kind, values),
         channels,
         cooldown_hours: cooldown,
+        rerun_analysis: canRerun(kind) && rerun,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ALERT_RULES_QUERY_KEY });
@@ -72,7 +75,7 @@ export function AlertRuleForm({ initialTicker = "", initialKind }: { initialTick
         if (!missing) create.mutate();
       }}
     >
-      <h2 className="text-sm font-semibold text-fg">New alert</h2>
+      <h2 className="text-sm font-semibold text-fg">Or build one yourself</h2>
 
       <div>
         <label htmlFor="alert-kind" className={FIELD_LABEL_CLASS}>Alert me when</label>
@@ -180,6 +183,13 @@ export function AlertRuleForm({ initialTicker = "", initialKind }: { initialTick
           ))}
         </div>
       </fieldset>
+
+      {canRerun(kind) && (
+        <label className="flex items-center gap-2 text-xs text-fg-secondary">
+          <input type="checkbox" checked={rerun} onChange={(e) => setRerun(e.target.checked)} />
+          Re-run the AI analysis when it fires (uses your LLM credits; never places an order)
+        </label>
+      )}
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>

@@ -8,7 +8,26 @@ export type AlertKind =
   | "regime_change"
   | "verdict_change"
   | "portfolio_drawdown"
-  | "position_weight";
+  | "position_weight"
+  | "compound";
+
+/** Params as stored: flat numbers/strings for single kinds, nested for compound. */
+export type AlertParams = Record<string, unknown>;
+
+export type CompoundCondition =
+  | { type: "price_above" | "price_below"; price: number }
+  | { type: "daily_move"; pct: number; direction: "any" | "up" | "down" }
+  | { type: "ma"; window: 50 | 200; direction: "above" | "below" }
+  | { type: "regime"; regime: "Bull" | "Sideways" | "Bear" }
+  | { type: "verdict"; verdict: "buy" | "hold" | "sell" }
+  | { type: "weight_above"; pct: number };
+
+export interface CompoundParams {
+  op: "and" | "or";
+  scope: "ticker" | "holdings";
+  sectors: string[];
+  conditions: CompoundCondition[];
+}
 
 export const ALERT_UNREAD_QUERY_KEY = ["alerts-unread"] as const;
 export const ALERT_RULES_QUERY_KEY = ["alert-rules"] as const;
@@ -23,10 +42,11 @@ export interface AlertRule {
   ticker: string | null;
   portfolio_id: string | null;
   portfolio_name: string | null;
-  params: Record<string, number | string>;
+  params: AlertParams;
   channels: AlertChannel[];
   cooldown_hours: number;
   enabled: boolean;
+  rerun_analysis: boolean;
   state: Record<string, unknown> | null;
   last_checked_at: string | null;
   last_triggered_at: string | null;
@@ -44,8 +64,18 @@ export interface AlertEvent {
   message: string;
   data: Record<string, unknown> | null;
   delivery: Record<string, string> | null;
+  /** Analyses the rule's "re-run" action started (or linked), with their current status. */
+  analyses: AlertAnalysis[];
   triggered_at: string | null;
   read_at: string | null;
+}
+
+export interface AlertAnalysis {
+  ticker: string;
+  run_id: string;
+  source: "started" | "recent";
+  status: "pending" | "running" | "completed" | "failed" | "aborted" | "deleted";
+  verdict: "buy" | "hold" | "sell" | null;
 }
 
 export interface AlertCheck {
@@ -59,9 +89,31 @@ export interface CreateAlertRuleRequest {
   kind: AlertKind;
   ticker?: string | null;
   portfolio_id?: string | null;
-  params: Record<string, number | string>;
+  params: AlertParams;
   channels: AlertChannel[];
   cooldown_hours: number;
+  rerun_analysis?: boolean;
+}
+
+/** POST /alerts/compile: a proposed rule (never saved by the server). */
+export interface CompiledRule extends CreateAlertRuleRequest {
+  ticker: string | null;
+  portfolio_id: string | null;
+  portfolio_name: string | null;
+  enabled: boolean;
+  rerun_analysis: boolean;
+}
+
+export interface CompileResult {
+  ok: boolean;
+  rule: CompiledRule | null;
+  /** Parts of the sentence the rule format can't express (left out of the rule). */
+  unsupported: string[];
+  /** Why the sentence couldn't become a valid rule. */
+  problems: string[];
+  /** The rule watches a portfolio and the user has several: they must choose one. */
+  needs_portfolio: boolean;
+  llm: string;
 }
 
 export type ParamField =
@@ -155,10 +207,69 @@ function fmtLevel(n: unknown): string {
   return Math.abs(x) >= 1 ? x.toLocaleString(undefined, { maximumFractionDigits: 2 }) : x.toPrecision(3);
 }
 
+function joinList(parts: string[], word: "and" | "or"): string {
+  if (parts.length <= 2) return parts.join(` ${word} `);
+  return `${parts.slice(0, -1).join(", ")}, ${word} ${parts[parts.length - 1]}`;
+}
+
+/** A condition as a verb phrase for its subject ("NVDA …", "Any holding …"). */
+export function describeCondition(c: CompoundCondition, portfolioName?: string | null): string {
+  switch (c.type) {
+    case "price_above":
+      return `trades above ${fmtLevel(c.price)}`;
+    case "price_below":
+      return `trades below ${fmtLevel(c.price)}`;
+    case "daily_move":
+      return `${c.direction === "up" ? "rises" : c.direction === "down" ? "falls" : "moves"} ${c.pct}% or more in a day`;
+    case "ma":
+      return `closes ${c.direction} its ${c.window}-day average`;
+    case "regime":
+      return `is in a ${c.regime} Markov regime`;
+    case "verdict":
+      return `has a ${c.verdict.toUpperCase()} AI verdict`;
+    case "weight_above":
+      return `is over ${c.pct}% of ${portfolioName ?? "the portfolio"}`;
+    default:
+      return "matches an unknown condition";
+  }
+}
+
+export function asCompound(params: AlertParams): CompoundParams {
+  const p = params as Partial<CompoundParams>;
+  return {
+    op: p.op === "or" ? "or" : "and",
+    scope: p.scope === "holdings" ? "holdings" : "ticker",
+    sectors: Array.isArray(p.sectors) ? p.sectors : [],
+    conditions: Array.isArray(p.conditions) ? p.conditions : [],
+  };
+}
+
+/** Who a compound rule is about: "NVDA", "Any holding in Core", "Any Semiconductors holding in Core". */
+export function compoundSubject(params: CompoundParams, ticker: string | null, portfolioName: string | null): string {
+  if (params.scope !== "holdings") return ticker ?? "";
+  const where = portfolioName ?? "the portfolio";
+  return params.sectors.length ? `Any ${joinList(params.sectors, "or")} holding in ${where}` : `Any holding in ${where}`;
+}
+
+/** How the rule fires, in one sentence (mirrors the engine's semantics). */
+export function firingNote(r: Pick<AlertRule, "kind" | "params">): string {
+  if (r.kind === "compound") {
+    const p = asCompound(r.params);
+    if (p.scope === "holdings") return "Fires for each holding that starts matching, then re-arms once it stops.";
+    return p.op === "and" && p.conditions.length > 1
+      ? "Fires when all of these become true together, then re-arms once any is false."
+      : "Fires when this becomes true, then re-arms once it is false again.";
+  }
+  if (r.kind === "regime_change" || r.kind === "verdict_change") {
+    return "Records the current value first, then fires when it changes.";
+  }
+  return "Fires when this becomes true, then re-arms once it is false again.";
+}
+
 /** One plain sentence describing what a rule watches. */
 export function describeRule(r: Pick<AlertRule, "kind" | "ticker" | "params" | "portfolio_name">): string {
   const t = r.ticker ?? "";
-  const p = r.params;
+  const p = r.params as Record<string, string | number>;
   const name = r.portfolio_name ?? "the portfolio";
   switch (r.kind) {
     case "price_above":
@@ -177,9 +288,48 @@ export function describeRule(r: Pick<AlertRule, "kind" | "ticker" | "params" | "
       return `${name} falls ${p.pct}% from its peak`;
     case "position_weight":
       return `A holding in ${name} grows past ${p.pct}%`;
+    case "compound": {
+      const c = asCompound(p);
+      const parts = c.conditions.map((x) => describeCondition(x, r.portfolio_name));
+      return `${compoundSubject(c, r.ticker, r.portfolio_name)} ${joinList(parts, c.op)}`;
+    }
     default:
       return r.kind;
   }
+}
+
+/** Whether the "re-run the analysis" action applies (it needs tickers to analyse). */
+export function canRerun(kind: AlertKind): boolean {
+  return kind !== "portfolio_drawdown";
+}
+
+/** Does this (proposed) rule need a portfolio before it can be saved? */
+export function needsPortfolio(r: Pick<CreateAlertRuleRequest, "kind" | "params">): boolean {
+  if (r.kind === "portfolio_drawdown" || r.kind === "position_weight") return true;
+  if (r.kind !== "compound") return false;
+  const p = asCompound(r.params);
+  return p.scope === "holdings" || p.conditions.some((c) => c.type === "weight_above");
+}
+
+/** The approved proposal as the body for POST /alerts/rules. */
+export function compiledToRequest(r: CompiledRule): CreateAlertRuleRequest {
+  return {
+    kind: r.kind, ticker: r.ticker, portfolio_id: r.portfolio_id, params: r.params,
+    channels: r.channels, cooldown_hours: r.cooldown_hours, rerun_analysis: r.rerun_analysis,
+  };
+}
+
+/** Text for an analysis link on an inbox event. */
+export function analysisLabel(a: AlertAnalysis): string {
+  if (a.status === "completed") return `${a.ticker} analysis: ${a.verdict ? a.verdict.toUpperCase() : "done"}`;
+  if (a.status === "pending" || a.status === "running") return `${a.ticker} analysis running…`;
+  return `${a.ticker} analysis ${a.status}`;
+}
+
+/** A part of the sentence the compiler couldn't express, for the "couldn't" list. */
+export function unsupportedLabel(u: string): string {
+  const m = /^missing:\s*(.*)$/i.exec(u.trim());
+  return m ? `Missing: ${m[1]}` : `Not understood: ${u}`;
 }
 
 export const CHANNEL_LABELS: Record<AlertChannel, string> = {
@@ -188,11 +338,12 @@ export const CHANNEL_LABELS: Record<AlertChannel, string> = {
   webhook: "Portfolio webhook",
 };
 
-/** Delivery problems worth surfacing on an event (anything not sent/delivered). */
+/** Delivery problems worth surfacing on an event (anything not sent/delivered).
+ * The re-run action's outcome counts only when something was skipped or failed. */
 export function deliveryIssues(delivery: Record<string, string> | null): string[] {
   return Object.entries(delivery ?? {})
-    .filter(([, v]) => v !== "sent" && v !== "delivered")
-    .map(([k, v]) => `${CHANNEL_LABELS[k as AlertChannel] ?? k}: ${v}`);
+    .filter(([k, v]) => (k === "analysis" ? /skipped|failed|over the limit/.test(v) : v !== "sent" && v !== "delivered"))
+    .map(([k, v]) => `${k === "analysis" ? "Analysis re-run" : (CHANNEL_LABELS[k as AlertChannel] ?? k)}: ${v}`);
 }
 
 /** "just now", "5 min ago", "3 h ago", "2 d ago", else the date. */

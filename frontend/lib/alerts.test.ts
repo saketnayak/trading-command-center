@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { ALERT_KINDS, defaultParams, deliveryIssues, describeRule, timeAgo, toApiParams } from "./alerts";
+import {
+  ALERT_KINDS,
+  analysisLabel,
+  canRerun,
+  compiledToRequest,
+  defaultParams,
+  deliveryIssues,
+  describeCondition,
+  describeRule,
+  firingNote,
+  needsPortfolio,
+  timeAgo,
+  toApiParams,
+  unsupportedLabel,
+} from "./alerts";
 
 describe("alerts helpers", () => {
   it("describes each kind in one sentence", () => {
@@ -53,5 +67,85 @@ describe("alerts helpers", () => {
         }
       }
     }
+  });
+});
+
+describe("compound alerts (roadmap 3.2)", () => {
+  const semis = {
+    op: "and",
+    scope: "holdings",
+    sectors: ["Semiconductors"],
+    conditions: [
+      { type: "regime", regime: "Bear" },
+      { type: "ma", window: 200, direction: "below" },
+    ],
+  };
+
+  it("describes compound rules over holdings and over one ticker", () => {
+    expect(describeRule({ kind: "compound", ticker: null, params: semis, portfolio_name: "Core" })).toBe(
+      "Any Semiconductors holding in Core is in a Bear Markov regime and closes below its 200-day average",
+    );
+    expect(describeRule({ kind: "compound", ticker: null, params: { ...semis, sectors: [] }, portfolio_name: null })).toBe(
+      "Any holding in the portfolio is in a Bear Markov regime and closes below its 200-day average",
+    );
+    const three = {
+      op: "or",
+      scope: "ticker",
+      sectors: [],
+      conditions: [
+        { type: "daily_move", pct: 5, direction: "down" },
+        { type: "verdict", verdict: "sell" },
+        { type: "price_below", price: 120 },
+      ],
+    };
+    expect(describeRule({ kind: "compound", ticker: "NVDA", params: three, portfolio_name: null })).toBe(
+      "NVDA falls 5% or more in a day, has a SELL AI verdict, or trades below 120",
+    );
+    expect(describeCondition({ type: "weight_above", pct: 20 }, "Core")).toBe("is over 20% of Core");
+    expect(describeCondition({ type: "daily_move", pct: 3, direction: "any" })).toBe("moves 3% or more in a day");
+    expect(describeCondition({ type: "ma", window: 50, direction: "above" })).toBe("closes above its 50-day average");
+  });
+
+  it("explains how a rule fires", () => {
+    expect(firingNote({ kind: "compound", params: semis })).toMatch(/each holding/);
+    expect(firingNote({ kind: "compound", params: { ...semis, scope: "ticker", sectors: [] } })).toMatch(/all of these/);
+    expect(firingNote({ kind: "regime_change", params: {} })).toMatch(/Records the current value/);
+    expect(firingNote({ kind: "price_above", params: { price: 1 } })).toMatch(/becomes true/);
+  });
+
+  it("knows when a portfolio is needed and when re-runs apply", () => {
+    expect(needsPortfolio({ kind: "compound", params: semis })).toBe(true);
+    expect(needsPortfolio({ kind: "compound", params: { scope: "ticker", conditions: [{ type: "weight_above", pct: 9 }] } })).toBe(true);
+    expect(needsPortfolio({ kind: "compound", params: { scope: "ticker", conditions: [{ type: "ma" }] } })).toBe(false);
+    expect(needsPortfolio({ kind: "position_weight", params: { pct: 9 } })).toBe(true);
+    expect(needsPortfolio({ kind: "price_above", params: { price: 9 } })).toBe(false);
+    expect(canRerun("portfolio_drawdown")).toBe(false);
+    expect(canRerun("compound")).toBe(true);
+  });
+
+  it("turns an approved proposal into a create request", () => {
+    expect(
+      compiledToRequest({
+        kind: "compound", ticker: null, portfolio_id: "p1", portfolio_name: "Core", params: semis,
+        channels: ["inbox", "email"], cooldown_hours: 6, enabled: true, rerun_analysis: true,
+      }),
+    ).toEqual({
+      kind: "compound", ticker: null, portfolio_id: "p1", params: semis, channels: ["inbox", "email"],
+      cooldown_hours: 6, rerun_analysis: true,
+    });
+  });
+
+  it("labels analyses and only flags re-run problems", () => {
+    const a = { ticker: "NVDA", run_id: "r", source: "started" as const, verdict: null };
+    expect(analysisLabel({ ...a, status: "running" })).toBe("NVDA analysis running…");
+    expect(analysisLabel({ ...a, status: "completed", verdict: "sell" })).toBe("NVDA analysis: SELL");
+    expect(analysisLabel({ ...a, status: "failed" })).toBe("NVDA analysis failed");
+    expect(analysisLabel({ ...a, status: "deleted" })).toBe("NVDA analysis deleted");
+    expect(unsupportedLabel("missing: how big a move")).toBe("Missing: how big a move");
+    expect(unsupportedLabel("when the CEO tweets")).toBe("Not understood: when the CEO tweets");
+    expect(deliveryIssues({ inbox: "delivered", analysis: "started 2" })).toEqual([]);
+    expect(deliveryIssues({ analysis: "skipped: No LLM provider key is configured" })).toEqual([
+      "Analysis re-run: skipped: No LLM provider key is configured",
+    ]);
   });
 });

@@ -4,7 +4,14 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { listAlertEvents, markAlertsRead } from "@/lib/api";
-import { ALERT_EVENTS_QUERY_KEY, ALERT_UNREAD_QUERY_KEY, deliveryIssues, timeAgo, type AlertEvent } from "@/lib/alerts";
+import {
+  ALERT_EVENTS_QUERY_KEY,
+  ALERT_UNREAD_QUERY_KEY,
+  analysisLabel,
+  deliveryIssues,
+  timeAgo,
+  type AlertEvent,
+} from "@/lib/alerts";
 
 export function AlertInbox() {
   const qc = useQueryClient();
@@ -52,6 +59,7 @@ export function AlertInbox() {
 
 function EventRow({ event, onRead }: { event: AlertEvent; onRead: () => void }) {
   const issues = deliveryIssues(event.delivery);
+  const analyses = event.analyses ?? [];
   const runId = event.kind === "verdict_change" ? (event.data?.run_id as string | undefined) : undefined;
   const unread = !event.read_at;
   return (
@@ -68,6 +76,21 @@ function EventRow({ event, onRead }: { event: AlertEvent; onRead: () => void }) 
       <p className="mt-0.5 text-xs text-fg-secondary">{event.message}</p>
       <div className="mt-1 flex flex-wrap gap-x-3 text-[11px]">
         {runId && <Link href={`/runs/${runId}`} onClick={onRead} className="text-blue-500 hover:text-blue-400">Open the analysis</Link>}
+        {analyses.map((a) =>
+          a.status === "deleted" ? (
+            <span key={a.run_id} className="text-muted">{analysisLabel(a)}</span>
+          ) : (
+            <Link
+              key={a.run_id}
+              href={a.status === "pending" || a.status === "running" ? `/runs/${a.run_id}/live` : `/runs/${a.run_id}`}
+              onClick={onRead}
+              className="text-blue-500 hover:text-blue-400"
+              title={a.source === "recent" ? "An analysis from the last 20 hours, linked instead of starting another" : "Started by this alert"}
+            >
+              {analysisLabel(a)}
+            </Link>
+          ),
+        )}
         {event.portfolio_id && !runId && <Link href="/portfolio" onClick={onRead} className="text-blue-500 hover:text-blue-400">Open portfolio</Link>}
         {unread && (
           <button type="button" onClick={onRead} className="text-muted hover:text-fg-secondary">Mark read</button>
