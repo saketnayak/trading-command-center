@@ -11,6 +11,7 @@
 - [Net worth](Net-Worth.md)
 - [Alerts](Alerts.md)
 - [SEC filings](SEC-Filings.md)
+- [ETF X-ray](ETF-X-ray.md)
 - [Backtest Lab and learning](Backtest-Lab-and-Learning.md)
 - [MCP server](MCP-Server.md)
 

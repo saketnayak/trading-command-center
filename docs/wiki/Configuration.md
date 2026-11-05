@@ -41,6 +41,7 @@ The backend runs these on its own; no cron setup is needed. Times are UTC.
 | Dividend refresh | Weekdays 23:05 | Dividend history for every held ticker |
 | Wallet sync | Daily 23:20 | Balances of BTC/ETH wallets on the Net worth page |
 | SEC filings refresh | Weekdays 23:40 | New filings, insider trades and summaries for held tickers |
+| ETF X-ray refresh | Sundays 22:30 | Which held tickers are funds, and what those funds hold |
 | Learning loop | Daily 01:10 | Reflections for users who turned the learning loop on |
 | JEV Lab tick retention | Daily 03:30 | Deletes JEV Lab tick data older than 14 days |
 
@@ -53,5 +54,6 @@ The backend runs these on its own; no cron setup is needed. Times are UTC.
 | Crypto prices | CoinGecko | No |
 | Exchange rates | ECB rates via Frankfurter | No |
 | SEC filings and insider trades | SEC EDGAR | No key, but needs `SEC_USER_AGENT` |
+| Fund holdings (ETF X-ray) | SEC N-PORT filings when `SEC_USER_AGENT` is set; Yahoo Finance top holdings and sector splits otherwise | No |
 | Wallet balances | mempool.space (BTC), a public Ethereum node (ETH) | No |
 | AI analysis, briefings, summaries | The LLM provider you choose | Your key |

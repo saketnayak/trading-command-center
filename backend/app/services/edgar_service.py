@@ -83,6 +83,27 @@ async def _http_get(url: str) -> str:
     raise EdgarError(str(err))
 
 
+async def _http_get_prefix(url: str, size: int = 8192) -> str:
+    """The first bytes of a document, without downloading the rest. A test seam."""
+    global _last_request
+    async with _rate_lock:
+        wait = MIN_INTERVAL_S - (time.monotonic() - _last_request)
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _last_request = time.monotonic()
+    async with _client.stream("GET", url, headers={"User-Agent": settings.sec_user_agent}) as resp:
+        if resp.status_code != 200:
+            raise EdgarError(f"HTTP {resp.status_code} from {url}")
+        chunks: list[bytes] = []
+        got = 0
+        async for chunk in resp.aiter_bytes():
+            chunks.append(chunk)
+            got += len(chunk)
+            if got >= size:
+                break
+    return b"".join(chunks).decode("utf-8", "ignore")
+
+
 def normalize_ticker(t: str) -> str:
     return t.strip().upper().replace(".", "-")
 

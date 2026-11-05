@@ -175,3 +175,18 @@ def test_dispatch_only_takes_the_mcp_path():
     for path in ("/mcp", "/mcp/", "/mcp-tokens", "/portfolio", "/mcpx"):
         asyncio.run(d({"type": "http", "path": path}, None, None))
     assert seen == [("mcp", "/mcp"), ("mcp", "/mcp"), ("api", "/mcp-tokens"), ("api", "/portfolio"), ("api", "/mcpx")]
+
+
+async def test_get_xray_reads_only_the_callers_portfolio(fake_prices):  # noqa: F811
+    async with _client() as c, _client() as other:
+        h = await _token(c, "mcp-xray@example.com")
+        oh = await _token(other, "mcp-xray2@example.com")
+        pid = await _portfolio(c, h, [(1, {"AAA": 10, "BBB": 5})])
+        theirs = await _portfolio(other, oh, [(1, {"AAA": 1})])
+        tok = (await _make_token(c, h))["token"]
+
+    async with mcp_session(tok) as s:
+        out = _json(await s.call_tool("get_xray", {"portfolio_id": pid}))
+        assert out["funds"] == [] and {r["ticker"] for r in out["exposures"]} == {"AAA", "BBB"}
+        denied = await s.call_tool("get_xray", {"portfolio_id": theirs})
+        assert denied.isError

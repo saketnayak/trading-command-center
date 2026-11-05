@@ -18,6 +18,7 @@ AgentFloor is a self-hosted research workspace for individual investors: a team 
 | [Net worth](Net-Worth.md) | Portfolios plus property, cash, loans and crypto wallets in one number |
 | [Alerts](Alerts.md) | Price, signal and portfolio alerts, alerts described in plain English, re-running the analysis when one fires |
 | [SEC filings](SEC-Filings.md) | What changed in your holdings' 10-K, 10-Q and 8-K filings, and insider trades |
+| [ETF X-ray](ETF-X-ray.md) | What you really own through your ETFs and funds: exposure by company and sector, and overlap between funds |
 | [Backtest Lab and learning loop](Backtest-Lab-and-Learning.md) | Replaying the agents on past dates, the model leaderboard, letting the agents learn from outcomes |
 | [MCP server](MCP-Server.md) | Asking Claude, Cursor or another MCP client about your own portfolio |
 

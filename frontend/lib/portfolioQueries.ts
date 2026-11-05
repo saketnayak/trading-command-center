@@ -77,6 +77,7 @@ export type PortfolioTab =
   | "income"
   | "tax"
   | "filings"
+  | "xray"
   | "insights"
   | "earnings"
   | "news"

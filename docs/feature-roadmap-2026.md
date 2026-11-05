@@ -217,7 +217,7 @@ Show the results as a **Risk** card in Holdings plus a full tab. Feed the number
 - An LLM writes a diff summary ("risk-factor section added China export-control language"), which is attached to the holding and fed into the morning brief.
 - Matches Robinhood Portfolio Digests, but with citations to the filing.
 
-#### 3.4 ETF look-through X-ray (M; data dependency)
+#### 3.4 ETF look-through X-ray (M; data dependency) ✅ shipped (an ETF X-ray tab: true exposure per company and sector, overlap matrix, concentration as held vs looking through; holdings from SEC N-PORT when `SEC_USER_AGENT` is set, otherwise Yahoo's top 10, with source, date and coverage shown; weekly refresh; feeds the AI brief; MCP `get_xray`; still open: rebalancing against true exposure, risk-tab concentration, funds inside funds, and issuer holdings files, which SPY needs because unit trusts don't file N-PORT)
 - Expand ETF holdings to their constituents (issuer holdings files; Finnhub ETF holdings if the key's tier has it) and cache them weekly.
 - Shows:
   - true exposure per stock and sector;

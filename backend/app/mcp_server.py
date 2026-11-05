@@ -299,6 +299,23 @@ def build_server():
             return await filing_digest_service.report(db, tickers, days=max(7, min(120, days)))
 
     @server.tool()
+    async def get_xray(portfolio_id: str) -> dict[str, Any]:
+        """ETF look-through: true exposure per company and sector counting funds' holdings, the overlap between
+        funds, and concentration as held vs looking through. Fund holdings can be partial (see each fund's
+        `covered_weight`, `source` and `as_of`), so exposures are minimums. Stored data only: the app refreshes
+        it weekly and when the ETF X-ray tab is opened."""
+        from app.models.user import User
+        from app.services import fund_lookthrough_service
+
+        user_id, _ = _caller()
+        async with AsyncSessionLocal() as db:
+            await _own_portfolio(db, user_id, portfolio_id)
+            user = await db.get(User, user_id)
+            return await fund_lookthrough_service.build_report(
+                db, uuid.UUID(portfolio_id), display_currency=((user.preferred_currency if user else None) or "USD").upper()
+            )
+
+    @server.tool()
     async def get_tax_report(portfolio_id: str, year: int | None = None, min_loss: float = 100.0) -> dict[str, Any]:
         """Tax view of a ledger-backed portfolio (informational, not tax advice; simplified US rules): realised
         gains for a tax year split short/long term with wash-sale adjustments, and open lots at a loss of at

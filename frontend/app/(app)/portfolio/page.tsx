@@ -65,6 +65,7 @@ import { DeliverySettingsModal } from "@/components/portfolio/DeliverySettingsMo
 import { SellCandidatesPanel } from "@/components/portfolio/SellCandidatesPanel";
 import { MorningBriefStrip } from "@/components/portfolio/MorningBriefStrip";
 import { FilingsPanel } from "@/components/portfolio/FilingsPanel";
+import { XrayPanel } from "@/components/portfolio/XrayPanel";
 import { PortfolioTotalsSummary } from "@/components/portfolio/PortfolioTotalsSummary";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Briefcase } from "lucide-react";
@@ -752,6 +753,16 @@ function PortfolioPageContent() {
                 aria-labelledby="portfolio-tab-filings"
               >
                 <FilingsPanel portfolioId={selectedId} />
+              </div>
+            )}
+
+            {tab === "xray" && (
+              <div
+                id="portfolio-panel-xray"
+                role="tabpanel"
+                aria-labelledby="portfolio-tab-xray"
+              >
+                <XrayPanel portfolioId={selectedId} />
               </div>
             )}
 

@@ -16,4 +16,5 @@ from app.models.dividend import DividendHistory, DividendSync  # noqa: F401
 from app.models.net_worth import NetWorthItem, NetWorthValuation  # noqa: F401
 from app.models.backtest import Backtest  # noqa: F401
 from app.models.run_reflection import RunReflection  # noqa: F401
+from app.models.fund_profile import FundProfile
 from app.models.sec_filing import SecCik, SecFiling, SecFilingText, SecInsiderTrade, SecSync  # noqa: F401
