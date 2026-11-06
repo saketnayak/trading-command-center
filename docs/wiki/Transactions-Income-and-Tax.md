@@ -16,6 +16,8 @@ Supported types: BUY, SELL, SPLIT, DIVIDEND, INTEREST, FEE, DEPOSIT and WITHDRAW
 
 **Cost basis**: FIFO, HIFO or average cost, switchable at any time. Buy fees go into the cost, sale fees reduce the proceeds, and splits adjust your lots.
 
+**Choosing lots**: if your broker let you pick which lots a sale closed (UBS and most US brokers do), record the same choice. When adding a sale, choose **Choose which lots this sale closes**; for a sale already in the list, use the lots button on its row. Shares you don't choose follow the cost-basis method. The realised gain, the Tax tab and the lots left open then match your broker.
+
 **While the ledger is on**, the Holdings tab is read-only (your trades decide the holdings). **Stop using the ledger** keeps the holdings it last worked out and returns the portfolio to editable holdings. Deleting your only transaction undoes the switch completely.
 
 ## Income

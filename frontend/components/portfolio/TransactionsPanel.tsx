@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { ListChecks, Trash2 } from "lucide-react";
 
 import {
   addTransaction,
@@ -12,12 +12,23 @@ import {
   getLedgerSummary,
   listTransactions,
   setCostBasisMethod,
+  updateTransaction,
 } from "@/lib/api";
 import { fmtMoney } from "@/lib/currency";
-import { COST_BASIS_METHODS, TX_TYPES, type LedgerSummary, type LedgerTx, type TxInput, type TxType } from "@/lib/ledger";
+import {
+  COST_BASIS_METHODS,
+  TX_TYPES,
+  inputsFromPicks,
+  picksFromInputs,
+  type LedgerSummary,
+  type LedgerTx,
+  type TxInput,
+  type TxType,
+} from "@/lib/ledger";
 import { portfolioQueryKeys } from "@/lib/portfolioQueries";
 import { IconButton } from "@/components/ui/IconButton";
 import { ImportTransactions } from "@/components/portfolio/ImportTransactions";
+import { LotPicker } from "@/components/portfolio/LotPicker";
 import {
   ALERT_BANNER_CLASS,
   BTN_DANGER_CLASS,
@@ -51,7 +62,7 @@ export function TransactionsPanel({ portfolioId, hasHoldings }: Props) {
   /** Every ledger change re-derives holdings, so refresh everything that reads them. */
   function refreshAll() {
     setReplaceHoldings(false);  // a confirmation only covers the change it was given for
-    for (const prefix of ["portfolio-transactions", "portfolio-ledger", "portfolio-current", "portfolios", "portfolio-performance",
+    for (const prefix of ["portfolio-transactions", "portfolio-ledger", "portfolio-lots", "portfolio-current", "portfolios", "portfolio-performance",
       "portfolio-risk", "portfolio-rebalance", "portfolio-income", "portfolio-tax", "portfolio-trim-signals", "portfolio-regime", "portfolio-wave", "portfolio-fundamentals"]) {
       qc.invalidateQueries({ queryKey: [prefix] });
     }
@@ -104,7 +115,8 @@ export function TransactionsPanel({ portfolioId, hasHoldings }: Props) {
 
       <section className={CARD}>
         <h3 className="mb-2 text-sm font-medium text-fg">Transactions <span className="font-normal text-muted">({rows.length})</span></h3>
-        <TransactionsTable rows={rows} onDelete={(id) => remove.mutate(id)} deleting={remove.isPending} />
+        <TransactionsTable portfolioId={portfolioId} rows={rows} onDelete={(id) => remove.mutate(id)} deleting={remove.isPending}
+          onChanged={(w) => { setNotice(w); refreshAll(); }} />
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -228,12 +240,16 @@ function CostBasis({ portfolioId, method, onChanged }: { portfolioId: string; me
 function AddTransactionForm({ portfolioId, replaceHoldings, onAdded }: { portfolioId: string; replaceHoldings: boolean; onAdded: (warnings: string[]) => void }) {
   const [type, setType] = useState<TxType>("BUY");
   const [form, setForm] = useState({ trade_date: today(), symbol: "", quantity: "", price: "", amount: "", fees: "", account: "Main", currency: "USD" });
+  const [choosingLots, setChoosingLots] = useState(false);
+  const [lotInputs, setLotInputs] = useState<Record<string, string>>({});
   const spec = TX_TYPES.find((t) => t.type === type)!;
   const add = useMutation({
     mutationFn: (tx: TxInput) => addTransaction(portfolioId, tx, replaceHoldings),
     onSuccess: (r) => {
       onAdded(r.warnings);
       setForm((f) => ({ ...f, symbol: type === "DIVIDEND" ? f.symbol : "", quantity: "", price: "", amount: "", fees: "" }));
+      setLotInputs({});
+      setChoosingLots(false);
     },
   });
   const num = (v: string) => (v.trim() === "" ? 0 : Number(v));
@@ -246,6 +262,7 @@ function AddTransactionForm({ portfolioId, replaceHoldings, onAdded }: { portfol
         trade_date: form.trade_date, type, symbol: spec.fields.includes("symbol") ? form.symbol.trim().toUpperCase() || null : null,
         quantity: num(form.quantity), price: num(form.price), amount: num(form.amount), fees: num(form.fees),
         account: form.account.trim() || "Main", currency: form.currency.trim().toUpperCase() || "USD",
+        lots: type === "SELL" && choosingLots ? picksFromInputs(lotInputs) : null,
       });
     }}>
       <h3 className="text-sm font-medium text-fg">Add a transaction</h3>
@@ -275,6 +292,19 @@ function AddTransactionForm({ portfolioId, replaceHoldings, onAdded }: { portfol
         <Field id="tx-account" label="Account"><input id="tx-account" value={form.account} onChange={set("account")} maxLength={64} className={FIELD_INPUT_SM_CLASS} /></Field>
         <Field id="tx-ccy" label="Currency"><input id="tx-ccy" value={form.currency} onChange={set("currency")} maxLength={8} className={`${FIELD_INPUT_SM_CLASS} uppercase`} /></Field>
       </div>
+      {type === "SELL" && (
+        <div className="space-y-2">
+          <button type="button" className="text-xs text-blue-500 hover:text-blue-400" aria-expanded={choosingLots}
+            onClick={() => setChoosingLots((v) => !v)}>
+            {choosingLots ? "Don't choose lots" : "Choose which lots this sale closes"}
+          </button>
+          {choosingLots && (
+            <LotPicker portfolioId={portfolioId} symbol={form.symbol.trim().toUpperCase()} account={form.account.trim() || "Main"}
+              on={form.trade_date} saleQuantity={num(form.quantity)} currency={form.currency.trim().toUpperCase() || "USD"}
+              inputs={lotInputs} onChange={setLotInputs} />
+          )}
+        </div>
+      )}
       <div className="flex items-center gap-3">
         <button type="submit" className={BTN_PRIMARY_SM_CLASS} disabled={add.isPending}>{add.isPending ? "Saving…" : `Add ${spec.label.toLowerCase()}`}</button>
         {add.isError && <span className="text-xs text-red-600 dark:text-red-400" role="alert">{(add.error as Error).message}</span>}
@@ -292,8 +322,11 @@ function Field({ id, label, children }: { id: string; label: string; children: R
   );
 }
 
-function TransactionsTable({ rows, onDelete, deleting }: { rows: LedgerTx[]; onDelete: (id: string) => void; deleting: boolean }) {
+function TransactionsTable({ portfolioId, rows, onDelete, deleting, onChanged }: {
+  portfolioId: string; rows: LedgerTx[]; onDelete: (id: string) => void; deleting: boolean; onChanged: (warnings: string[]) => void;
+}) {
   const [show, setShow] = useState(50);
+  const [lotsFor, setLotsFor] = useState<string | null>(null);
   return (
     <>
       <div className="overflow-x-auto">
@@ -315,20 +348,36 @@ function TransactionsTable({ rows, onDelete, deleting }: { rows: LedgerTx[]; onD
             {rows.slice(0, show).map((t) => {
               const value = t.type === "BUY" || t.type === "SELL" ? t.quantity * t.price : t.type === "SPLIT" ? null : t.amount;
               return (
-                <tr key={t.id} className="border-t border-border/60">
+                <Fragment key={t.id}>
+                <tr className="border-t border-border/60">
                   <td className="py-1.5 text-fg-secondary">{t.trade_date}</td>
-                  <td className="py-1.5 font-medium text-fg">{TX_TYPES.find((x) => x.type === t.type)?.label ?? t.type}</td>
+                  <td className="py-1.5 font-medium text-fg">
+                    {TX_TYPES.find((x) => x.type === t.type)?.label ?? t.type}
+                    {t.lots && t.lots.length > 0 && <span className="ml-1 text-[10px] font-normal text-muted">{`· ${t.lots.length} ${t.lots.length === 1 ? "lot" : "lots"} chosen`}</span>}
+                  </td>
                   <td className="py-1.5 text-fg">{t.symbol ?? ""}</td>
                   <td className="py-1.5 text-right text-fg-secondary">{t.type === "SPLIT" ? `×${t.quantity}` : t.quantity ? Number(t.quantity.toFixed(6)).toLocaleString() : ""}</td>
                   <td className="hidden py-1.5 text-right text-fg-secondary sm:table-cell">{t.price ? t.price.toLocaleString(undefined, { maximumFractionDigits: 4 }) : ""}</td>
                   <td className="py-1.5 text-right text-fg">{value !== null ? fmtMoney(value, t.currency) : ""}</td>
                   <td className="hidden py-1.5 pl-3 text-fg-secondary md:table-cell">{t.account}</td>
                   <td className="hidden py-1.5 pl-3 text-[11px] text-muted md:table-cell">{t.source}</td>
-                  <td className="py-1.5 text-right">
+                  <td className="whitespace-nowrap py-1.5 text-right">
+                    {t.type === "SELL" && (
+                      <IconButton icon={ListChecks} label={`Choose the lots this ${t.symbol ?? ""} sale on ${t.trade_date} closes`}
+                        onClick={() => setLotsFor(lotsFor === t.id ? null : t.id)} />
+                    )}
                     <IconButton icon={Trash2} label={`Delete ${t.type.toLowerCase()} ${t.symbol ?? ""} on ${t.trade_date}`} tone="danger"
                       disabled={deleting} onClick={() => onDelete(t.id)} />
                   </td>
                 </tr>
+                {lotsFor === t.id && (
+                  <tr>
+                    <td colSpan={9} className="pb-3 pt-1">
+                      <SaleLots portfolioId={portfolioId} sale={t} onDone={(w) => { setLotsFor(null); onChanged(w); }} onCancel={() => setLotsFor(null)} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>
@@ -340,6 +389,36 @@ function TransactionsTable({ rows, onDelete, deleting }: { rows: LedgerTx[]; onD
         </button>
       )}
     </>
+  );
+}
+
+function SaleLots({ portfolioId, sale, onDone, onCancel }: {
+  portfolioId: string; sale: LedgerTx; onDone: (warnings: string[]) => void; onCancel: () => void;
+}) {
+  const [inputs, setInputs] = useState<Record<string, string>>(() => inputsFromPicks(sale.lots));
+  const save = useMutation({
+    mutationFn: (lots: TxInput["lots"]) => updateTransaction(portfolioId, sale.id, { lots }),
+    onSuccess: (r) => onDone(r.warnings),
+  });
+  const picks = picksFromInputs(inputs);
+  return (
+    <div className="space-y-2 rounded-md border border-border bg-muted-surface p-3">
+      <p className="text-xs text-fg-secondary">
+        {`Which lots did this sale of ${Number(sale.quantity.toFixed(6)).toLocaleString("en-US")} ${sale.symbol ?? ""} close? Shares you don't choose follow the cost-basis method.`}
+      </p>
+      <LotPicker portfolioId={portfolioId} symbol={sale.symbol ?? ""} account={sale.account} on={sale.trade_date} exclude={sale.id}
+        saleQuantity={sale.quantity} currency={sale.currency} inputs={inputs} onChange={setInputs} />
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className={BTN_PRIMARY_SM_CLASS} disabled={save.isPending} onClick={() => save.mutate(picks.length ? picks : null)}>
+          {save.isPending ? "Saving…" : "Save lots"}
+        </button>
+        {sale.lots && sale.lots.length > 0 && (
+          <button type="button" className={BTN_SECONDARY_CLASS} disabled={save.isPending} onClick={() => save.mutate(null)}>Stop choosing lots</button>
+        )}
+        <button type="button" className="text-xs text-muted hover:text-fg" onClick={onCancel}>Cancel</button>
+        {save.isError && <span className="text-xs text-red-600 dark:text-red-400" role="alert">{(save.error as Error).message}</span>}
+      </div>
+    </div>
   );
 }
 

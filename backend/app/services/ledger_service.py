@@ -37,7 +37,7 @@ def to_tx(row: PortfolioTransaction) -> Tx:
     return Tx(
         seq=row.seq, date=row.trade_date, type=row.type, symbol=row.symbol, quantity=row.quantity,
         price=row.price, amount=row.amount, fees=row.fees, account=row.account, currency=row.currency,
-        id=str(row.id),
+        id=str(row.id), picks=tuple((str(p["buy_id"]), float(p["quantity"])) for p in (row.lots or ())),
     )
 
 

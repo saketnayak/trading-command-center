@@ -40,6 +40,11 @@ MAX_IMPORT_ROWS = 5000
 TxTypeLit = Literal["BUY", "SELL", "SPLIT", "DIVIDEND", "INTEREST", "FEE", "DEPOSIT", "WITHDRAWAL"]
 
 
+class LotPick(BaseModel):
+    buy_id: str = Field(pattern=r"^[0-9a-fA-F-]{36}$")
+    quantity: float = Field(gt=0)
+
+
 class TxIn(BaseModel):
     trade_date: date
     type: TxTypeLit
@@ -51,6 +56,7 @@ class TxIn(BaseModel):
     account: str = Field(default="Main", max_length=64)
     currency: str = Field(default="USD", max_length=8)
     note: str | None = Field(default=None, max_length=500)
+    lots: list[LotPick] | None = Field(default=None, max_length=200)  # SELL only: the lots it closes
 
 
 class TxPatch(BaseModel):
@@ -64,6 +70,7 @@ class TxPatch(BaseModel):
     account: str | None = Field(default=None, max_length=64)
     currency: str | None = Field(default=None, max_length=8)
     note: str | None = Field(default=None, max_length=500)
+    lots: list[LotPick] | None = Field(default=None, max_length=200)
 
 
 class ImportIn(BaseModel):
@@ -98,15 +105,31 @@ def _clean(body: TxIn) -> TxIn:
     out = body.model_copy(update={
         "symbol": sym, "currency": (body.currency or "USD").strip().upper() or "USD",
         "account": (body.account or "Main").strip() or "Main",
+        "lots": body.lots or None,
     })
-    validate(Tx(0, out.trade_date, out.type, out.symbol, out.quantity, out.price, out.amount, out.fees, out.account, out.currency))
+    validate(Tx(0, out.trade_date, out.type, out.symbol, out.quantity, out.price, out.amount, out.fees, out.account,
+                out.currency, picks=tuple((p.buy_id, p.quantity) for p in out.lots or ())))
     return out
+
+
+async def _check_lots(db: AsyncSession, portfolio_id: UUID, tx: TxIn) -> None:
+    """Every chosen lot must be a BUY of the same symbol in the same account of this portfolio."""
+    if not tx.lots:
+        return
+    ids = {p.buy_id.lower() for p in tx.lots}
+    rows = (await db.execute(select(PortfolioTransaction.id, PortfolioTransaction.type, PortfolioTransaction.symbol,
+                                    PortfolioTransaction.account).where(
+        PortfolioTransaction.portfolio_id == portfolio_id,
+        PortfolioTransaction.id.in_([UUID(i) for i in ids])))).all()
+    ok = {str(r.id) for r in rows if r.type == "BUY" and r.symbol == tx.symbol and r.account == tx.account}
+    if ok != ids:
+        raise TxError(f"A chosen lot isn't a buy of {tx.symbol} in account {tx.account} in this portfolio")
 
 
 def _tx_dict(r: PortfolioTransaction) -> dict:
     return {"id": str(r.id), "trade_date": r.trade_date.isoformat(), "type": r.type, "symbol": r.symbol,
             "quantity": r.quantity, "price": r.price, "amount": r.amount, "fees": r.fees, "account": r.account,
-            "currency": r.currency, "note": r.note, "source": r.source, "seq": r.seq}
+            "currency": r.currency, "note": r.note, "source": r.source, "seq": r.seq, "lots": r.lots}
 
 
 async def _check_replays(db: AsyncSession, portfolio: Portfolio) -> list[str]:
@@ -136,6 +159,7 @@ async def add_transaction(portfolio_id: UUID, body: TxIn, replace_holdings: bool
     portfolio = await _own(db, portfolio_id, user)
     try:
         clean = _clean(body)
+        await _check_lots(db, portfolio_id, clean)
     except TxError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not replace_holdings:
@@ -162,6 +186,7 @@ async def update_transaction(portfolio_id: UUID, tx_id: UUID, body: TxPatch, db:
     merged = TxIn(**{**{k: getattr(row, k) for k in TxIn.model_fields}, **body.model_dump(exclude_unset=True)})
     try:
         clean = _clean(merged)
+        await _check_lots(db, portfolio_id, clean)
     except TxError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     for k, v in clean.model_dump().items():
@@ -186,6 +211,25 @@ async def delete_transaction(portfolio_id: UUID, tx_id: UUID, db: AsyncSession =
     await db.commit()
 
 
+@router.get("/portfolio/{portfolio_id}/lots")
+async def open_lots(portfolio_id: UUID, symbol: str = Query(..., min_length=1, max_length=32),
+                    on: date = Query(...), account: str = Query("Main", max_length=64),
+                    exclude: UUID | None = Query(None), db: AsyncSession = Depends(get_db),
+                    user: User = Depends(get_current_user)):
+    """The lots of one holding still open on a date, for choosing which ones a sale closes. `exclude` leaves
+    out a transaction (the sale being edited)."""
+    portfolio = await _own(db, portfolio_id, user)
+    sym = symbol.strip().upper()
+    txs = [t for t in await ledger_service.load_txs(db, portfolio_id)
+           if t.date <= on and (exclude is None or t.id != str(exclude))]
+    st = replay(txs, portfolio.cost_basis_method or "fifo")
+    lots = st.lots.get(((account or "Main").strip() or "Main", sym), [])
+    return {"symbol": sym, "account": account, "on": on.isoformat(), "method": portfolio.cost_basis_method or "fifo",
+            "lots": [{"buy_id": lot.tx_id, "open_date": lot.open_date.isoformat(), "quantity": round(lot.quantity, 10),
+                      "cost_per_share": round(lot.cost_per_share, 6),
+                      "term": "long" if (on - lot.open_date).days > 365 else "short"} for lot in lots]}
+
+
 @router.post("/portfolio/{portfolio_id}/transactions/import")
 async def import_transactions(portfolio_id: UUID, body: ImportIn, db: AsyncSession = Depends(get_db),
                               user: User = Depends(get_current_user)):
@@ -196,7 +240,9 @@ async def import_transactions(portfolio_id: UUID, body: ImportIn, db: AsyncSessi
     clean: list[TxIn] = []
     for i, raw in enumerate(body.rows):
         try:
-            clean.append(_clean(TxIn.model_validate(raw)))
+            row = _clean(TxIn.model_validate(raw))
+            await _check_lots(db, portfolio_id, row)
+            clean.append(row)
         except (TxError, ValueError) as exc:  # pydantic ValidationError is a ValueError
             msg = str(exc).splitlines()[0] if not hasattr(exc, "errors") else "; ".join(
                 f"{'.'.join(str(p) for p in e.get('loc', ()))}: {e.get('msg')}" for e in exc.errors()[:2])
@@ -206,7 +252,8 @@ async def import_transactions(portfolio_id: UUID, body: ImportIn, db: AsyncSessi
         existing = await ledger_service.load_txs(db, portfolio_id)
         start = len(existing) + 1
         trial = existing + [Tx(start + i, t.trade_date, t.type, t.symbol, t.quantity, t.price, t.amount, t.fees,
-                               t.account, t.currency) for i, t in enumerate(clean)]
+                               t.account, t.currency, picks=tuple((p.buy_id, p.quantity) for p in t.lots or ()))
+                            for i, t in enumerate(clean)]
         preview_warnings = replay(trial, portfolio.cost_basis_method or "fifo").warnings
     if body.dry_run or errors:
         return {"valid": len(clean), "errors": errors, "warnings": preview_warnings, "imported": 0}

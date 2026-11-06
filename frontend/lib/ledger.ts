@@ -17,6 +17,22 @@ export interface LedgerTx {
   note: string | null;
   source: "manual" | "csv" | "opening";
   seq: number;
+  /** SELL only: the lots it closes, by the BUY that opened each. */
+  lots: LotPick[] | null;
+}
+
+export interface LotPick {
+  buy_id: string;
+  quantity: number;
+}
+
+/** A lot still open on a date, from GET /portfolio/{id}/lots. */
+export interface OpenLot {
+  buy_id: string;
+  open_date: string;
+  quantity: number;
+  cost_per_share: number;
+  term: "short" | "long";
 }
 
 export interface TxInput {
@@ -30,6 +46,7 @@ export interface TxInput {
   account?: string;
   currency?: string;
   note?: string | null;
+  lots?: LotPick[] | null;
 }
 
 export interface LedgerLot {
@@ -266,4 +283,35 @@ export function mapRows(
     out.push(tx);
   });
   return { rows: out, problems };
+}
+
+/** Picker inputs (buy id → typed shares) → the lots to send; blanks and zeros are left out. */
+export function picksFromInputs(inputs: Record<string, string>): LotPick[] {
+  return Object.entries(inputs)
+    .map(([buy_id, v]) => ({ buy_id, quantity: Number(v) }))
+    .filter((p) => Number.isFinite(p.quantity) && p.quantity > 0);
+}
+
+/** The reverse, to start the picker from a sale's saved lots. */
+export function inputsFromPicks(picks: LotPick[] | null | undefined): Record<string, string> {
+  return Object.fromEntries((picks ?? []).map((p) => [p.buy_id, String(p.quantity)]));
+}
+
+/** "28 of 123 chosen; the other 95 follow FIFO", or a problem with the choice. */
+export function pickSummary(picks: LotPick[], saleQuantity: number, method: string, lots: OpenLot[]): { text: string; ok: boolean } {
+  const chosen = picks.reduce((n, p) => n + p.quantity, 0);
+  const over = picks.find((p) => {
+    const lot = lots.find((l) => l.buy_id === p.buy_id);
+    return !lot || p.quantity > lot.quantity + 1e-9;
+  });
+  if (over) return { text: "A chosen amount is more than that lot holds.", ok: false };
+  if (chosen > saleQuantity + 1e-9) return { text: `${fmtQty(chosen)} chosen, more than the ${fmtQty(saleQuantity)} sold.`, ok: false };
+  const rest = saleQuantity - chosen;
+  const label = method.toUpperCase();
+  if (chosen === 0) return { text: `No lots chosen; the sale follows ${label}.`, ok: true };
+  return { text: rest > 1e-9 ? `${fmtQty(chosen)} of ${fmtQty(saleQuantity)} chosen; the other ${fmtQty(rest)} follow ${label}.` : `All ${fmtQty(saleQuantity)} chosen.`, ok: true };
+}
+
+function fmtQty(n: number): string {
+  return Number(n.toFixed(6)).toLocaleString("en-US");
 }
