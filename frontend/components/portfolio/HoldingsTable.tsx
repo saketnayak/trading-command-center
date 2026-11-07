@@ -12,7 +12,7 @@ import { IconButton, IconLink } from "@/components/ui/IconButton";
 import { TickerLabel } from "@/components/ui/TickerLabel";
 import { WaveBadge } from "@/components/wave/WaveBadge";
 import type { PortfolioHolding, FundamentalsData, RegimeData, WaveSummary, TrimSignalEntry, FinnhubUnavailableReason, TickerMetadata } from "@/lib/types";
-import { finnhubUnavailableMessage } from "@/lib/finnhubMessages";
+import { scopedFinnhubMessage } from "@/lib/finnhubMessages";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { HoldingsMobileCards } from "@/components/portfolio/HoldingsMobileCards";
 import { FIELD_INPUT_SM_CLASS, BTN_SECONDARY_CLASS, ALERT_BANNER_CLASS } from "@/lib/uiClasses";
@@ -22,6 +22,8 @@ interface HoldingsTableProps {
   holdings: PortfolioHolding[];
   priceUnavailableReason: string | null;
   fundamentalsUnavailableReason?: FinnhubUnavailableReason | null;
+  /** The holdings that reason applies to (all of them when empty). */
+  fundamentalsUnavailableTickers?: string[];
   displayCurrency: string;
   fundamentals?: Record<string, FundamentalsData>;
   regime?: Record<string, RegimeData>;
@@ -351,7 +353,7 @@ function RegimeRow({ data, colSpan }: { data: RegimeData; colSpan: number }) {
   );
 }
 
-export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, fundamentalsUnavailableReason, displayCurrency, fundamentals, regime, wave, trimSignals, tickerMetadata = {}, onTickerClick, onUploadClick, readOnly = false }: HoldingsTableProps) {
+export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, fundamentalsUnavailableReason, fundamentalsUnavailableTickers = [], displayCurrency, fundamentals, regime, wave, trimSignals, tickerMetadata = {}, onTickerClick, onUploadClick, readOnly = false }: HoldingsTableProps) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftRow>({ ticker: "", shares: "", avg_cost: "", currency: displayCurrency });
@@ -527,7 +529,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
   const hasTrimSignals = trimSignals != null;
   const colSpan = 7 + (hasRegime ? 1 : 0) + (hasTrimSignals ? 1 : 0);
 
-  const fundamentalsMessage = finnhubUnavailableMessage(fundamentalsUnavailableReason, "fundamentals");
+  const fundamentalsMessage = scopedFinnhubMessage(fundamentalsUnavailableReason, "fundamentals", fundamentalsUnavailableTickers, holdings.length);
 
   return (
     <div className="space-y-3">

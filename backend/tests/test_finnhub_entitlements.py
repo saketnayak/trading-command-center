@@ -184,3 +184,44 @@ async def test_get_portfolio_fundamentals_keeps_crypto_data_without_finnhub_key(
         "BTC-USD": {"asset_type": "crypto", "market_cap": 1_000_000},
     }
     assert response["fundamentals_unavailable_reason"] == "no_finnhub_key"
+
+
+@pytest.mark.asyncio
+async def test_get_portfolio_fundamentals_names_the_tickers_it_could_not_load(monkeypatch):
+    """A free Finnhub key 403s on ASX symbols only; the response says which holdings, not just why."""
+    denied = FinnhubError(capability=FinnhubCapability.STOCK_METRIC, reason=FinnhubReason.ACCESS_DENIED, message="denied")
+
+    async def fake_fetch_fundamentals(ticker, api_key):
+        if ticker.endswith(".AX"):
+            return {"asset_type": "stock"}, denied
+        return {"asset_type": "stock", "pe_ratio": 30.0}, None
+
+    from app.routers import portfolio as portfolio_router
+
+    monkeypatch.setattr(portfolio_router, "_fetch_fundamentals", fake_fetch_fundamentals)
+    monkeypatch.setattr(portfolio_router, "_get_finnhub_key", AsyncMock(return_value="test-key"))
+    monkeypatch.setattr(portfolio_router, "_verify_portfolio_access", AsyncMock())
+
+    class FakeHolding:
+        def __init__(self, ticker):
+            self.ticker = ticker
+
+    class FakeSnapshot:
+        holdings = [FakeHolding("NAB.AX"), FakeHolding("AAPL"), FakeHolding("CSL.AX"), FakeHolding("BTC-USD")]
+
+    class FakeResult:
+        def scalar_one_or_none(self):
+            return FakeSnapshot()
+
+    class FakeDb:
+        async def execute(self, *_args, **_kwargs):
+            return FakeResult()
+
+    class FakeUser:
+        id = "00000000-0000-0000-0000-000000000099"
+
+    response = await portfolio_router.get_portfolio_fundamentals(
+        portfolio_id="00000000-0000-0000-0000-000000000001", db=FakeDb(), user=FakeUser())
+
+    assert response["fundamentals_unavailable_reason"] == FinnhubReason.ACCESS_DENIED.value
+    assert response["fundamentals_unavailable_tickers"] == ["CSL.AX", "NAB.AX"]

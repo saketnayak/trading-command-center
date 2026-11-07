@@ -42,7 +42,7 @@ from app.utils.quote_currency import quote_currency_from_ticker
 from app.services.ledger_service import ensure_not_ledger_backed
 from app.utils.response_language import DEFAULT_RESPONSE_LANGUAGE, normalize_response_language
 from app.schemas.money import PriceQuote
-from app.services.fx_service import SUPPORTED_CURRENCIES
+from app.services.fx_service import SUPPORTED_CURRENCIES, convert_rate
 from app.utils.llm_providers import (
     DEFAULT_LLM_DEPTH,
     LOCAL_LLM_PROVIDERS,
@@ -185,6 +185,7 @@ class CurrentResponse(BaseModel):
     portfolio_currencies: list[str] = []
     totals_currency: Optional[str] = None
     totals: Totals
+    totals_excluded: list[str] = []  # priced holdings left out of totals: no FX rate to the display currency
     holdings: list[HoldingResponse]
 
 
@@ -521,6 +522,7 @@ async def get_current_holdings(
     total_market_value_for_pnl: float = 0.0
     total_cost: float = 0.0
     has_totals = False
+    totals_excluded: list[str] = []
 
     for h in snapshot.holdings:
         quote = price_map.get(h.ticker)
@@ -543,17 +545,18 @@ async def get_current_holdings(
             else:
                 pnl_reason = "currency_mismatch"
 
-        include_in_totals = (
-            quote is not None
-            and quote.currency_code == pref_currency
-            and cost_ccy == quote.currency_code
-        )
-        if include_in_totals and market_value is not None:
-            total_market_value += market_value
-            has_totals = True
-            if h.avg_cost is not None:
-                total_market_value_for_pnl += market_value
-                total_cost += h.avg_cost * h.shares
+        # Totals are in the display currency: convert each holding from its quote currency.
+        # A holding with no rate is left out and named, never counted 1:1.
+        if quote is not None and market_value is not None:
+            fx = await convert_rate(quote.currency_code, pref_currency)
+            if fx is None:
+                totals_excluded.append(h.ticker)
+            else:
+                total_market_value += market_value * fx
+                has_totals = True
+                if h.avg_cost is not None and cost_ccy == quote.currency_code:
+                    total_market_value_for_pnl += market_value * fx
+                    total_cost += h.avg_cost * h.shares * fx
 
         enriched.append(HoldingResponse(
             id=h.id,
@@ -593,6 +596,7 @@ async def get_current_holdings(
         portfolio_currencies=sorted(portfolio_currencies),
         totals_currency=totals_currency,
         totals=totals,
+        totals_excluded=sorted(totals_excluded),
         holdings=enriched,
     )
 
@@ -1409,6 +1413,7 @@ async def get_portfolio_fundamentals(
         return {
             "price_unavailable_reason": None,
             "fundamentals_unavailable_reason": None,
+            "fundamentals_unavailable_tickers": [],
             "data": {},
         }
 
@@ -1419,15 +1424,19 @@ async def get_portfolio_fundamentals(
     no_key_reason = "no_finnhub_key" if has_stock and not av_key else None
 
     errors: list[FinnhubError | None] = []
+    failed: list[str] = []
     results = await asyncio.gather(*[_fetch_fundamentals(t, av_key) for t in tickers])
     data: dict[str, dict] = {}
     for ticker, (fundamentals, error) in zip(tickers, results):
         data[ticker] = fundamentals
         if error and not is_crypto(ticker):
             errors.append(error)
+            failed.append(ticker)
     return {
         "price_unavailable_reason": no_key_reason,
         "fundamentals_unavailable_reason": no_key_reason or aggregate_unavailable_reason(errors),
+        # Which holdings it applies to: a free key is refused only some symbols (e.g. ASX).
+        "fundamentals_unavailable_tickers": sorted(failed),
         "data": data,
     }
 
