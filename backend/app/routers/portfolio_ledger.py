@@ -20,7 +20,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -43,6 +43,11 @@ TxTypeLit = Literal["BUY", "SELL", "SPLIT", "DIVIDEND", "INTEREST", "FEE", "DEPO
 class LotPick(BaseModel):
     buy_id: str = Field(pattern=r"^[0-9a-fA-F-]{36}$")
     quantity: float = Field(gt=0)
+
+    @field_validator("buy_id")
+    @classmethod
+    def _lower(cls, v: str) -> str:
+        return v.lower()  # ledger replay matches lots by the id's canonical (lower-case) form
 
 
 class TxIn(BaseModel):

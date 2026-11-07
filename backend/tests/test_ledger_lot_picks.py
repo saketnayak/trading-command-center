@@ -114,6 +114,20 @@ async def test_api_records_chosen_lots_lists_open_lots_and_reverts(fake_prices):
         assert repick.status_code == 200 and repick.json()["lots"][0]["buy_id"] == new["id"]
 
 
+async def test_api_matches_a_chosen_lot_whatever_the_case_of_its_id(fake_prices):  # noqa: F811
+    async with _client() as c:
+        h = await _token(c, "lots4@example.com")
+        pid = await _portfolio(c, h, [(1, {})])
+        await _add(c, h, pid, trade_date=_d(900), type="BUY", symbol="LOTE", quantity=10, price=100)
+        new = await _add(c, h, pid, trade_date=_d(400), type="BUY", symbol="LOTE", quantity=10, price=300)
+
+        sell = await _add(c, h, pid, trade_date=_d(10), type="SELL", symbol="LOTE", quantity=10, price=250,
+                          lots=[{"buy_id": new["id"].upper(), "quantity": 10}])
+        assert sell["warnings"] == [] and sell["lots"][0]["buy_id"] == new["id"]
+        summary = (await c.get(f"/portfolio/{pid}/ledger", headers=h)).json()
+        assert [x["open_date"] for x in summary["realised_lots"]] == [_d(400)]
+
+
 async def test_api_rejects_lots_that_are_not_buys_of_the_same_holding(fake_prices):  # noqa: F811
     async with _client() as c:
         h = await _token(c, "lots3@example.com")
