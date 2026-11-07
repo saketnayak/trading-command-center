@@ -340,6 +340,8 @@ export interface PortfolioCurrentResponse {
   portfolio_currencies: string[];
   totals_currency: string | null;
   totals: PortfolioTotals;
+  /** Priced holdings left out of the totals: no exchange rate to the display currency. */
+  totals_excluded?: string[];
   holdings: PortfolioHolding[];
 }
 
@@ -394,6 +396,8 @@ export interface PortfolioEarningsResponse {
 export interface PortfolioFundamentalsResponse {
   data: Record<string, FundamentalsData>;
   fundamentals_unavailable_reason: FinnhubUnavailableReason | null;
+  /** The holdings the reason applies to. */
+  fundamentals_unavailable_tickers: string[];
 }
 
 export interface PortfolioNewsResponse {

@@ -30,6 +30,21 @@ export function finnhubUnavailableMessage(
   }
 }
 
+/** Like finnhubUnavailableMessage, but names the holdings when only some of them were refused
+ * (a free key is refused ASX symbols, for example), so one ticker doesn't read as the whole portfolio. */
+export function scopedFinnhubMessage(
+  reason: FinnhubUnavailableReason | null | undefined,
+  feature: keyof typeof FEATURE_LABELS,
+  tickers: string[],
+  holdingCount: number,
+): string | null {
+  const message = finnhubUnavailableMessage(reason, feature);
+  if (!message || tickers.length === 0 || tickers.length >= holdingCount) return message;
+  const shown = tickers.slice(0, 4).join(", ");
+  const more = tickers.length > 4 ? ` and ${tickers.length - 4} more` : "";
+  return `${message.replace(/\.$/, "")} for ${tickers.length} of ${holdingCount} holdings: ${shown}${more}. Prices are unaffected.`;
+}
+
 export const FINNHUB_CAPABILITY_LABELS: Record<string, string> = {
   quote: "Live quotes",
   stock_candle: "Historical candles",

@@ -452,6 +452,7 @@ export async function getPortfolioFundamentals(portfolioId: string): Promise<Por
   return {
     data: data.data ?? {},
     fundamentals_unavailable_reason: data.fundamentals_unavailable_reason ?? data.price_unavailable_reason ?? null,
+    fundamentals_unavailable_tickers: data.fundamentals_unavailable_tickers ?? [],
   };
 }
 

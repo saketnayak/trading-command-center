@@ -325,6 +325,7 @@ function PortfolioPageContent() {
   });
   const fundamentals = fundamentalsResult?.data;
   const fundamentalsUnavailableReason = fundamentalsResult?.fundamentals_unavailable_reason ?? null;
+  const fundamentalsUnavailableTickers = fundamentalsResult?.fundamentals_unavailable_tickers ?? [];
 
   const { data: regime = {}, isFetching: fetchingRegime } = useQuery<Record<string, RegimeData>>({
     queryKey: portfolioQueryKeys.regime(selectedId ?? ""),
@@ -537,6 +538,7 @@ function PortfolioPageContent() {
                   <PortfolioTotalsSummary
                     totals={current.totals}
                     totalsCurrency={current.totals_currency}
+                    excluded={current.totals_excluded ?? []}
                   />
                 )}
                 <PortfolioActions
@@ -671,6 +673,7 @@ function PortfolioPageContent() {
                   holdings={current.holdings}
                   priceUnavailableReason={current.price_unavailable_reason}
                   fundamentalsUnavailableReason={fundamentalsUnavailableReason}
+                  fundamentalsUnavailableTickers={fundamentalsUnavailableTickers}
                   displayCurrency={current.display_currency ?? "USD"}
                   fundamentals={fundamentals}
                   regime={markovEnabled ? regime : undefined}

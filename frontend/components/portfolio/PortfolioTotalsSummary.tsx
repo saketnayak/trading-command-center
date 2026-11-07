@@ -4,6 +4,8 @@ import type { PortfolioTotals } from "@/lib/types";
 type PortfolioTotalsSummaryProps = {
   totals: PortfolioTotals;
   totalsCurrency: string;
+  /** Holdings left out of the totals for want of an exchange rate. */
+  excluded?: string[];
 };
 
 function fmtPct(n: number | null | undefined): string {
@@ -11,7 +13,7 @@ function fmtPct(n: number | null | undefined): string {
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
-export function PortfolioTotalsSummary({ totals, totalsCurrency }: PortfolioTotalsSummaryProps) {
+export function PortfolioTotalsSummary({ totals, totalsCurrency, excluded = [] }: PortfolioTotalsSummaryProps) {
   const pnl = totals.unrealized_pnl ?? null;
   const pnlPct = totals.unrealized_pnl_pct ?? null;
   const pnlPositive = pnl != null && pnl >= 0;
@@ -24,6 +26,11 @@ export function PortfolioTotalsSummary({ totals, totalsCurrency }: PortfolioTota
           {fmtMoney(totals.market_value, totalsCurrency)}
         </div>
         <div className="text-xs text-muted">Market value ({totalsCurrency})</div>
+        {excluded.length > 0 && (
+          <div className="text-[10px] text-amber-400" title={excluded.join(", ")}>
+            {`Excludes ${excluded.length} ${excluded.length === 1 ? "holding" : "holdings"} (no exchange rate)`}
+          </div>
+        )}
       </div>
       <div className={`text-right ${pnlColor}`}>
         <div className="text-base sm:text-lg font-semibold font-data tabular-nums">

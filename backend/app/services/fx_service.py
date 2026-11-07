@@ -59,3 +59,21 @@ def apply(value: Optional[float], rate: float) -> Optional[float]:
     if value is None:
         return None
     return value * rate
+
+
+async def convert_rate(frm: str, to: str) -> Optional[float]:
+    """Multiplier from one currency to another, through USD. Unlike get_rate, it returns
+    None when a rate is unknown (an unsupported currency, or a failed refresh) instead of
+    treating the currencies as equal."""
+    frm, to = frm.upper(), to.upper()
+    if frm == to:
+        return 1.0
+    if frm not in SUPPORTED_CURRENCIES or to not in SUPPORTED_CURRENCIES:
+        return None
+    if time.time() > _rates_expiry:
+        await _refresh_rates()
+    usd_to_frm = 1.0 if frm == "USD" else _rates_cache.get(frm)
+    usd_to_to = 1.0 if to == "USD" else _rates_cache.get(to)
+    if not usd_to_frm or not usd_to_to:
+        return None
+    return usd_to_to / usd_to_frm
