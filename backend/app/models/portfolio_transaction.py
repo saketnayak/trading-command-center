@@ -2,6 +2,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.base import Base
@@ -12,7 +13,8 @@ class PortfolioTransaction(Base):
 
     `seq` orders same-day transactions (insertion order). `source` records
     where a row came from: manual, csv, or opening (the bootstrap from a
-    holdings snapshot)."""
+    holdings snapshot). `lots`, on a SELL only, names the lots it closes:
+    [{"buy_id": <BUY transaction id>, "quantity": shares}]."""
 
     __tablename__ = "portfolio_transactions"
 
@@ -30,4 +32,5 @@ class PortfolioTransaction(Base):
     currency: Mapped[str] = mapped_column(String(8), default="USD")
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     source: Mapped[str] = mapped_column(String(16), default="manual")
+    lots: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

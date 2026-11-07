@@ -13,7 +13,7 @@ import type { NetWorthItemInput, NetWorthRange, NetWorthReport } from "./netWort
 import type { BacktestDetail, BacktestInput, BacktestMeta, BacktestSummary, Leaderboard } from "./backtest";
 import type { LearningStatus } from "./learning";
 import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
-import type { CostBasisMethod, ImportResult, LedgerSummary, LedgerTx, TxInput } from "./ledger";
+import type { CostBasisMethod, ImportResult, LedgerSummary, LedgerTx, OpenLot, TxInput } from "./ledger";
 import type { ResponseLanguage } from "./responseLanguage";
 import type { AppSettings } from "./appSettings";
 import type { CreateJevSessionRequest, JevCalibration, JevMeta, JevSession, JevSymbolSpec, JevTick } from "./jev/types";
@@ -1029,6 +1029,15 @@ export const listTransactions = (portfolioId: string) => apiJson<LedgerTx[]>(`/p
 
 export const addTransaction = (portfolioId: string, tx: TxInput, replaceHoldings = false) =>
   apiJson<LedgerTx & { warnings: string[] }>(`/portfolio/${portfolioId}/transactions${replaceHoldings ? "?replace_holdings=true" : ""}`, { method: "POST", body: JSON.stringify(tx) });
+
+export const updateTransaction = (portfolioId: string, id: string, patch: Partial<TxInput>) =>
+  apiJson<LedgerTx & { warnings: string[] }>(`/portfolio/${portfolioId}/transactions/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
+
+export const getOpenLots = (portfolioId: string, q: { symbol: string; on: string; account?: string; exclude?: string }) => {
+  const params = new URLSearchParams({ symbol: q.symbol, on: q.on, account: q.account || "Main" });
+  if (q.exclude) params.set("exclude", q.exclude);
+  return apiJson<{ symbol: string; account: string; on: string; method: string; lots: OpenLot[] }>(`/portfolio/${portfolioId}/lots?${params}`);
+};
 
 export const deleteTransaction = (portfolioId: string, id: string) =>
   apiJson<void>(`/portfolio/${portfolioId}/transactions/${id}`, { method: "DELETE" });

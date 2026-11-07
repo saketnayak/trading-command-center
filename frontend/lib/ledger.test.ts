@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guessMapping, mapRows, normaliseType, parseCsv, parseDate, parseNumber } from "./ledger";
+import { guessMapping, inputsFromPicks, mapRows, normaliseType, parseCsv, parseDate, parseNumber, pickSummary, picksFromInputs } from "./ledger";
 
 describe("ledger CSV helpers", () => {
   it("parses quoted CSV with commas, escaped quotes and CRLF", () => {
@@ -44,5 +44,30 @@ describe("ledger CSV helpers", () => {
     expect(out[0]).toMatchObject({ type: "BUY", symbol: "AAPL", quantity: 10, price: 150.5, amount: 1505 });
     expect(out[1]).toMatchObject({ type: "SELL", quantity: 4, price: 160, fees: 1 });
     expect(out[2]).toMatchObject({ type: "DIVIDEND", amount: 2.4, account: "Main", currency: "USD" });
+  });
+});
+
+describe("choosing lots for a sale", () => {
+  const lots = [
+    { buy_id: "a", open_date: "2020-01-02", quantity: 10, cost_per_share: 100, term: "long" as const },
+    { buy_id: "b", open_date: "2025-01-02", quantity: 5, cost_per_share: 300, term: "short" as const },
+  ];
+
+  it("turns picker inputs into lots, leaving out blanks and zeros", () => {
+    expect(picksFromInputs({ a: "4", b: "", c: "0", d: "x" })).toEqual([{ buy_id: "a", quantity: 4 }]);
+    expect(inputsFromPicks([{ buy_id: "a", quantity: 4 }])).toEqual({ a: "4" });
+    expect(inputsFromPicks(null)).toEqual({});
+  });
+
+  it("says what happens to the shares not chosen", () => {
+    expect(pickSummary([], 8, "fifo", lots)).toEqual({ text: "No lots chosen; the sale follows FIFO.", ok: true });
+    expect(pickSummary([{ buy_id: "a", quantity: 3 }], 8, "fifo", lots).text).toBe("3 of 8 chosen; the other 5 follow FIFO.");
+    expect(pickSummary([{ buy_id: "a", quantity: 3 }, { buy_id: "b", quantity: 5 }], 8, "hifo", lots).text).toBe("All 8 chosen.");
+  });
+
+  it("flags choices that can't be saved", () => {
+    expect(pickSummary([{ buy_id: "b", quantity: 6 }], 8, "fifo", lots).ok).toBe(false);
+    expect(pickSummary([{ buy_id: "a", quantity: 9 }], 8, "fifo", lots).ok).toBe(false);
+    expect(pickSummary([{ buy_id: "zzz", quantity: 1 }], 8, "fifo", lots).ok).toBe(false);
   });
 });

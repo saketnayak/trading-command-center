@@ -13,7 +13,9 @@ Transaction types
 
 Cost-basis methods: fifo, hifo (highest cost first) and average (pooled
 average cost; quantities still leave oldest-first, so holding periods
-follow FIFO). Holding period: long term when a lot was held for more than
+follow FIFO). A SELL can also name the lots it closes (`picks`: the BUY
+that opened each lot and how many shares), as brokers allow; shares it
+doesn't name follow the method. Holding period: long term when a lot was held for more than
 365 days (US convention; informational, not tax advice).
 
 The account is cash-only for positions: a sale of more than is held only
@@ -56,6 +58,7 @@ class Tx:
     account: str = "Main"
     currency: str = "USD"
     id: str | None = None
+    picks: tuple[tuple[str, float], ...] = ()  # SELL only: (BUY id, shares) to close first
 
 
 def validate(tx: Tx) -> None:
@@ -75,6 +78,13 @@ def validate(tx: Tx) -> None:
         raise TxError(f"{tx.type} needs an amount above 0")
     if any(not math.isfinite(x) for x in (tx.quantity, tx.price, tx.amount, tx.fees)):
         raise TxError("Numbers must be finite")
+    if tx.picks:
+        if tx.type != "SELL":
+            raise TxError("Only a sale can choose which lots it closes")
+        if any(not (math.isfinite(q) and q > 0) for _, q in tx.picks):
+            raise TxError("Each chosen lot needs a quantity above 0")
+        if sum(q for _, q in tx.picks) > tx.quantity + QTY_EPS:
+            raise TxError("The chosen lots add up to more than the sale")
 
 
 @dataclass
@@ -134,6 +144,41 @@ def _take(lots: list[Lot], qty: float, method: Method) -> list[tuple[Lot, float]
         q = min(lot.quantity, left)
         out.append((lot, q))
         left -= q
+    return out
+
+
+def _take_picked(lots: list[Lot], qty: float, method: Method, tx: Tx, warn) -> list[tuple[Lot, float]]:
+    """A sale that names lots: those first, then the method for any shares left."""
+    taken: dict[int, float] = {}
+    out, left = [], qty
+    for buy_id, want in tx.picks:
+        if left <= QTY_EPS:
+            break
+        lot = next((lot for lot in lots if lot.tx_id == buy_id and lot.quantity - taken.get(id(lot), 0.0) > QTY_EPS), None)
+        if lot is None:
+            warn(f"{tx.date.isoformat()}: a lot chosen for this {tx.symbol} sale isn't open by then; "
+                 f"those shares were taken {method.upper()} instead.")
+            continue
+        avail = lot.quantity - taken.get(id(lot), 0.0)
+        q = min(want, avail, left)
+        if q < want - QTY_EPS and avail < want - QTY_EPS:
+            warn(f"{tx.date.isoformat()}: chose {want:g} {tx.symbol} from the lot bought {lot.open_date.isoformat()}, "
+                 f"but only {avail:g} were left in it; the rest were taken {method.upper()}.")
+        out.append((lot, q))
+        taken[id(lot)] = taken.get(id(lot), 0.0) + q
+        left -= q
+    if left > QTY_EPS:
+        order = sorted(lots, key=lambda lot: -lot.cost_per_share) if method == "hifo" else list(lots)
+        for lot in order:
+            if left <= QTY_EPS:
+                break
+            avail = lot.quantity - taken.get(id(lot), 0.0)
+            if avail <= QTY_EPS:
+                continue
+            q = min(avail, left)
+            out.append((lot, q))
+            taken[id(lot)] = taken.get(id(lot), 0.0) + q
+            left -= q
     return out
 
 
@@ -198,7 +243,9 @@ def replay(txs: list[Tx], method: Method = "fifo") -> LedgerState:
             if qty > QTY_EPS:
                 gross = qty * tx.price
                 fee_share = tx.fees * (qty / tx.quantity)
-                for lot, q in _take(lots, qty, method):
+                chosen = (_take_picked(lots, qty, method, tx, st.warnings.append) if tx.picks
+                          else _take(lots, qty, method))
+                for lot, q in chosen:
                     st.realised.append(Realised(
                         tx.date, acct, tx.symbol, ccy, q,
                         proceeds=(gross - fee_share) * q / qty,
