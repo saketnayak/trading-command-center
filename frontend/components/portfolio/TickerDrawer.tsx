@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { getTickerSnapshot } from "@/lib/api";
 import { getClosesForDays } from "@/lib/chartWindow";
+import { cryptoBase, fmtCoinCount, isCrypto, quantityUnit } from "@/lib/asset";
 import { fmtMoney } from "@/lib/currency";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import { CompanyLogo } from "@/components/ui/CompanyLogo";
@@ -52,9 +53,9 @@ function Sparkline({ chart, days, currency }: { chart: TickerChart; days: number
           strokeLinejoin="round" strokeLinecap="round" />
       </svg>
       <div className="flex justify-between text-[10px] text-muted font-mono">
-        <span>{fmtMoney(minV, currency)}</span>
-        <span className="text-subtle">{currency} · {days}D</span>
-        <span>{fmtMoney(maxV, currency)}</span>
+        <span>{`Low ${fmtMoney(minV, currency)}`}</span>
+        <span className="text-subtle">{`${currency} · ${days}D`}</span>
+        <span>{`High ${fmtMoney(maxV, currency)}`}</span>
       </div>
     </div>
   );
@@ -173,7 +174,12 @@ function DrawerContent({
           {/* Your position */}
           <Section title="Your Position">
             <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-              <StatCell label="Shares" value={holding.shares.toLocaleString("en-US")} />
+              <StatCell
+                label={isCrypto(holding.ticker) ? "Amount" : "Shares"}
+                value={isCrypto(holding.ticker)
+                  ? `${holding.shares.toLocaleString("en-US")} ${quantityUnit(holding.ticker)}`
+                  : holding.shares.toLocaleString("en-US")}
+              />
               <StatCell
                 label={`Avg Cost (${holding.cost_basis_currency ?? holding.currency ?? displayCurrency})`}
                 value={holding.avg_cost != null ? fmtMoney(holding.avg_cost, holding.cost_basis_currency ?? holding.currency ?? displayCurrency) : null}
@@ -236,10 +242,10 @@ function DrawerContent({
               <div className="grid grid-cols-3 gap-x-4 gap-y-2">
                 <StatCell label="Mkt Cap" value={fmtLarge(snap.fundamentals.market_cap as number | null)} />
                 <StatCell label="24h Vol" value={fmtLarge(snap.fundamentals.volume_24h as number | null)} />
-                <StatCell label="Circ Supply" value={fmtLarge(snap.fundamentals.circulating_supply as number | null)} />
+                <StatCell label="Circ Supply" value={fmtCoinCount(snap.fundamentals.circulating_supply as number | null, cryptoBase(ticker))} />
                 <StatCell label="ATH" value={snap.fundamentals.all_time_high != null ? `$${(snap.fundamentals.all_time_high as number).toLocaleString("en-US", { minimumFractionDigits: 2 })}` : null} />
                 <StatCell label="ATH Date" value={snap.fundamentals.ath_date ? String(snap.fundamentals.ath_date).slice(0, 10) : null} />
-                <StatCell label="Max Supply" value={fmtLarge(snap.fundamentals.max_supply as number | null)} />
+                <StatCell label="Max Supply" value={fmtCoinCount(snap.fundamentals.max_supply as number | null, cryptoBase(ticker))} />
               </div>
             ) : (
               <div className="grid grid-cols-3 gap-x-4 gap-y-2">

@@ -5,6 +5,7 @@ Fallback: Finnhub crypto candle endpoint (requires stored Finnhub key).
 """
 
 import asyncio
+import re
 import time
 from datetime import date, datetime, timezone as tz, timedelta
 from typing import Optional
@@ -360,12 +361,29 @@ async def fetch_metrics(ticker: str) -> dict:
             "ath_date": (md.get("ath_date") or {}).get("usd"),
             "price_change_24h_pct": md.get("price_change_percentage_24h"),
             "price_change_7d_pct": md.get("price_change_percentage_7d"),
-            "category": (raw.get("categories") or [None])[0],
+            "category": pick_category(raw.get("categories") or []),
         }
         _metrics_cache[symbol] = (data, now + _METRICS_TTL)
         return data
     except Exception:
         return {}
+
+
+# CoinGecko lists "Smart Contract Platform" first even for Bitcoin and Dogecoin, and mixes in
+# investor portfolios, indexes and ecosystems, so the first category is often misleading.
+_PREFERRED_CATEGORIES = ("Stablecoins", "Meme", "Layer 1 (L1)", "Layer 2 (L2)", "Decentralized Finance (DeFi)")
+_NOT_A_CATEGORY = re.compile(r"Ecosystem|Portfolio|Index|Holdings|Launchpad|Made in|Smart Contract Platform", re.I)
+
+
+def pick_category(categories: list[str]) -> Optional[str]:
+    """The category that best says what a coin is."""
+    for preferred in _PREFERRED_CATEGORIES:
+        if preferred in categories:
+            return preferred
+    for category in categories:
+        if category and not _NOT_A_CATEGORY.search(category):
+            return category
+    return "Smart Contract Platform" if "Smart Contract Platform" in categories else None
 
 
 async def fetch_category(ticker: str) -> str:

@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, LoaderCircle, Pencil, Play, Plus, Trash2, X, Briefcase } from "lucide-react";
 import { addHolding, updateHolding, deleteHolding } from "@/lib/api";
 import { fmtMoney, fmtPnl, SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { quantityUnit } from "@/lib/asset";
 import { analysisFromLastRun } from "@/lib/holdingLastRun";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 import { IconButton, IconLink } from "@/components/ui/IconButton";
@@ -910,7 +911,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                           </div>
                         ) : (
                           <div className="flex flex-col gap-0.5">
-                            <span className="text-fg-secondary font-data text-xs">{h.shares.toLocaleString("en-US")} sh</span>
+                            <span className="text-fg-secondary font-data text-xs">{`${h.shares.toLocaleString("en-US")} ${quantityUnit(h.ticker)}`}</span>
                             <span className="text-muted font-data text-[10px]">
                               @ {fmtMoney(h.avg_cost, h.cost_basis_currency ?? h.currency ?? displayCurrency)}
                             </span>

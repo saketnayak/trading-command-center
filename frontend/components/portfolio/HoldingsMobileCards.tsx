@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Check, LoaderCircle, Pencil, Play, Trash2, X } from "lucide-react";
 import { fmtMoney, fmtPnl, SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { quantityUnit } from "@/lib/asset";
 import { analysisFromLastRun } from "@/lib/holdingLastRun";
 import { WatchButton } from "@/components/portfolio/WatchButton";
 import { IconButton, IconLink } from "@/components/ui/IconButton";
@@ -219,7 +220,7 @@ export function HoldingsMobileCards({
                   <div>
                     <span className="text-muted">Position </span>
                     <span className="font-data text-fg-secondary">
-                      {holding.shares.toLocaleString("en-US")} sh @{" "}
+                      {`${holding.shares.toLocaleString("en-US")} ${quantityUnit(holding.ticker)} @`}{" "}
                       {fmtMoney(holding.avg_cost, holding.cost_basis_currency ?? holding.currency ?? displayCurrency)}
                     </span>
                   </div>
