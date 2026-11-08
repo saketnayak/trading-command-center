@@ -27,7 +27,7 @@ from app.models.portfolio import PortfolioSnapshot
 from app.models.sec_filing import SecCik
 from app.services import edgar_service, lookthrough_calc
 from app.services.performance_calc import PriceLookup
-from app.services.portfolio_pricing import aggregate_shares, fx_factors
+from app.services.portfolio_pricing import aggregate_shares, fx_factors, without_rate
 from app.services.price_history_service import get_closes, history_start
 from app.utils.asset_type import is_crypto
 
@@ -230,15 +230,16 @@ async def build_report(db: AsyncSession, portfolio_id: UUID, *, display_currency
     shares = aggregate_shares(snapshot.holdings) if snapshot else {}
     base = {"display_currency": display_currency, "holdings": len(shares)}
     if not shares:
-        return {**base, **lookthrough_calc.xray({}, {}, {}), "no_price": [], "pending": [], "failed": {}, "last_updated_at": None}
+        return {**base, **lookthrough_calc.xray({}, {}, {}), "no_price": [], "no_rate": [], "pending": [], "failed": {}, "last_updated_at": None}
 
     today = datetime.now(timezone.utc).date()
     symbols = sorted(shares)
     closes, _ = await get_closes(db, symbols, history_start(today), today)
     lookups = {s: PriceLookup(c) for s, c in closes.items() if c}
     fx, _ = await fx_factors(db, symbols, display_currency)
+    no_rate = without_rate(symbols, fx)
     values: dict[str, float] = {}
-    for s in symbols:
+    for s in (s for s in symbols if s in fx):
         px = lookups[s].at(today) if s in lookups else None
         if px is not None:
             values[s] = shares[s] * px * fx.get(s, 1.0)
@@ -266,7 +267,8 @@ async def build_report(db: AsyncSession, portfolio_id: UUID, *, display_currency
     return {
         **base,
         **report,
-        "no_price": [s for s in symbols if s not in values],
+        "no_price": [s for s in symbols if s not in values and s not in no_rate],
+        "no_rate": no_rate,  # priced in a currency with no rate to the display currency; left out
         "pending": [s for s in symbols if s not in profiles],
         "failed": {r.ticker: r.error for r in rows if r.error},
         "last_updated_at": max(fetched).isoformat() if fetched else None,

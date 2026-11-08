@@ -16,6 +16,7 @@ import { scopedFinnhubMessage } from "@/lib/finnhubMessages";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { HoldingsMobileCards } from "@/components/portfolio/HoldingsMobileCards";
 import { FIELD_INPUT_SM_CLASS, BTN_SECONDARY_CLASS, ALERT_BANNER_CLASS } from "@/lib/uiClasses";
+import { pnlNote, rowMoney, sortValue } from "@/lib/displayCurrency";
 
 interface HoldingsTableProps {
   portfolioId: string;
@@ -42,6 +43,8 @@ interface DraftRow {
   avg_cost: string;
   currency: string;
 }
+
+const SHOW_NATIVE_KEY = "agentfloor.holdings.showNative";
 
 type SortKey = "ticker" | "shares" | "avg_cost" | "current_price" | "market_value" | "unrealized_pnl";
 type SortDir = "asc" | "desc";
@@ -369,6 +372,24 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
   const [trimOnly, setTrimOnly] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [showDetailColumns, setShowDetailColumns] = useState(false);
+  // Rows show the display currency; this restores each holding's own currency. Remembered per browser.
+  const [showNative, setShowNative] = useState<boolean>(() => {
+    try {
+      return typeof window !== "undefined" && window.localStorage.getItem(SHOW_NATIVE_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleShowNative = () => {
+    setShowNative((v) => {
+      try {
+        window.localStorage.setItem(SHOW_NATIVE_KEY, v ? "0" : "1");
+      } catch {
+        /* storage unavailable: the choice lasts for this page only */
+      }
+      return !v;
+    });
+  };
   const newTickerRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -433,6 +454,9 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
       let av: number | string | null;
       let bv: number | string | null;
       if (sortKey === "ticker") { av = a.ticker; bv = b.ticker; }
+      else if (sortKey === "current_price" || sortKey === "market_value" || sortKey === "unrealized_pnl") {
+        av = sortValue(a, sortKey, showNative); bv = sortValue(b, sortKey, showNative);
+      }
       else { av = a[sortKey] as number | null; bv = b[sortKey] as number | null; }
 
       // nulls always last
@@ -443,7 +467,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
       const cmp = av < bv ? -1 : av > bv ? 1 : 0;
       return sortDir === "asc" ? cmp : -cmp;
     });
-  }, [filteredHoldings, sortKey, sortDir]);
+  }, [filteredHoldings, sortKey, sortDir, showNative]);
 
   useEffect(() => {
     if (addingNew) newTickerRef.current?.focus();
@@ -572,6 +596,15 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
           }
         >
           {showDetailColumns ? "Fewer columns" : "More columns"}
+        </button>
+        <button
+          type="button"
+          onClick={toggleShowNative}
+          className={BTN_SECONDARY_CLASS}
+          aria-pressed={showNative}
+          title={showNative ? `Show every row in ${displayCurrency}` : "Show each holding in the currency it trades in"}
+        >
+          Native currencies
         </button>
         {!showDetailColumns && (hasRegime || hasTrimSignals) && (
           <span className="text-xs text-muted">
@@ -760,6 +793,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
           <HoldingsMobileCards
             holdings={sortedHoldings}
             displayCurrency={displayCurrency}
+            showNative={showNative}
             fundamentals={fundamentals}
             regime={regime}
             wave={wave}
@@ -819,7 +853,10 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                 const isEditing = editingId === h.id;
                 const isExpanded = expandedIds.has(h.id);
                 const fundData = fundamentals?.[h.ticker] ?? null;
-                const pnl = h.unrealized_pnl;
+                const pnl = showNative ? h.unrealized_pnl : (h.unrealized_pnl_display ?? null);
+                const pnlPct = showNative ? h.unrealized_pnl_pct : (h.unrealized_pnl_pct_display ?? null);
+                const price = rowMoney(h, "current_price", showNative, displayCurrency);
+                const value = rowMoney(h, "market_value", showNative, displayCurrency);
                 const pnlColor = pnl == null ? "text-muted" : pnl >= 0 ? "text-green-400" : "text-red-400";
                 const rowEntry = analysisFromLastRun(h.last_run);
                 const rowTint = rowEntry != null && daysAgo(rowEntry.completed_at) <= 14
@@ -924,26 +961,35 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                       {/* Current Price (read-only) */}
                       {showDetailColumns && (
                         <td className="hidden lg:table-cell px-3 py-2 text-right text-fg-secondary font-data text-xs">
-                          {fmtMoney(h.current_price, h.quote_currency ?? displayCurrency)}
+                          {fmtMoney(price.value, price.currency)}
+                          {price.native && (
+                            <div className="text-muted font-data text-[10px]">{fmtMoney(price.native.value, price.native.currency)}</div>
+                          )}
                         </td>
                       )}
 
                       {/* Market Value (read-only) */}
                       {showDetailColumns && (
                         <td className="hidden lg:table-cell px-3 py-2 text-right text-fg-secondary font-data text-xs">
-                          {fmtMoney(h.market_value, h.quote_currency ?? displayCurrency)}
+                          {fmtMoney(value.value, value.currency)}
+                          {value.native && (
+                            <div className="text-muted font-data text-[10px]">{fmtMoney(value.native.value, value.native.currency)}</div>
+                          )}
                         </td>
                       )}
 
                       {/* Unrealized P&L (read-only) */}
                       <td className={`px-3 py-2 text-right font-data ${pnlColor}`}>
-                        {h.pnl_unavailable_reason === "currency_mismatch" ? (
+                        {h.pnl_unavailable_reason === "currency_mismatch" && (showNative || pnl == null) ? (
                           <div className="font-data text-[10px] text-amber-400" title="Cost basis and quote currencies differ">
                             —
                           </div>
                         ) : (
-                          <div className="font-semibold font-data text-xs">
-                            {fmtPnl(pnl, h.unrealized_pnl_pct, h.quote_currency ?? displayCurrency)}
+                          <div
+                            className="font-semibold font-data text-xs"
+                            title={showNative ? undefined : pnlNote(h, displayCurrency)}
+                          >
+                            {fmtPnl(pnl, pnlPct, showNative ? (h.quote_currency ?? displayCurrency) : displayCurrency)}
                           </div>
                         )}
                       </td>

@@ -3,28 +3,36 @@ export const PORTFOLIO_EARNINGS_DAYS_AHEAD = 60;
 
 export const portfolioQueryKeys = {
   list: ["portfolios"] as const,
-  current: (id: string) => ["portfolio-current", id] as const,
+  current: (id: string, ccy?: string) => (ccy ? ["portfolio-current", id, ccy] : ["portfolio-current", id]) as readonly string[],
   fundamentals: (id: string) => ["portfolio-fundamentals", id] as const,
   regime: (id: string) => ["portfolio-regime", id] as const,
   wave: (id: string) => ["portfolio-wave", id] as const,
-  trimSignals: (id: string) => ["portfolio-trim-signals", id] as const,
+  trimSignals: (id: string, ccy?: string) => (ccy ? ["portfolio-trim-signals", id, ccy] : ["portfolio-trim-signals", id]) as readonly string[],
   earnings: (id: string) => ["portfolio-earnings", id] as const,
   news: (id: string) => ["portfolio-news", id] as const,
-  performance: (id: string, mode: string, range: string, benchmark: string) =>
-    ["portfolio-performance", id, mode, range, benchmark] as const,
-  risk: (id: string, lookback: string, benchmark: string) =>
-    ["portfolio-risk", id, lookback, benchmark] as const,
+  performance: (id: string, mode: string, range: string, benchmark: string, ccy?: string) =>
+    (ccy ? ["portfolio-performance", id, mode, range, benchmark, ccy] : ["portfolio-performance", id, mode, range, benchmark]) as readonly string[],
+  risk: (id: string, lookback: string, benchmark: string, ccy?: string) =>
+    (ccy ? ["portfolio-risk", id, lookback, benchmark, ccy] : ["portfolio-risk", id, lookback, benchmark]) as readonly string[],
   transactions: (id: string) => ["portfolio-transactions", id] as const,
   ledger: (id: string) => ["portfolio-ledger", id] as const,
-  income: (id: string) => ["portfolio-income", id] as const,
-  tax: (id: string, year: number | null, minLoss: number) => ["portfolio-tax", id, year, minLoss] as const,
+  income: (id: string, ccy?: string) => (ccy ? ["portfolio-income", id, ccy] : ["portfolio-income", id]) as readonly string[],
+  tax: (id: string, year: number | null, minLoss: number, ccy?: string) =>
+    (ccy ? ["portfolio-tax", id, year, minLoss, ccy] : ["portfolio-tax", id, year, minLoss]) as readonly unknown[],
   taxReplacements: (id: string, symbol: string) => ["portfolio-tax-replacements", id, symbol] as const,
-  rebalance: (id: string, mode: string, amount: number, wholeShares: boolean) =>
-    ["portfolio-rebalance", id, mode, amount, wholeShares] as const,
+  rebalance: (id: string, mode: string, amount: number, wholeShares: boolean, ccy?: string) =>
+    (ccy ? ["portfolio-rebalance", id, mode, amount, wholeShares, ccy] : ["portfolio-rebalance", id, mode, amount, wholeShares]) as readonly unknown[],
   behavioralAlerts: (id: string) => ["behavioralAlerts", id] as const,
   insightLatest: (id: string) => ["insight-latest", id] as const,
   insightsList: (id: string) => ["insights-list", id] as const,
 };
+
+/** placeholderData that keeps the previous figures while a currency/range changes, but never
+ * shows another portfolio's data while this one loads (key index 1 is the portfolio id). */
+export function samePortfolioPlaceholder(portfolioId: string) {
+  return <T,>(previous: T | undefined, previousQuery?: { queryKey: readonly unknown[] }): T | undefined =>
+    previousQuery?.queryKey[1] === portfolioId ? previous : undefined;
+}
 
 export const marketQueryKeys = {
   trending: ["market-trending"] as const,

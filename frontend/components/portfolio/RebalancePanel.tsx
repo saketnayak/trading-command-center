@@ -33,6 +33,7 @@ import {
   FIELD_LABEL_CLASS,
   selectionPillClass,
 } from "@/lib/uiClasses";
+import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
 
 const CARD = "rounded-lg border border-border bg-surface p-3";
 const CURRENT_COLOR = "bg-[#2a78d6] dark:bg-[#3987e5]"; // categorical slot 1, as on the other tabs
@@ -55,9 +56,10 @@ export function RebalancePanel({ portfolioId, trimEntries }: Props) {
   const amount = modeInfo.needsAmount ? Number(debouncedAmount) || 0 : 0;
   const ready = !modeInfo.needsAmount || amount > 0;
 
+  const { currency: ccy } = useDisplayCurrency();
   const query = useQuery({
-    queryKey: portfolioQueryKeys.rebalance(portfolioId, ready ? mode : "bands", amount, wholeShares),
-    queryFn: () => getRebalancePlan(portfolioId, ready ? mode : "bands", amount, wholeShares),
+    queryKey: portfolioQueryKeys.rebalance(portfolioId, ready ? mode : "bands", amount, wholeShares, ccy),
+    queryFn: () => getRebalancePlan(portfolioId, ready ? mode : "bands", amount, wholeShares, ccy),
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[1] === portfolioId ? keepPreviousData(previous) : undefined,
   });

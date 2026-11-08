@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     trim_concentration_threshold_pct: float = 15.0
     trim_regime_signal_weak_threshold: float = -0.1
     logo_cache_dir: str = "data/logos"
+    fx_live_ttl_s: int = 300  # how long live FX rates (and a failed live fetch) are cached
 
     @model_validator(mode="after")
     def validate_secrets(self) -> "Settings":

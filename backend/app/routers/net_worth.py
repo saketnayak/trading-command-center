@@ -22,7 +22,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, resolve_display_currency
 from app.models.net_worth import NetWorthItem, NetWorthValuation
 from app.models.portfolio import Portfolio
 from app.models.user import User
@@ -99,21 +99,12 @@ async def _record(db: AsyncSession, item_id: UUID, day: date, value: float) -> N
     await db.execute(stmt.on_conflict_do_update(index_elements=["item_id", "date"], set_={"value": value}))
 
 
-async def _factor(currency: str, display: str) -> float:
-    src = (currency or "USD").upper()
-    if src == display:
-        return 1.0
-    to = await fx_service.get_rate(display)
-    frm = await fx_service.get_rate(src) if src in fx_service.SUPPORTED_CURRENCIES else 1.0
-    return to / frm if frm else 1.0
-
-
 @router.get("/net-worth")
 async def net_worth(range: str = Query(default="1y"), db: AsyncSession = Depends(get_db),  # noqa: A002
-                    user: User = Depends(get_current_user)):
+                    user: User = Depends(get_current_user), ccy: str = Depends(resolve_display_currency)):
     if range not in RANGES:
         raise HTTPException(status_code=422, detail=f"range must be one of {', '.join(RANGES)}")
-    ccy = (user.preferred_currency or "USD").upper()
+    fx_snap = await fx_service.snapshot()  # one set of rates for the whole response
     today = _today()
     start = _range_start(range, today)
     warnings: list[str] = []
@@ -130,7 +121,8 @@ async def net_worth(range: str = Query(default="1y"), db: AsyncSession = Depends
         p_rows.append({"id": str(p.id), "name": p.name, "value": series[max(series)] if series else 0.0,
                        "mode": rep.get("mode"), "start": rep.get("start"), "holdings_source": rep.get("holdings_source")})
         for w in rep.get("warnings") or []:
-            if w.startswith(("No price history for", "Could not refresh")) and not w.startswith("No price history for benchmark"):
+            if (w.startswith(("No price history for", "Could not refresh", f"No {ccy} exchange rate for"))
+                    and not w.startswith("No price history for benchmark")):
                 warnings.append(f"{p.name}: {w}")
 
     # Manual items and wallets.
@@ -149,21 +141,34 @@ async def net_worth(range: str = Query(default="1y"), db: AsyncSession = Depends
         for c in chains:
             if not coin_closes[c]:
                 warnings.append(f"No {c.upper()} price: those wallets are left out.")
-    usd_factor = await _factor("USD", ccy)
-
+    # An item whose currency has no rate to the display currency is left out and named, never 1:1.
     inputs: list[ItemInput] = []
+    by_item: dict[UUID, ItemInput] = {}
+    excluded: list[dict] = []
+    currencies_seen: set[str] = set()
     for i in items:
+        item_ccy = "USD" if i.wallet_chain else (i.currency or "USD").upper()
+        currencies_seen.add(item_ccy)
+        factor = fx_snap.convert(item_ccy, ccy)
+        if factor is None:
+            excluded.append({"id": str(i.id), "name": i.name, "currency": item_ccy})
+            warnings.append(f"No {ccy} exchange rate for {i.name} ({item_ccy}); left out.")
+            continue
         if i.wallet_chain:
-            inputs.append(ItemInput(str(i.id), "asset", i.category, i.name, vals[i.id], usd_factor, coin_closes.get(i.wallet_chain, {})))
+            inp = ItemInput(str(i.id), "asset", i.category, i.name, vals[i.id], factor, coin_closes.get(i.wallet_chain, {}))
         else:
-            inputs.append(ItemInput(str(i.id), i.kind, i.category, i.name, vals[i.id], await _factor(i.currency, ccy)))
+            inp = ItemInput(str(i.id), i.kind, i.category, i.name, vals[i.id], factor)
+        inputs.append(inp)
+        by_item[i.id] = inp
 
     item_rows = []
     today_values = []
-    for i, inp in zip(items, inputs):
+    for i in items:
+        inp = by_item.get(i.id)
         latest = vals[i.id][-1] if vals[i.id] else None
-        value_display = inp.value_on(today)
-        today_values.append((inp, value_display))
+        value_display = inp.value_on(today) if inp is not None else None
+        if inp is not None:
+            today_values.append((inp, value_display))
         item_rows.append({
             "id": str(i.id), "kind": i.kind, "category": i.category, "category_label": CATEGORY_LABELS.get(i.category, i.category),
             "name": i.name, "currency": "USD" if i.wallet_chain else i.currency, "notes": i.notes,
@@ -193,7 +198,7 @@ async def net_worth(range: str = Query(default="1y"), db: AsyncSession = Depends
         warnings.append("Not updated in over 6 months: " + ", ".join(stale) + ".")
 
     return {
-        "display_currency": ccy, "range": range, "start": dates[0].isoformat(), "end": today.isoformat(),
+        "display_currency": ccy, "excluded": excluded, "fx": fx_snap.meta(ccy, currencies_seen), "range": range, "start": dates[0].isoformat(), "end": today.isoformat(),
         **summary, "change": change, "portfolios": p_rows, "items": item_rows, "series": series,
         "categories": {"asset": [{"id": c, "label": CATEGORY_LABELS[c]} for c in ASSET_CATEGORIES],
                        "liability": [{"id": c, "label": CATEGORY_LABELS[c]} for c in LIABILITY_CATEGORIES]},

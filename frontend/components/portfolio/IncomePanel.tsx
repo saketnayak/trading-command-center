@@ -19,8 +19,9 @@ import {
 } from "@/lib/income";
 import { INCOME_COLORS, buildProjectionFigure } from "@/lib/incomeChart";
 import { fmtPct, fmtSignedPct } from "@/lib/performance";
-import { PORTFOLIO_STALE_TIMES, portfolioQueryKeys } from "@/lib/portfolioQueries";
+import { PORTFOLIO_STALE_TIMES, portfolioQueryKeys, samePortfolioPlaceholder } from "@/lib/portfolioQueries";
 import { ALERT_BANNER_CLASS, BTN_PRIMARY_SM_CLASS, BTN_SECONDARY_CLASS, FIELD_INPUT_SM_CLASS } from "@/lib/uiClasses";
+import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
@@ -28,9 +29,11 @@ const CARD = "rounded-lg border border-border bg-surface p-3";
 const BAR = "bg-[#2a78d6] dark:bg-[#3987e5]"; // categorical slot 1, as on the other tabs
 
 export function IncomePanel({ portfolioId }: { portfolioId: string }) {
+  const { currency: ccy } = useDisplayCurrency();
   const query = useQuery({
-    queryKey: portfolioQueryKeys.income(portfolioId),
-    queryFn: () => getPortfolioIncome(portfolioId),
+    queryKey: portfolioQueryKeys.income(portfolioId, ccy),
+    queryFn: () => getPortfolioIncome(portfolioId, ccy),
+    placeholderData: samePortfolioPlaceholder(portfolioId),
     staleTime: PORTFOLIO_STALE_TIMES.income,
   });
 

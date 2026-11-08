@@ -1,4 +1,5 @@
 import type { ResponseLanguage } from "./responseLanguage";
+import type { FxMeta } from "./displayCurrency";
 
 export interface User {
   id: string;
@@ -325,6 +326,12 @@ export interface PortfolioHolding {
   unrealized_pnl_pct: number | null;
   pnl_unavailable_reason: string | null;
   last_run: PortfolioHoldingLastRun | null;
+  /** The same figures in the display currency; null when a price or exchange rate is missing. */
+  fx_rate?: number | null;
+  current_price_display?: number | null;
+  market_value_display?: number | null;
+  unrealized_pnl_display?: number | null;
+  unrealized_pnl_pct_display?: number | null;
 }
 
 export interface PortfolioTotals {
@@ -342,6 +349,8 @@ export interface PortfolioCurrentResponse {
   totals: PortfolioTotals;
   /** Priced holdings left out of the totals: no exchange rate to the display currency. */
   totals_excluded?: string[];
+  /** The rates behind the display figures. */
+  fx?: FxMeta | null;
   holdings: PortfolioHolding[];
 }
 

@@ -1,4 +1,6 @@
-"""Unit test: the FX refresh calls Frankfurter's current endpoint and follows redirects."""
+"""Unit tests: FX snapshot layers (Yahoo live → Frankfurter/ECB daily → last known), never 1:1."""
+from datetime import date, datetime, timezone
+
 import httpx
 import pytest
 
@@ -6,8 +8,130 @@ from app.services import fx_service
 
 pytestmark = pytest.mark.unit
 
+AS_OF = datetime(2026, 1, 2, 15, 0, tzinfo=timezone.utc)
 
-async def test_refresh_uses_current_endpoint_and_follows_redirects(monkeypatch):
+
+class _Calls:
+    count = 0
+
+
+@pytest.fixture(autouse=True)
+def _fresh_layers(monkeypatch):
+    """Each test starts with no cached layer and with the real snapshot (not the conftest stub)."""
+    monkeypatch.setattr(fx_service, "snapshot", fx_service._real_snapshot)
+    fx_service._reset_layers()
+    yield
+    fx_service._reset_layers()
+
+
+@pytest.fixture
+def fake_live(monkeypatch):
+    def set_live(rates_or_exc):
+        calls = _Calls()
+
+        async def fetch(codes):
+            calls.count += 1
+            if isinstance(rates_or_exc, Exception):
+                raise rates_or_exc
+            return {c: (r, AS_OF) for c, r in rates_or_exc.items()}
+
+        monkeypatch.setattr(fx_service.yfinance_service, "fetch_fx_quotes", fetch)
+        return calls
+
+    return set_live
+
+
+@pytest.fixture
+def fake_ecb(monkeypatch):
+    def set_ecb(rates_or_exc, day="2026-01-02"):
+        async def fetch():
+            if isinstance(rates_or_exc, Exception):
+                raise rates_or_exc
+            return dict(rates_or_exc), date.fromisoformat(day)
+
+        monkeypatch.setattr(fx_service, "_fetch_ecb", fetch)
+
+    return set_ecb
+
+
+@pytest.fixture
+def expire_layers():
+    return fx_service._expire_layers
+
+
+async def test_live_rates_win_and_ecb_fills_missing_pairs(fake_live, fake_ecb):
+    fake_live({"AUD": 1.52, "EUR": 0.93})
+    fake_ecb({"AUD": 1.50, "EUR": 0.92, "GBP": 0.79})
+    snap = await fx_service.snapshot()
+    assert snap.source == "live" and snap.as_of == AS_OF
+    assert snap.rates["AUD"] == 1.52 and snap.rates["GBP"] == 0.79 and snap.rates["USD"] == 1.0
+
+
+async def test_live_rejects_non_positive_and_nan_rates(fake_live, fake_ecb):
+    fake_live({"AUD": 0.0, "EUR": float("nan"), "GBP": -1.0, "JPY": 150.0})
+    fake_ecb({"AUD": 1.5, "EUR": 0.9, "GBP": 0.8})
+    snap = await fx_service.snapshot()
+    assert (snap.rates["AUD"], snap.rates["EUR"], snap.rates["GBP"], snap.rates["JPY"]) == (1.5, 0.9, 0.8, 150.0)
+
+
+async def test_falls_back_to_ecb_when_live_fails(fake_live, fake_ecb):
+    fake_live(RuntimeError("yahoo down"))
+    fake_ecb({"AUD": 1.5})
+    snap = await fx_service.snapshot()
+    assert snap.source == "ecb" and snap.as_of.date().isoformat() == "2026-01-02"
+    assert snap.rates == {"USD": 1.0, "AUD": 1.5}
+
+
+async def test_falls_back_to_last_known_marked_stale(fake_live, fake_ecb, expire_layers):
+    fake_live({"AUD": 1.52})
+    fake_ecb({"AUD": 1.5})
+    await fx_service.snapshot()
+    expire_layers()
+    fake_live(RuntimeError("down"))
+    fake_ecb(RuntimeError("down"))
+    snap = await fx_service.snapshot()
+    assert snap.source == "stale" and snap.rates["AUD"] == 1.52
+
+
+async def test_nothing_ever_succeeded_gives_unknown_not_one(fake_live, fake_ecb):
+    fake_live(RuntimeError("down"))
+    fake_ecb(RuntimeError("down"))
+    snap = await fx_service.snapshot()
+    assert snap.source is None and snap.as_of is None
+    assert snap.convert("AUD", "USD") is None and snap.convert("USD", "USD") == 1.0
+
+
+async def test_failed_live_fetch_is_not_retried_every_request(fake_live, fake_ecb):
+    calls = fake_live(RuntimeError("down"))
+    fake_ecb({"AUD": 1.5})
+    await fx_service.snapshot()
+    await fx_service.snapshot()
+    assert calls.count == 1
+
+
+async def test_convert_rate_uses_the_snapshot(fake_live, fake_ecb):
+    fake_live({"AUD": 1.5})
+    fake_ecb(RuntimeError("down"))
+    assert await fx_service.convert_rate("AUD", "USD") == pytest.approx(1 / 1.5)
+    assert await fx_service.convert_rate("EUR", "USD") is None
+
+
+def test_convert_and_meta():
+    snap = fx_service.FxSnapshot(rates={"USD": 1.0, "AUD": 1.5, "EUR": 0.9}, source="live", as_of=AS_OF)
+    assert snap.convert("AUD", "EUR") == pytest.approx(0.6)
+    assert snap.convert("aud", "aud") == 1.0
+    assert snap.convert("HKD", "USD") is None
+    assert snap.meta("AUD", ["USD", "AUD", "HKD"]) == {
+        "source": "live", "as_of": AS_OF.isoformat(), "rates_used": {"USD": 1.5}}
+
+
+def test_supported_currencies_is_the_frankfurter_set():
+    assert len(fx_service.SUPPORTED_CURRENCIES) == 30
+    assert {"NZD", "HKD", "KRW", "USD"} <= fx_service.SUPPORTED_CURRENCIES
+    assert "BGN" not in fx_service.SUPPORTED_CURRENCIES  # Bulgaria joined the euro on 2026-01-01; no rate is published
+
+
+async def test_ecb_fetch_uses_current_endpoint_and_follows_redirects(monkeypatch, fake_live):
     seen = {}
 
     class FakeClient:
@@ -22,12 +146,45 @@ async def test_refresh_uses_current_endpoint_and_follows_redirects(monkeypatch):
 
         async def get(self, url, params=None):
             seen["url"] = url
-            return httpx.Response(200, json={"rates": {"EUR": 0.9, "GBP": 0.75}}, request=httpx.Request("GET", url))
+            body = {"date": "2026-01-02", "rates": {"EUR": 0.9, "GBP": 0.75}}
+            return httpx.Response(200, json=body, request=httpx.Request("GET", url))
 
     monkeypatch.setattr(fx_service.httpx, "AsyncClient", FakeClient)
-    monkeypatch.setattr(fx_service, "_rates_expiry", 0.0)
-    fx_service._rates_cache.clear()
-    assert await fx_service.get_rate("EUR") == 0.9
+    fake_live(RuntimeError("down"))
+    snap = await fx_service.snapshot()
+    assert snap.source == "ecb" and snap.rates["EUR"] == 0.9
     assert seen["url"] == "https://api.frankfurter.dev/v1/latest" and seen["kwargs"]["follow_redirects"] is True
-    fx_service._rates_cache.clear()
-    monkeypatch.setattr(fx_service, "_rates_expiry", 0.0)
+
+
+async def test_missing_live_pair_comes_from_last_known_and_says_so(fake_live, fake_ecb, expire_layers):
+    fake_live({"AUD": 1.5, "NZD": 1.7})
+    fake_ecb({"AUD": 1.49, "NZD": 1.69})
+    await fx_service.snapshot()
+    expire_layers()
+    fake_live({"AUD": 1.52})  # Yahoo lost NZD
+    fake_ecb(RuntimeError("down"))
+    snap = await fx_service.snapshot()
+    assert snap.rates["NZD"] == 1.7 and snap.rates["AUD"] == 1.52
+    assert snap.meta("USD", ["NZD"])["source"] == "stale"
+    assert snap.meta("USD", ["AUD"])["source"] == "live"
+
+
+async def test_meta_labels_a_pair_that_came_from_ecb(fake_live, fake_ecb):
+    fake_live({"AUD": 1.5})
+    fake_ecb({"AUD": 1.49, "GBP": 0.79}, day="2026-01-01")
+    snap = await fx_service.snapshot()
+    gbp = snap.meta("USD", ["GBP"])
+    assert gbp["source"] == "ecb" and gbp["as_of"].startswith("2026-01-01")
+    assert snap.meta("AUD", ["GBP"])["source"] == "ecb"  # worst of AUD (live) and GBP (ecb)
+    assert snap.meta("USD", ["AUD"]) == {"source": "live", "as_of": AS_OF.isoformat(), "rates_used": {"AUD": 1 / 1.5}}
+
+
+async def test_a_pair_missing_for_several_refreshes_keeps_its_last_known_rate(fake_live, fake_ecb, expire_layers):
+    fake_live({"AUD": 1.5, "NZD": 1.7})
+    fake_ecb(RuntimeError("down"))
+    await fx_service.snapshot()
+    for _ in range(2):
+        expire_layers()
+        fake_live({"AUD": 1.52})
+        snap = await fx_service.snapshot()
+    assert snap.rates["NZD"] == 1.7 and snap.meta("USD", ["NZD"])["as_of"] == AS_OF.isoformat()

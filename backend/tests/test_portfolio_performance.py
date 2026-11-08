@@ -247,3 +247,30 @@ async def test_failed_refresh_with_stored_rows_warns_stale_not_missing(fake_pric
     assert body["stats"]["total_return"] == first["stats"]["total_return"]
     assert not any("No price history for AAA" in w for w in body["warnings"])
     assert any("Could not refresh prices for AAA" in w for w in body["warnings"])
+
+
+async def _listed(symbol: str, currency: str) -> None:
+    from app.models.ticker_metadata import TickerMetadata
+
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as db:
+        db.add(TickerMetadata(ticker=symbol, currency=currency, fetched_at=now, expires_at=now + timedelta(days=1)))
+        await db.commit()
+
+
+async def test_currency_param_converts_and_a_missing_rate_is_named(fake_prices, fixed_fx):
+    fixed_fx({"USD": 1.0, "AUD": 1.5})
+    async with _client() as c:
+        h = await _token(c, "perfccy@example.com")
+        pid = await _portfolio(c, h, [(0, {"AAA": 10, "BBB": 5})])
+        await _listed("AAA", "AUD")
+        usd = (await c.get(f"/portfolio/{pid}/performance?mode=current&range=1m&currency=USD", headers=h)).json()
+        aud = (await c.get(f"/portfolio/{pid}/performance?mode=current&range=1m&currency=AUD", headers=h)).json()
+        fixed_fx({"USD": 1.0})
+        gap = (await c.get(f"/portfolio/{pid}/performance?mode=current&range=1m&currency=USD", headers=h)).json()
+        bad = await c.get(f"/portfolio/{pid}/performance?currency=XYZ", headers=h)
+
+    assert usd["display_currency"] == "USD" and aud["display_currency"] == "AUD"
+    assert aud["series"][-1]["value"] == pytest.approx(usd["series"][-1]["value"] * 1.5, abs=0.02)  # series are rounded to cents
+    assert "No USD exchange rate for AAA; left out." in gap["warnings"]
+    assert bad.status_code == 422

@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+from typing import Iterable
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,17 +26,28 @@ async def fx_factors(
     db: AsyncSession, symbols: list[str], display_currency: str
 ) -> tuple[dict[str, float], dict[str, str]]:
     """symbol → factor from its listing currency into the display currency
-    (today's rate), plus each symbol's listing currency."""
+    (today's rate), plus each symbol's listing currency. A symbol whose rate is
+    unknown has no factor: callers leave it out (see without_rate), never 1:1."""
     meta = {
         row.ticker.upper(): (row.currency or "").upper()
         for row in (await db.execute(select(TickerMetadata).where(TickerMetadata.ticker.in_(symbols)))).scalars()
     }
-    target = await fx_service.get_rate(display_currency)
+    snap = await fx_service.snapshot()
     factors: dict[str, float] = {}
     currencies: dict[str, str] = {}
     for sym in symbols:
         ccy = quote_currency_from_ticker(sym) or meta.get(sym) or "USD"
         currencies[sym] = ccy
-        local = await fx_service.get_rate(ccy) if ccy in fx_service.SUPPORTED_CURRENCIES else 1.0
-        factors[sym] = target / local if local else 1.0
+        rate = snap.convert(ccy, display_currency)
+        if rate is not None:
+            factors[sym] = rate
     return factors, currencies
+
+
+def without_rate(symbols: Iterable[str], fx: dict[str, float]) -> list[str]:
+    """The symbols fx_factors could not convert, sorted."""
+    return sorted({s for s in symbols if s not in fx})
+
+
+def no_rate_warning(symbols: list[str], display_currency: str) -> str:
+    return f"No {display_currency} exchange rate for {', '.join(symbols)}; left out."

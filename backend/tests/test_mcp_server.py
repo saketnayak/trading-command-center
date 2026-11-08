@@ -190,3 +190,30 @@ async def test_get_xray_reads_only_the_callers_portfolio(fake_prices):  # noqa: 
         assert out["funds"] == [] and {r["ticker"] for r in out["exposures"]} == {"AAA", "BBB"}
         denied = await s.call_tool("get_xray", {"portfolio_id": theirs})
         assert denied.isError
+
+
+async def test_money_tools_take_an_optional_currency(fake_prices, fixed_fx):  # noqa: F811
+    from app.models.ticker_metadata import TickerMetadata
+
+    fixed_fx({"USD": 1.0, "AUD": 1.5})
+    async with _client() as c:
+        h = await _token(c, "mcpccy@example.com")
+        pid = await _portfolio(c, h, [(1, {"AAA": 10, "BBB": 5})])
+        tok = (await _make_token(c, h))["token"]
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as db:
+        db.add(TickerMetadata(ticker="BBB", currency="CHF", fetched_at=now, expires_at=now + timedelta(days=1)))
+        await db.commit()
+
+    async with mcp_session(tok) as s:
+        usd = _json(await s.call_tool("get_holdings", {"portfolio_id": pid}))
+        aud = _json(await s.call_tool("get_holdings", {"portfolio_id": pid, "currency": "aud"}))
+        worth = _json(await s.call_tool("get_net_worth", {"currency": "AUD"}))
+        perf = _json(await s.call_tool("get_performance", {"portfolio_id": pid, "range": "3m", "currency": "AUD"}))
+        bad = await s.call_tool("get_holdings", {"portfolio_id": pid, "currency": "XYZ"})
+
+    assert usd["currency"] == "USD" and aud["currency"] == "AUD"
+    assert aud["total_value"] == pytest.approx(usd["total_value"] * 1.5, abs=0.02)
+    assert usd["left_out"] == ["BBB"] and {r["ticker"] for r in usd["holdings"]} == {"AAA"}  # no CHF rate
+    assert worth["display_currency"] == "AUD" and perf["display_currency"] == "AUD"
+    assert bad.isError and "Unsupported currency" in bad.content[0].text

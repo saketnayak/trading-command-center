@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, resolve_display_currency
 from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.services import edgar_service, fund_lookthrough_service as service
@@ -41,12 +41,13 @@ def _start_refresh(portfolio_id: UUID, tickers: list[str], *, force: bool) -> bo
 
 
 @router.get("/portfolio/{portfolio_id}/xray")
-async def get_xray(portfolio_id: UUID, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def get_xray(portfolio_id: UUID, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+                   display_currency: str = Depends(resolve_display_currency)):
     await _own(db, portfolio_id, user)
     tickers = await edgar_service.held_tickers(db, portfolio_id)
     if await service.stale_tickers(db, tickers):
         _start_refresh(portfolio_id, tickers, force=False)
-    out = await service.build_report(db, portfolio_id, display_currency=(user.preferred_currency or "USD").upper())
+    out = await service.build_report(db, portfolio_id, display_currency=display_currency)
     out["syncing"] = str(portfolio_id) in service.running
     out["full_holdings_available"] = edgar_service.contact_configured()
     return out

@@ -12,7 +12,7 @@ import asyncio
 import logging
 import time
 import weakref
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import pandas as pd
@@ -81,6 +81,34 @@ async def fetch_price_quote(ticker: str) -> Optional[PriceQuote]:
     """Async wrapper: fetches stock price + listing currency via Yahoo Finance."""
     async with _get_yf_semaphore():
         return await asyncio.to_thread(_sync_fetch_price_quote, ticker)
+
+
+def _sync_fetch_fx_quotes(codes: list[str]) -> dict[str, tuple[float, datetime]]:
+    """USD→code rates from Yahoo `<CCY>=X` pairs: each pair's last close and when it printed."""
+    symbols = [f"{code}=X" for code in codes]
+    data = yf.download(symbols, period="5d", interval="5m", progress=False, threads=True, auto_adjust=False)
+    if data is None or data.empty or "Close" not in data:
+        return {}
+    closes = data["Close"]
+    if isinstance(closes, pd.Series):
+        closes = closes.to_frame(name=symbols[0])
+    out: dict[str, tuple[float, datetime]] = {}
+    for code, symbol in zip(codes, symbols):
+        if symbol not in closes:
+            continue
+        series = closes[symbol].dropna()
+        if series.empty:
+            continue
+        stamp = pd.Timestamp(series.index[-1])
+        stamp = stamp.tz_localize("UTC") if stamp.tzinfo is None else stamp.tz_convert("UTC")
+        out[code] = (float(series.iloc[-1]), stamp.to_pydatetime())
+    return out
+
+
+async def fetch_fx_quotes(codes: list[str]) -> dict[str, tuple[float, datetime]]:
+    """Async wrapper: live USD→code FX rates via one Yahoo download; only pairs it got."""
+    async with _get_yf_semaphore():
+        return await asyncio.to_thread(_sync_fetch_fx_quotes, codes)
 
 
 async def fetch_price(ticker: str) -> Optional[float]:

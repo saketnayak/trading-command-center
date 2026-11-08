@@ -39,6 +39,7 @@ import {
   MARKET_STALE_TIMES,
   PORTFOLIO_NEWS_DAYS,
   PORTFOLIO_EARNINGS_DAYS_AHEAD,
+  samePortfolioPlaceholder,
 } from "@/lib/portfolioQueries";
 import { usePortfolioSync } from "@/lib/usePortfolioSync";
 import { PortfolioFreshnessLabel } from "@/lib/usePortfolioFreshness";
@@ -67,6 +68,9 @@ import { MorningBriefStrip } from "@/components/portfolio/MorningBriefStrip";
 import { FilingsPanel } from "@/components/portfolio/FilingsPanel";
 import { XrayPanel } from "@/components/portfolio/XrayPanel";
 import { PortfolioTotalsSummary } from "@/components/portfolio/PortfolioTotalsSummary";
+import { DisplayCurrencyPicker } from "@/components/currency/DisplayCurrencyPicker";
+import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
+import { headline } from "@/lib/displayCurrency";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Briefcase } from "lucide-react";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
@@ -260,11 +264,20 @@ function PortfolioPageContent() {
     [portfolios, preferredId]
   );
 
-  const { data: current, isLoading: loadingCurrent, isFetching: fetchingCurrent, refetch: refetchCurrent } = useQuery({
-    queryKey: portfolioQueryKeys.current(selectedId ?? ""),
-    queryFn: () => getPortfolioCurrent(selectedId!),
-    enabled: selectedId != null,
+  const displayCcy = useDisplayCurrency();
+  const ccy = displayCcy.currency;
+
+  const {
+    data: current, isLoading: loadingCurrent, isFetching: fetchingCurrent, isPlaceholderData: currentIsPlaceholder,
+    refetch: refetchCurrent,
+  } = useQuery({
+    queryKey: portfolioQueryKeys.current(selectedId ?? "", ccy),
+    queryFn: () => getPortfolioCurrent(selectedId!, ccy),
+    enabled: selectedId != null && displayCcy.ready,
     staleTime: PORTFOLIO_STALE_TIMES.current,
+    // Keep the old figures (dimmed) while another currency loads, so a switch never flashes empty,
+    // but never show another portfolio's holdings while this one loads.
+    placeholderData: samePortfolioPlaceholder(selectedId ?? ""),
   });
 
   const hasHoldings = (current?.holdings?.length ?? 0) > 0;
@@ -342,10 +355,11 @@ function PortfolioPageContent() {
   });
 
   const { data: trimSignals, isFetching: fetchingTrimSignals, isError: trimSignalsError, refetch: refetchTrimSignals } = useQuery<TrimSignalsResponse>({
-    queryKey: portfolioQueryKeys.trimSignals(selectedId ?? ""),
-    queryFn: () => getPortfolioTrimSignals(selectedId!),
-    enabled: selectedId != null && markovEnabled,
+    queryKey: portfolioQueryKeys.trimSignals(selectedId ?? "", ccy),
+    queryFn: () => getPortfolioTrimSignals(selectedId!, ccy),
+    enabled: selectedId != null && markovEnabled && displayCcy.ready,
     staleTime: PORTFOLIO_STALE_TIMES.trimSignals,
+    placeholderData: samePortfolioPlaceholder(selectedId ?? ""),
   });
 
   const trimByHoldingId = useMemo<Record<string, TrimSignalEntry>>(
@@ -506,6 +520,16 @@ function PortfolioPageContent() {
     [tabGroups.overflow, alertCount],
   );
 
+  // The rate line leads with the pair behind the biggest holding.
+  const largestQuoteCurrency = useMemo(() => {
+    let best: { ccy: string | null; value: number } = { ccy: null, value: -Infinity };
+    for (const h of current?.holdings ?? []) {
+      const v = h.market_value_display ?? null;
+      if (v != null && v > best.value) best = { ccy: h.quote_currency, value: v };
+    }
+    return best.ccy;
+  }, [current?.holdings]);
+
   const hasTotals =
     current?.totals != null &&
     current.totals_currency != null &&
@@ -534,11 +558,23 @@ function PortfolioPageContent() {
           actions={
             selectedPortfolio ? (
               <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
-                {hasTotals && current?.totals && current.totals_currency && (
+                {headline(current).show && current?.totals && (
                   <PortfolioTotalsSummary
                     totals={current.totals}
-                    totalsCurrency={current.totals_currency}
+                    totalsCurrency={headline(current).currency}
                     excluded={current.totals_excluded ?? []}
+                    fx={current.fx}
+                    primaryCurrency={largestQuoteCurrency}
+                    pending={currentIsPlaceholder}
+                    picker={
+                      <DisplayCurrencyPicker
+                        value={ccy}
+                        held={current.portfolio_currencies ?? []}
+                        supported={displayCcy.supported}
+                        onChange={displayCcy.setCurrency}
+                        saveError={displayCcy.saveError}
+                      />
+                    }
                   />
                 )}
                 <PortfolioActions

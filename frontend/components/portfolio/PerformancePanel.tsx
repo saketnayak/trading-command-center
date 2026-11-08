@@ -24,6 +24,7 @@ import { PERFORMANCE_COLORS, buildDrawdownFigure, buildGrowthFigure } from "@/li
 import { PORTFOLIO_STALE_TIMES, portfolioQueryKeys } from "@/lib/portfolioQueries";
 import { fmtMoney } from "@/lib/currency";
 import { ALERT_BANNER_CLASS, FIELD_INPUT_SM_CLASS, selectionPillClass } from "@/lib/uiClasses";
+import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
@@ -43,9 +44,10 @@ export function PerformancePanel({ portfolioId }: Props) {
   const [benchmark, setBenchmark] = useState("SPY");
   const [customBenchmark, setCustomBenchmark] = useState("");
 
+  const { currency: ccy } = useDisplayCurrency();
   const query = useQuery({
-    queryKey: portfolioQueryKeys.performance(portfolioId, mode, range, benchmark),
-    queryFn: () => getPortfolioPerformance(portfolioId, mode, range, benchmark),
+    queryKey: portfolioQueryKeys.performance(portfolioId, mode, range, benchmark, ccy),
+    queryFn: () => getPortfolioPerformance(portfolioId, mode, range, benchmark, ccy),
     staleTime: PORTFOLIO_STALE_TIMES.performance,
     // Keep the old chart while range/mode/benchmark change, but never show
     // another portfolio's numbers while this one loads.

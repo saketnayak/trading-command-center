@@ -106,6 +106,16 @@ async def _user(db, user_id):
     return user
 
 
+def _display_ccy(currency: str | None, user) -> str:
+    """The currency a money tool answers in: the `currency` argument, else the user's preference."""
+    from app.dependencies import normalize_currency
+
+    try:
+        return normalize_currency(currency, (user.preferred_currency if user else None) or "USD")
+    except ValueError as e:
+        raise ToolError(str(e))
+
+
 async def _own_portfolio(db, user_id, portfolio_id: str):
     from app.models.portfolio import Portfolio
 
@@ -175,7 +185,7 @@ def build_server():
             return out
 
     @server.tool()
-    async def get_holdings(portfolio_id: str) -> dict[str, Any]:
+    async def get_holdings(portfolio_id: str, currency: str | None = None) -> dict[str, Any]:
         """Current holdings of a portfolio: shares, average cost, latest close, value and weight
         (in the user's display currency), plus each ticker's latest AI verdict."""
         from app.models.portfolio import PortfolioSnapshot
@@ -188,22 +198,25 @@ def build_server():
         async with AsyncSessionLocal() as db:
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
-            ccy = (user.preferred_currency or "USD").upper()
+            ccy = _display_ccy(currency, user)
             snap = (await db.execute(
                 select(PortfolioSnapshot).where(PortfolioSnapshot.portfolio_id == uuid.UUID(portfolio_id))
                 .options(selectinload(PortfolioSnapshot.holdings)).order_by(desc(PortfolioSnapshot.uploaded_at)).limit(1)
             )).scalar_one_or_none()
             if not snap or not snap.holdings:
-                return {"currency": ccy, "holdings": [], "total_value": 0}
+                return {"currency": ccy, "holdings": [], "total_value": 0, "left_out": []}
             tickers = sorted({h.ticker.upper() for h in snap.holdings})
             today = datetime.now(timezone.utc).date()
             closes, _ = await get_closes(db, tickers, today - timedelta(days=14), today)
             fx, _ = await fx_factors(db, tickers, ccy)
             rows, total = [], 0.0
+            left_out = sorted({h.ticker.upper() for h in snap.holdings if h.ticker.upper() not in fx})  # no rate: never 1:1
             for h in snap.holdings:
                 t = h.ticker.upper()
+                if t in left_out:
+                    continue
                 px = PriceLookup(closes.get(t, {})).at(today) if closes.get(t) else None
-                value = h.shares * px * fx.get(t, 1.0) if px is not None else None
+                value = h.shares * px * fx[t] if px is not None else None
                 total += value or 0.0
                 run = (await db.execute(
                     select(Run).where(Run.created_by == user_id, Run.ticker == t, Run.status == RunStatus.completed,
@@ -215,10 +228,12 @@ def build_server():
             for r in rows:
                 r["weight"] = round(r["value"] / total, 4) if r["value"] is not None and total > 0 else None
             rows.sort(key=lambda r: -(r["value"] or 0))
-            return {"currency": ccy, "as_of_upload": snap.uploaded_at.isoformat(), "total_value": round(total, 2), "holdings": rows}
+            return {"currency": ccy, "as_of_upload": snap.uploaded_at.isoformat(), "total_value": round(total, 2), "holdings": rows,
+                    "left_out": left_out}
 
     @server.tool()
-    async def get_performance(portfolio_id: str, range: str = "1y", benchmark: str = "SPY", mode: str = "auto") -> dict[str, Any]:
+    async def get_performance(portfolio_id: str, range: str = "1y", benchmark: str = "SPY", mode: str = "auto",
+                              currency: str | None = None) -> dict[str, Any]:
         """Time-weighted return vs a benchmark (range: 1m, 3m, 6m, ytd, 1y, 3y, 5y; mode: auto, actual, current).
         Returns stats, trailing returns, per-holding contribution and a month-end series."""
         from app.services.portfolio_performance_service import build_performance_report
@@ -229,13 +244,13 @@ def build_server():
         async with AsyncSessionLocal() as db:
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
-            rep = await build_performance_report(db, uuid.UUID(portfolio_id), display_currency=(user.preferred_currency or "USD").upper(),
+            rep = await build_performance_report(db, uuid.UUID(portfolio_id), display_currency=_display_ccy(currency, user),
                                                  mode=mode, range_key=range, benchmark=_ticker(benchmark))
         rep["series"] = _month_ends(rep.get("series") or [])
         return rep
 
     @server.tool()
-    async def get_risk(portfolio_id: str, lookback: str = "1y", benchmark: str = "SPY") -> dict[str, Any]:
+    async def get_risk(portfolio_id: str, lookback: str = "1y", benchmark: str = "SPY", currency: str | None = None) -> dict[str, Any]:
         """Risk of today's holdings (lookback: 3m, 6m, 1y, 3y): volatility, beta, 1-day VaR/CVaR, drawdown,
         concentration, each holding's share of risk, correlated clusters, stress replays and a 1-year Monte Carlo."""
         from app.services.portfolio_risk_service import build_risk_report
@@ -246,7 +261,7 @@ def build_server():
         async with AsyncSessionLocal() as db:
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
-            rep = await build_risk_report(db, uuid.UUID(portfolio_id), display_currency=(user.preferred_currency or "USD").upper(),
+            rep = await build_risk_report(db, uuid.UUID(portfolio_id), display_currency=_display_ccy(currency, user),
                                           lookback=lookback, benchmark=_ticker(benchmark))
         risk = rep.get("risk")
         if risk:
@@ -256,7 +271,8 @@ def build_server():
         return rep
 
     @server.tool()
-    async def get_rebalance_plan(portfolio_id: str, mode: str = "bands", amount: float = 0.0, whole_shares: bool = False) -> dict[str, Any]:
+    async def get_rebalance_plan(portfolio_id: str, mode: str = "bands", amount: float = 0.0, whole_shares: bool = False,
+                                 currency: str | None = None) -> dict[str, Any]:
         """Drift against the portfolio's target weights and a trade plan (mode: bands, full, contribute, withdraw;
         amount for contribute/withdraw). A plan only: AgentFloor never places orders."""
         from app.routers.portfolio_rebalance import rebalance
@@ -269,10 +285,11 @@ def build_server():
         async with AsyncSessionLocal() as db:
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
-            return await rebalance(uuid.UUID(portfolio_id), mode=mode, amount=amount, whole_shares=whole_shares, db=db, user=user)
+            return await rebalance(uuid.UUID(portfolio_id), mode=mode, amount=amount, whole_shares=whole_shares, db=db, user=user,
+                                   display_currency=_display_ccy(currency, user))
 
     @server.tool()
-    async def get_income(portfolio_id: str) -> dict[str, Any]:
+    async def get_income(portfolio_id: str, currency: str | None = None) -> dict[str, Any]:
         """Dividend income: forward annual and monthly income, yield and yield on cost, each holding's
         frequency and next ex-dividend date, the next 12 months' expected payments, income received, and
         progress toward the user's monthly target. Estimates from each holding's dividend history."""
@@ -282,7 +299,7 @@ def build_server():
         async with AsyncSessionLocal() as db:
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
-            return await portfolio_income(uuid.UUID(portfolio_id), db=db, user=user)
+            return await portfolio_income(uuid.UUID(portfolio_id), db=db, user=user, ccy=_display_ccy(currency, user))
 
     @server.tool()
     async def get_filings(portfolio_id: str, days: int = 30) -> dict[str, Any]:
@@ -299,7 +316,7 @@ def build_server():
             return await filing_digest_service.report(db, tickers, days=max(7, min(120, days)))
 
     @server.tool()
-    async def get_xray(portfolio_id: str) -> dict[str, Any]:
+    async def get_xray(portfolio_id: str, currency: str | None = None) -> dict[str, Any]:
         """ETF look-through: true exposure per company and sector counting funds' holdings, the overlap between
         funds, and concentration as held vs looking through. Fund holdings can be partial (see each fund's
         `covered_weight`, `source` and `as_of`), so exposures are minimums. Stored data only: the app refreshes
@@ -312,11 +329,11 @@ def build_server():
             await _own_portfolio(db, user_id, portfolio_id)
             user = await db.get(User, user_id)
             return await fund_lookthrough_service.build_report(
-                db, uuid.UUID(portfolio_id), display_currency=((user.preferred_currency if user else None) or "USD").upper()
+                db, uuid.UUID(portfolio_id), display_currency=_display_ccy(currency, user)
             )
 
     @server.tool()
-    async def get_tax_report(portfolio_id: str, year: int | None = None, min_loss: float = 100.0) -> dict[str, Any]:
+    async def get_tax_report(portfolio_id: str, year: int | None = None, min_loss: float = 100.0, currency: str | None = None) -> dict[str, Any]:
         """Tax view of a ledger-backed portfolio (informational, not tax advice; simplified US rules): realised
         gains for a tax year split short/long term with wash-sale adjustments, and open lots at a loss of at
         least `min_loss` (display currency) that could be harvested, with any wash-sale risk."""
@@ -326,10 +343,11 @@ def build_server():
         async with AsyncSessionLocal() as db:
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
-            return await portfolio_tax(uuid.UUID(portfolio_id), year=year, min_loss=min_loss, db=db, user=user)
+            return await portfolio_tax(uuid.UUID(portfolio_id), year=year, min_loss=min_loss, db=db, user=user,
+                                       ccy=_display_ccy(currency, user))
 
     @server.tool()
-    async def get_net_worth(range: str = "1y") -> dict[str, Any]:  # noqa: A002
+    async def get_net_worth(range: str = "1y", currency: str | None = None) -> dict[str, Any]:  # noqa: A002
         """Household net worth: portfolios plus manually tracked assets (cash, property, private holdings,
         retirement accounts, crypto wallets) and liabilities (mortgages, loans, cards). Totals, the split by
         category, every item, and a series over `range` (6m, ytd, 1y, 3y, 5y)."""
@@ -338,7 +356,7 @@ def build_server():
         user_id, _ = _caller()
         async with AsyncSessionLocal() as db:
             user = await _user(db, user_id)
-            return await net_worth(range=range, db=db, user=user)
+            return await net_worth(range=range, db=db, user=user, ccy=_display_ccy(currency, user))
 
     @server.tool()
     async def get_regime(ticker: str) -> dict[str, Any]:

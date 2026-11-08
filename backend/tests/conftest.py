@@ -162,3 +162,35 @@ async def clean_db(request, temporary_database):
             "RESTART IDENTITY CASCADE"
         ))
     yield
+
+
+@pytest.fixture(autouse=True)
+def _offline_fx(monkeypatch):
+    """No test reaches Yahoo or Frankfurter: by default only USD has a rate. Tests that need
+    rates use `fixed_fx`; test_fx_service exercises the real layers with its own fakes."""
+    from app.services import fx_service
+
+    async def no_rates():
+        return fx_service.FxSnapshot(rates={"USD": 1.0}, source=None, as_of=None)
+
+    monkeypatch.setattr(fx_service, "snapshot", no_rates)
+
+
+@pytest.fixture
+def fixed_fx(monkeypatch):
+    """fixed_fx({"USD": 1.0, "AUD": 1.5}) makes every snapshot() return those rates."""
+    from datetime import datetime, timezone
+
+    from app.services import fx_service
+
+    def set_rates(rates: dict[str, float], source: str = "live"):
+        snap = fx_service.FxSnapshot(rates={"USD": 1.0, **rates}, source=source,
+                                     as_of=datetime(2026, 1, 2, 15, 0, tzinfo=timezone.utc))
+
+        async def fixed():
+            return snap
+
+        monkeypatch.setattr(fx_service, "snapshot", fixed)
+        return snap
+
+    return set_rates
