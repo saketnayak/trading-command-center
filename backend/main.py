@@ -6,7 +6,7 @@ from sqlalchemy import update
 from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.run import Run, RunStatus
-from app.routers import portfolio_xray
+from app.routers import fx, portfolio_xray
 from app.routers import auth, runs, api_keys, users, llm_providers, watchlist, portfolio, ticker, tickers, admin, market, investor_profile, regime, wave, kalman, jev, portfolio_performance, portfolio_risk, portfolio_rebalance, alerts, mcp_tokens, portfolio_ledger, portfolio_income, portfolio_tax, net_worth, backtests, learning, filings, settings as settings_router
 from app.services.jev_session_manager import recover_interrupted_sessions
 from app.services.scheduler import start_scheduler, stop_scheduler
@@ -74,6 +74,7 @@ app.include_router(portfolio_income.router, tags=["portfolio"])
 app.include_router(portfolio_tax.router, tags=["portfolio"])
 app.include_router(portfolio_xray.router, tags=["portfolio"])
 app.include_router(net_worth.router, tags=["net-worth"])
+app.include_router(fx.router, tags=["fx"])
 app.include_router(backtests.router, tags=["backtests"])
 app.include_router(learning.router, tags=["learning"])
 app.include_router(filings.router, tags=["filings"])
