@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { formatRate, orderCurrencies, rateLine, withCurrency } from "./displayCurrency";
+import { formatRate, orderCurrencies, rateLine, rowMoney, sortValue, withCurrency } from "./displayCurrency";
+import type { PortfolioHolding } from "./types";
 import { portfolioQueryKeys } from "./portfolioQueries";
 
 test("withCurrency appends to bare and existing query strings", () => {
@@ -53,4 +54,24 @@ test("keys carry the currency so responses cannot cross", () => {
   assert.deepEqual(portfolioQueryKeys.current("p", "AUD"), ["portfolio-current", "p", "AUD"]);
   assert.deepEqual(portfolioQueryKeys.performance("p", "auto", "1y", "SPY", "EUR"),
     ["portfolio-performance", "p", "auto", "1y", "SPY", "EUR"]);
+});
+
+const holding = {
+  quote_currency: "USD", current_price: 200, current_price_display: 300, market_value: 2000, market_value_display: 3000,
+  unrealized_pnl: null, unrealized_pnl_display: 300, unrealized_pnl_pct: null, unrealized_pnl_pct_display: 11.1,
+  pnl_unavailable_reason: "currency_mismatch",
+} as PortfolioHolding;
+
+test("rowMoney shows the display value with native subtext only when currencies differ", () => {
+  assert.deepEqual(rowMoney(holding, "market_value", false, "AUD"),
+    { value: 3000, currency: "AUD", native: { value: 2000, currency: "USD" } });
+  assert.equal(rowMoney(holding, "market_value", false, "USD").native, null);
+  assert.deepEqual(rowMoney(holding, "market_value", true, "AUD"), { value: 2000, currency: "USD", native: null });
+  assert.deepEqual(rowMoney(holding, "unrealized_pnl", false, "AUD"), { value: 300, currency: "AUD", native: null });
+});
+
+test("sortValue sorts on converted values unless native is on", () => {
+  assert.equal(sortValue(holding, "market_value", false), 3000);
+  assert.equal(sortValue(holding, "unrealized_pnl_pct", false), 11.1);
+  assert.equal(sortValue(holding, "unrealized_pnl", true), null);
 });

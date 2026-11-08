@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Check, LoaderCircle, Pencil, Play, Trash2, X } from "lucide-react";
 import { fmtMoney, fmtPnl, SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { rowMoney } from "@/lib/displayCurrency";
 import { quantityUnit } from "@/lib/asset";
 import { analysisFromLastRun } from "@/lib/holdingLastRun";
 import { WatchButton } from "@/components/portfolio/WatchButton";
@@ -28,6 +29,8 @@ type DraftRow = {
 type HoldingsMobileCardsProps = {
   holdings: PortfolioHolding[];
   displayCurrency: string;
+  /** Show each holding in the currency it trades in instead of the display currency. */
+  showNative?: boolean;
   fundamentals?: Record<string, FundamentalsData>;
   regime?: Record<string, RegimeData>;
   wave?: Record<string, WaveSummary>;
@@ -114,6 +117,7 @@ function VerdictBadge({ holding }: { holding: PortfolioHolding }) {
 export function HoldingsMobileCards({
   holdings,
   displayCurrency,
+  showNative = false,
   fundamentals,
   regime,
   wave,
@@ -140,7 +144,9 @@ export function HoldingsMobileCards({
         const isExpanded = expandedIds.has(holding.id);
         const fundData = fundamentals?.[holding.ticker] ?? null;
         const regimeData = regime?.[holding.ticker];
-        const pnl = holding.unrealized_pnl;
+        const pnl = showNative ? holding.unrealized_pnl : (holding.unrealized_pnl_display ?? null);
+        const pnlPct = showNative ? holding.unrealized_pnl_pct : (holding.unrealized_pnl_pct_display ?? null);
+        const value = rowMoney(holding, "market_value", showNative, displayCurrency);
         const pnlColor = pnl == null ? "text-muted" : pnl >= 0 ? "text-green-400" : "text-red-400";
         const tickerMeta = tickerMetadata?.[holding.ticker.toUpperCase()];
         const canExpand = Boolean(fundData || regimeData);
@@ -176,8 +182,11 @@ export function HoldingsMobileCards({
               {!isEditing && (
                 <div className="text-right shrink-0">
                   <p className="text-sm font-semibold font-data text-fg">
-                    {fmtMoney(holding.market_value, holding.quote_currency ?? displayCurrency)}
+                    {fmtMoney(value.value, value.currency)}
                   </p>
+                  {value.native && (
+                    <p className="text-[10px] font-data text-muted">{fmtMoney(value.native.value, value.native.currency)}</p>
+                  )}
                   <p className="text-[10px] text-muted uppercase tracking-wide">Value</p>
                 </div>
               )}
@@ -225,7 +234,7 @@ export function HoldingsMobileCards({
                     </span>
                   </div>
                   <div className={`font-data font-semibold ${pnlColor}`}>
-                    {fmtPnl(pnl, holding.unrealized_pnl_pct, holding.quote_currency ?? displayCurrency)}
+                    {fmtPnl(pnl, pnlPct, showNative ? (holding.quote_currency ?? displayCurrency) : displayCurrency)}
                   </div>
                 </div>
 

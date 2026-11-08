@@ -1,5 +1,7 @@
 /** Display-currency helpers: request paths, picker ordering and the "1 USD = … AUD · live" line. */
 
+import type { PortfolioHolding } from "./types";
+
 export type FxSource = "live" | "ecb" | "stale" | null;
 
 /** The rates behind a response's display figures: rates_used maps a source currency to its multiplier into the display currency. */
@@ -57,4 +59,31 @@ export function rateLine(
     label = asOf ? `live · ${age(asOf, now)}` : "live";
   }
   return { text: `${pair(main)} · ${label}`, tone: fx.source === "stale" ? "amber" : "muted", pairs: codes.map(pair) };
+}
+
+type MoneyField = "current_price" | "market_value" | "unrealized_pnl";
+
+/** A holdings cell: the display-currency figure, plus the native one as subtext when it trades in another currency.
+ * With showNative, the native figure alone (today's per-row behaviour). */
+export function rowMoney(
+  h: PortfolioHolding,
+  field: MoneyField,
+  showNative: boolean,
+  display: string,
+): { value: number | null; currency: string; native: { value: number; currency: string } | null } {
+  const quote = h.quote_currency ?? display;
+  const nativeValue = h[field] ?? null;
+  if (showNative) return { value: nativeValue, currency: quote, native: null };
+  const value = h[`${field}_display`] ?? null;
+  // P&L has no meaningful native subtext when it was only computable in the display currency.
+  const showSub = quote !== display && nativeValue != null && value != null && field !== "unrealized_pnl";
+  return { value, currency: display, native: showSub ? { value: nativeValue, currency: quote } : null };
+}
+
+export function sortValue(
+  h: PortfolioHolding,
+  key: MoneyField | "unrealized_pnl_pct",
+  showNative: boolean,
+): number | null {
+  return (showNative ? h[key] : h[`${key}_display`]) ?? null;
 }
