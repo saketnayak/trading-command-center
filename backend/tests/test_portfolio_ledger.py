@@ -225,6 +225,8 @@ async def test_without_later_flows_money_weighted_equals_time_weighted(fake_pric
         pid = (await c.post("/portfolio", json={"name": "One"}, headers=h)).json()["id"]
         await c.post(f"/portfolio/{pid}/transactions", headers=h, json={
             "trade_date": _d(500), "type": "BUY", "symbol": "AAA", "quantity": 3, "price": 90})
-        s = (await c.get(f"/portfolio/{pid}/performance?range=1y", headers=h)).json()["stats"]
+        # 3y, so the chart starts at the first trade (500 days ago) whatever the weekday: a 1y window
+        # that opens on a weekend spans under 365 days and has no annualised figure on Sundays/Mondays.
+        s = (await c.get(f"/portfolio/{pid}/performance?range=3y", headers=h)).json()["stats"]
     assert s["mwr_period"] == pytest.approx(s["total_return"], abs=1e-4)
     assert s["mwr_annualised"] is not None  # a full year of history
