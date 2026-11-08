@@ -126,8 +126,9 @@ def test_convert_and_meta():
 
 
 def test_supported_currencies_is_the_frankfurter_set():
-    assert len(fx_service.SUPPORTED_CURRENCIES) == 31
+    assert len(fx_service.SUPPORTED_CURRENCIES) == 30
     assert {"NZD", "HKD", "KRW", "USD"} <= fx_service.SUPPORTED_CURRENCIES
+    assert "BGN" not in fx_service.SUPPORTED_CURRENCIES  # Bulgaria joined the euro on 2026-01-01; no rate is published
 
 
 async def test_ecb_fetch_uses_current_endpoint_and_follows_redirects(monkeypatch, fake_live):

@@ -24,7 +24,7 @@ from app.services import yfinance_service
 logger = logging.getLogger(__name__)
 
 SUPPORTED_CURRENCIES = frozenset({
-    "AUD", "BGN", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR", "ILS", "INR", "ISK",
+    "AUD", "BRL", "CAD", "CHF", "CNY", "CZK", "DKK", "EUR", "GBP", "HKD", "HUF", "IDR", "ILS", "INR", "ISK",
     "JPY", "KRW", "MXN", "MYR", "NOK", "NZD", "PHP", "PLN", "RON", "SEK", "SGD", "THB", "TRY", "USD", "ZAR",
 })
 _TARGETS = sorted(SUPPORTED_CURRENCIES - {"USD"})  # USD is the base
