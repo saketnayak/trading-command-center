@@ -1,6 +1,4 @@
 """Portfolio totals across quote currencies (a USD and an ASX holding in one portfolio)."""
-import time
-
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -12,20 +10,19 @@ from tests.test_portfolio_integration import _auth, _create_portfolio, _register
 
 
 @pytest.fixture
-def aud_rate(monkeypatch):
-    """1 USD = 1.5 AUD, already cached so no network call is made."""
-    monkeypatch.setattr(fx_service, "_rates_cache", {"USD": 1.0, "AUD": 1.5})
-    monkeypatch.setattr(fx_service, "_rates_expiry", time.time() + 3600)
+def aud_rate(fixed_fx):
+    """1 USD = 1.5 AUD, with no network call."""
+    return fixed_fx({"USD": 1.0, "AUD": 1.5})
 
 
 @pytest.mark.unit
-async def test_convert_rate_goes_through_usd_and_refuses_unknown_rates(aud_rate, monkeypatch):
+async def test_convert_rate_goes_through_usd_and_refuses_unknown_rates(aud_rate, fixed_fx):
     assert await fx_service.convert_rate("AUD", "AUD") == 1.0
     assert await fx_service.convert_rate("USD", "AUD") == 1.5
     assert await fx_service.convert_rate("AUD", "USD") == pytest.approx(1 / 1.5)
-    assert await fx_service.convert_rate("AUD", "EUR") is None  # no EUR rate cached
-    assert await fx_service.convert_rate("HKD", "USD") is None  # not a supported currency
-    monkeypatch.setattr(fx_service, "_rates_cache", {"USD": 1.0})  # what a failed refresh leaves
+    assert await fx_service.convert_rate("AUD", "EUR") is None  # no EUR rate in this snapshot
+    assert await fx_service.convert_rate("HKD", "USD") is None  # no HKD rate in this snapshot
+    fixed_fx({"USD": 1.0})  # what a failed refresh leaves
     assert await fx_service.convert_rate("AUD", "USD") is None
 
 
@@ -69,9 +66,8 @@ async def test_totals_convert_holdings_quoted_in_another_currency(aud_rate, monk
 
 
 @pytest.mark.asyncio
-async def test_totals_name_holdings_left_out_when_there_is_no_rate(monkeypatch):
-    monkeypatch.setattr(fx_service, "_rates_cache", {"USD": 1.0})
-    monkeypatch.setattr(fx_service, "_rates_expiry", time.time() + 3600)
+async def test_totals_name_holdings_left_out_when_there_is_no_rate(monkeypatch, fixed_fx):
+    fixed_fx({"USD": 1.0})
     _prices(monkeypatch)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         token, pid = await _mixed_portfolio(client, "mixedccy2@example.com")
