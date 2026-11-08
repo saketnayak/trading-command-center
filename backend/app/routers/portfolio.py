@@ -15,7 +15,7 @@ from sqlalchemy.orm import selectinload
 import httpx
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, resolve_display_currency
 from app.models.portfolio import Portfolio, PortfolioSnapshot, PortfolioHolding
 from app.models.portfolio_insight import PortfolioInsight, InsightStatus, InsightTrigger, InsightStance
 from app.models.user import User
@@ -42,7 +42,8 @@ from app.utils.quote_currency import quote_currency_from_ticker
 from app.services.ledger_service import ensure_not_ledger_backed
 from app.utils.response_language import DEFAULT_RESPONSE_LANGUAGE, normalize_response_language
 from app.schemas.money import PriceQuote
-from app.services.fx_service import SUPPORTED_CURRENCIES, convert_rate
+from app.services import fx_service
+from app.services.fx_service import SUPPORTED_CURRENCIES
 from app.utils.llm_providers import (
     DEFAULT_LLM_DEPTH,
     LOCAL_LLM_PROVIDERS,
@@ -138,6 +139,12 @@ class HoldingResponse(BaseModel):
     unrealized_pnl_pct: Optional[float]
     pnl_unavailable_reason: Optional[str] = None
     last_run: Optional[LastRun]
+    # The same figures in the display currency (None when a rate or price is missing).
+    fx_rate: Optional[float] = None  # quote currency -> display currency
+    current_price_display: Optional[float] = None
+    market_value_display: Optional[float] = None
+    unrealized_pnl_display: Optional[float] = None
+    unrealized_pnl_pct_display: Optional[float] = None
 
 
 class HoldingPatch(BaseModel):
@@ -186,6 +193,7 @@ class CurrentResponse(BaseModel):
     totals_currency: Optional[str] = None
     totals: Totals
     totals_excluded: list[str] = []  # priced holdings left out of totals: no FX rate to the display currency
+    fx: Optional[dict] = None  # {source, as_of, rates_used} for the rates behind the display figures
     holdings: list[HoldingResponse]
 
 
@@ -478,6 +486,7 @@ async def get_current_holdings(
     portfolio_id: UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
+    display_currency: str = Depends(resolve_display_currency),
 ):
     result = await db.execute(select(Portfolio).where(Portfolio.id == portfolio_id, Portfolio.user_id == user.id))
     if not result.scalar_one_or_none():
@@ -514,8 +523,10 @@ async def get_current_holdings(
     # Fetch all prices in each instrument's source currency
     price_map = await _fetch_prices_bulk(tickers, av_key, db)
 
-    pref_currency = user.preferred_currency.upper()
+    pref_currency = display_currency
+    fx_snap = await fx_service.snapshot()  # one set of rates for every figure in this response
     portfolio_currencies: set[str] = set()
+    currencies_seen: set[str] = set()
 
     enriched: list[HoldingResponse] = []
     total_market_value: float = 0.0
@@ -545,18 +556,30 @@ async def get_current_holdings(
             else:
                 pnl_reason = "currency_mismatch"
 
-        # Totals are in the display currency: convert each holding from its quote currency.
-        # A holding with no rate is left out and named, never counted 1:1.
+        # Display figures and totals are in the display currency: value converts from the quote
+        # currency, cost from the cost-basis currency. A holding with no rate is left out and
+        # named, never counted 1:1.
+        fx: Optional[float] = None
+        price_display = value_display = pnl_display = pnl_pct_display = None
         if quote is not None and market_value is not None:
-            fx = await convert_rate(quote.currency_code, pref_currency)
+            currencies_seen.add(quote.currency_code)
+            fx = fx_snap.convert(quote.currency_code, pref_currency)
             if fx is None:
                 totals_excluded.append(h.ticker)
             else:
-                total_market_value += market_value * fx
+                price_display = current_price * fx
+                value_display = market_value * fx
+                total_market_value += value_display
                 has_totals = True
-                if h.avg_cost is not None and cost_ccy == quote.currency_code:
-                    total_market_value_for_pnl += market_value * fx
-                    total_cost += h.avg_cost * h.shares * fx
+                if h.avg_cost is not None and h.avg_cost != 0:
+                    currencies_seen.add(cost_ccy)
+                    cost_fx = fx_snap.convert(cost_ccy, pref_currency)
+                    if cost_fx is not None:
+                        cost_display = h.avg_cost * h.shares * cost_fx
+                        pnl_display = value_display - cost_display
+                        pnl_pct_display = (value_display / cost_display - 1) * 100
+                        total_market_value_for_pnl += value_display
+                        total_cost += cost_display
 
         enriched.append(HoldingResponse(
             id=h.id,
@@ -572,6 +595,11 @@ async def get_current_holdings(
             unrealized_pnl_pct=pnl_pct,
             pnl_unavailable_reason=pnl_reason,
             last_run=last_runs.get(h.ticker),
+            fx_rate=fx,
+            current_price_display=price_display,
+            market_value_display=value_display,
+            unrealized_pnl_display=pnl_display,
+            unrealized_pnl_pct_display=pnl_pct_display,
         ))
 
     totals_pnl = (
@@ -597,6 +625,7 @@ async def get_current_holdings(
         totals_currency=totals_currency,
         totals=totals,
         totals_excluded=sorted(totals_excluded),
+        fx=fx_snap.meta(pref_currency, currencies_seen),
         holdings=enriched,
     )
 

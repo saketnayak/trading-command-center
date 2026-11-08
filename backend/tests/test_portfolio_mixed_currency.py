@@ -75,3 +75,78 @@ async def test_totals_name_holdings_left_out_when_there_is_no_rate(monkeypatch, 
 
     assert body["totals"]["market_value"] == pytest.approx(2000.0)
     assert body["totals_excluded"] == ["CSL.AX"]
+
+
+def _only_aapl_priced(monkeypatch):
+    async def fake_bulk(tickers, *_args, **_kwargs):
+        return {"AAPL": PriceQuote(amount=200.0, currency="USD")} if "AAPL" in tickers else {}
+
+    monkeypatch.setattr(portfolio_router, "_fetch_prices_bulk", fake_bulk)
+
+
+async def _usd_cost_portfolio(client, email):
+    """Like _mixed_portfolio, but CSL.AX keeps a USD cost basis while it is quoted in AUD."""
+    token = await _register_and_login(client, email)
+    pid = await _create_portfolio(client, token)
+    csv = b"ticker,shares,avg_cost\nAAPL,10,100\nCSL.AX,4,150\n"
+    r = await client.post(f"/portfolio/{pid}/upload", files={"file": ("h.csv", csv, "text/csv")}, headers=_auth(token))
+    assert r.status_code == 200, r.text
+    return token, pid
+
+
+@pytest.mark.asyncio
+async def test_rows_carry_display_values_and_currency_param_overrides_preference(aud_rate, monkeypatch):
+    _prices(monkeypatch)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token, pid = await _mixed_portfolio(client, "mixedccy3@example.com")
+        body = (await client.get(f"/portfolio/{pid}/current?currency=aud", headers=_auth(token))).json()
+
+    assert body["display_currency"] == "AUD" and body["totals_currency"] == "AUD"
+    assert body["fx"]["source"] == "live" and body["fx"]["rates_used"] == {"USD": 1.5}
+    aapl = next(h for h in body["holdings"] if h["ticker"] == "AAPL")
+    assert aapl["market_value"] == 2000.0 and aapl["market_value_display"] == pytest.approx(3000.0)
+    assert aapl["current_price_display"] == pytest.approx(300.0) and aapl["fx_rate"] == 1.5
+    assert aapl["unrealized_pnl_display"] == pytest.approx(1500.0)
+    assert aapl["unrealized_pnl_pct_display"] == pytest.approx(100.0)
+    csl = next(h for h in body["holdings"] if h["ticker"] == "CSL.AX")
+    assert csl["fx_rate"] == 1.0 and csl["market_value_display"] == pytest.approx(1200.0)
+    assert body["totals"]["market_value"] == pytest.approx(4200.0)  # A$3,000 + A$1,200
+
+
+@pytest.mark.asyncio
+async def test_cost_and_quote_in_different_currencies_now_has_display_pnl(aud_rate, monkeypatch):
+    _prices(monkeypatch)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token, pid = await _usd_cost_portfolio(client, "mixedccy4@example.com")
+        body = (await client.get(f"/portfolio/{pid}/current?currency=AUD", headers=_auth(token))).json()
+
+    # CSL.AX: cost 4 × $150 = $600 = A$900; value 4 × A$300 = A$1,200.
+    csl = next(h for h in body["holdings"] if h["ticker"] == "CSL.AX")
+    assert csl["pnl_unavailable_reason"] == "currency_mismatch" and csl["unrealized_pnl"] is None
+    assert csl["unrealized_pnl_display"] == pytest.approx(300.0)
+    assert csl["unrealized_pnl_pct_display"] == pytest.approx(33.3333, rel=1e-4)
+    # Totals P&L now counts it: AAPL A$3,000 − A$1,500 plus CSL.AX A$300.
+    assert body["totals"]["unrealized_pnl"] == pytest.approx(1800.0)
+    assert body["fx"]["rates_used"] == {"USD": 1.5}
+
+
+@pytest.mark.asyncio
+async def test_unpriced_holding_has_null_display_fields_and_is_not_excluded(aud_rate, monkeypatch):
+    _only_aapl_priced(monkeypatch)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token, pid = await _mixed_portfolio(client, "mixedccy5@example.com")
+        body = (await client.get(f"/portfolio/{pid}/current", headers=_auth(token))).json()
+
+    csl = next(h for h in body["holdings"] if h["ticker"] == "CSL.AX")
+    assert csl["market_value_display"] is None and csl["current_price_display"] is None
+    assert csl["unrealized_pnl_display"] is None
+    assert body["totals_excluded"] == [] and body["totals"]["market_value"] == pytest.approx(2000.0)
+
+
+@pytest.mark.asyncio
+async def test_unknown_currency_param_is_422(aud_rate, monkeypatch):
+    _prices(monkeypatch)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token, pid = await _mixed_portfolio(client, "mixedccy6@example.com")
+        r = await client.get(f"/portfolio/{pid}/current?currency=XYZ", headers=_auth(token))
+    assert r.status_code == 422
