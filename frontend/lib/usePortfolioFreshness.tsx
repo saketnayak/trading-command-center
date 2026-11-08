@@ -15,7 +15,7 @@ export interface PortfolioFreshnessOptions {
   isFetching: boolean;
 }
 
-function computeFreshnessLabel(
+export function computeFreshnessLabel(
   portfolioId: string | null,
   markovEnabled: boolean,
   waveEnabled: boolean,
@@ -33,9 +33,12 @@ function computeFreshnessLabel(
 
   let latestUpdatedAt = 0;
   for (const queryKey of queryKeys) {
-    const updatedAt = queryClient.getQueryState(queryKey)?.dataUpdatedAt ?? 0;
-    if (updatedAt > latestUpdatedAt) {
-      latestUpdatedAt = updatedAt;
+    // Prefix match: money queries append the display currency to these keys.
+    for (const query of queryClient.getQueryCache().findAll({ queryKey })) {
+      const updatedAt = query.state.dataUpdatedAt ?? 0;
+      if (updatedAt > latestUpdatedAt) {
+        latestUpdatedAt = updatedAt;
+      }
     }
   }
 

@@ -12,7 +12,7 @@ import logging
 import math
 import time
 import weakref
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field
 from datetime import date, datetime, time as dtime, timezone
 from typing import Iterable, Literal, Optional
 
@@ -31,6 +31,7 @@ _TARGETS = sorted(SUPPORTED_CURRENCIES - {"USD"})  # USD is the base
 _ECB_TTL = 86_400  # 24 hours
 
 FxSource = Literal["live", "ecb", "stale"]
+_FRESHNESS = {"live": 0, "ecb": 1, "stale": 2}
 
 
 @dataclass(frozen=True)
@@ -38,6 +39,8 @@ class FxSnapshot:
     rates: dict[str, float]  # USD -> ccy; always contains "USD": 1.0
     source: Optional[FxSource]  # None only when no layer has ever succeeded
     as_of: Optional[datetime]  # UTC; when upstream observed the rates
+    # Where each non-USD rate came from: ccy -> (source, as_of). Empty means every rate is `source`/`as_of`.
+    pairs: dict[str, tuple[FxSource, datetime]] = field(default_factory=dict)
 
     def convert(self, frm: str, to: str) -> Optional[float]:
         """Multiplier from one currency to another, through USD; None when either rate is unknown."""
@@ -59,7 +62,13 @@ class FxSnapshot:
             rate = self.convert(src, display)
             if rate is not None:
                 used[src] = rate
-        return {"source": self.source, "as_of": self.as_of.isoformat() if self.as_of else None, "rates_used": used}
+        source, as_of = self.source, self.as_of
+        # Label by the least fresh rate actually used, so an ECB or last-known pair is never called "live".
+        legs = [self.pairs[c] for c in {*used, display.upper()} if c in self.pairs]
+        if legs:
+            source = max((src for src, _ in legs), key=_FRESHNESS.__getitem__)
+            as_of = min(t for _, t in legs)
+        return {"source": source, "as_of": as_of.isoformat() if as_of else None, "rates_used": used}
 
 
 _EMPTY = FxSnapshot(rates={"USD": 1.0}, source=None, as_of=None)
@@ -119,8 +128,9 @@ async def _ecb_layer() -> Optional[FxSnapshot]:
         rates = {c: r for c, r in rates.items() if c in SUPPORTED_CURRENCIES and _usable(r)}
         if not rates:
             raise ValueError("no rates in response")
-        _ecb = FxSnapshot(rates={**rates, "USD": 1.0}, source="ecb",
-                          as_of=datetime.combine(day, dtime.min, tzinfo=timezone.utc))
+        as_of = datetime.combine(day, dtime.min, tzinfo=timezone.utc)
+        _ecb = FxSnapshot(rates={**rates, "USD": 1.0}, source="ecb", as_of=as_of,
+                          pairs={c: ("ecb", as_of) for c in rates})
         _ecb_expiry = time.time() + _ECB_TTL
     except Exception as e:
         logger.warning("ECB FX refresh failed (%s)", e)
@@ -143,17 +153,35 @@ async def _real_snapshot() -> FxSnapshot:
             logger.warning("Live FX refresh failed (%s)", e)
             quotes = {}
         live = {c.upper(): (r, t) for c, (r, t) in quotes.items() if c.upper() in SUPPORTED_CURRENCIES and _usable(r)}
-        if live:
-            rates = {**(ecb.rates if ecb else {}), **{c: r for c, (r, _) in live.items()}, "USD": 1.0}
-            snap = FxSnapshot(rates=rates, source="live", as_of=min(t for _, t in live.values()))
-        elif ecb is not None:
-            snap = ecb
-        elif _last_good is not None:
-            snap = replace(_last_good, source="stale")
-        else:
+        # Each pair from its freshest layer: live, then ECB, then the last known rate (marked stale).
+        rates: dict[str, float] = {}
+        pairs: dict[str, tuple[FxSource, datetime]] = {}
+        if _last_good is not None:
+            for c, r in _last_good.rates.items():
+                if c != "USD" and c in _last_good.pairs:
+                    rates[c], pairs[c] = r, ("stale", _last_good.pairs[c][1])
+        if ecb is not None:
+            rates.update({c: r for c, r in ecb.rates.items() if c != "USD"})
+            pairs.update(ecb.pairs)
+        for c, (r, t) in live.items():
+            rates[c], pairs[c] = r, ("live", t)
+        if not rates:
             snap = _EMPTY
+        else:
+            source = "live" if live else "ecb" if ecb is not None else "stale"
+            as_of = (min(t for _, t in live.values()) if live else ecb.as_of if ecb is not None
+                     else min(t for _, t in pairs.values()))
+            snap = FxSnapshot(rates={**rates, "USD": 1.0}, source=source, as_of=as_of, pairs=pairs)
         if snap.source in ("live", "ecb"):
-            _last_good = snap
+            # Update the last known rates with this refresh's fresh pairs; a pair still missing keeps
+            # its earlier rate and age, so it stays labelled stale with the right time.
+            fresh = {c: v for c, v in pairs.items() if v[0] != "stale"}
+            prev_rates = _last_good.rates if _last_good is not None else {}
+            prev_pairs = _last_good.pairs if _last_good is not None else {}
+            _last_good = FxSnapshot(
+                rates={**{c: prev_rates[c] for c in prev_pairs}, **{c: rates[c] for c in fresh}, "USD": 1.0},
+                source=snap.source, as_of=snap.as_of, pairs={**prev_pairs, **fresh},
+            )
         # A failed live fetch waits a full TTL too, so an outage does not cost every request.
         _current, _current_expiry = snap, time.time() + settings.fx_live_ttl_s
         return snap

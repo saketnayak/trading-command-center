@@ -154,3 +154,37 @@ async def test_ecb_fetch_uses_current_endpoint_and_follows_redirects(monkeypatch
     snap = await fx_service.snapshot()
     assert snap.source == "ecb" and snap.rates["EUR"] == 0.9
     assert seen["url"] == "https://api.frankfurter.dev/v1/latest" and seen["kwargs"]["follow_redirects"] is True
+
+
+async def test_missing_live_pair_comes_from_last_known_and_says_so(fake_live, fake_ecb, expire_layers):
+    fake_live({"AUD": 1.5, "NZD": 1.7})
+    fake_ecb({"AUD": 1.49, "NZD": 1.69})
+    await fx_service.snapshot()
+    expire_layers()
+    fake_live({"AUD": 1.52})  # Yahoo lost NZD
+    fake_ecb(RuntimeError("down"))
+    snap = await fx_service.snapshot()
+    assert snap.rates["NZD"] == 1.7 and snap.rates["AUD"] == 1.52
+    assert snap.meta("USD", ["NZD"])["source"] == "stale"
+    assert snap.meta("USD", ["AUD"])["source"] == "live"
+
+
+async def test_meta_labels_a_pair_that_came_from_ecb(fake_live, fake_ecb):
+    fake_live({"AUD": 1.5})
+    fake_ecb({"AUD": 1.49, "GBP": 0.79}, day="2026-01-01")
+    snap = await fx_service.snapshot()
+    gbp = snap.meta("USD", ["GBP"])
+    assert gbp["source"] == "ecb" and gbp["as_of"].startswith("2026-01-01")
+    assert snap.meta("AUD", ["GBP"])["source"] == "ecb"  # worst of AUD (live) and GBP (ecb)
+    assert snap.meta("USD", ["AUD"]) == {"source": "live", "as_of": AS_OF.isoformat(), "rates_used": {"AUD": 1 / 1.5}}
+
+
+async def test_a_pair_missing_for_several_refreshes_keeps_its_last_known_rate(fake_live, fake_ecb, expire_layers):
+    fake_live({"AUD": 1.5, "NZD": 1.7})
+    fake_ecb(RuntimeError("down"))
+    await fx_service.snapshot()
+    for _ in range(2):
+        expire_layers()
+        fake_live({"AUD": 1.52})
+        snap = await fx_service.snapshot()
+    assert snap.rates["NZD"] == 1.7 and snap.meta("USD", ["NZD"])["as_of"] == AS_OF.isoformat()

@@ -201,3 +201,19 @@ async def test_sector_gaps_count_holdings_in_other_currencies(aud_rate, monkeypa
     weights = {r["sector"]: r["your_weight"] for r in rows}
     assert weights["Health Care"] == pytest.approx(0.2857, rel=1e-3)
     assert weights["Technology"] == pytest.approx(0.7143, rel=1e-3)
+
+
+@pytest.mark.asyncio
+async def test_zero_cost_holding_still_counts_in_total_pnl(aud_rate, monkeypatch):
+    _prices(monkeypatch)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token = await _register_and_login(client, "mixedccy9@example.com")
+        pid = await _create_portfolio(client, token)
+        csv = b"ticker,shares,avg_cost\nAAPL,10,0\n"  # gifted shares
+        r = await client.post(f"/portfolio/{pid}/upload", files={"file": ("h.csv", csv, "text/csv")}, headers=_auth(token))
+        assert r.status_code == 200, r.text
+        body = (await client.get(f"/portfolio/{pid}/current", headers=_auth(token))).json()
+
+    aapl = body["holdings"][0]
+    assert aapl["unrealized_pnl_display"] == pytest.approx(2000.0) and aapl["unrealized_pnl_pct_display"] is None
+    assert body["totals"]["market_value"] == pytest.approx(2000.0)

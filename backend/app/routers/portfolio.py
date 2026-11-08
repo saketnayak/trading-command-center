@@ -571,13 +571,14 @@ async def get_current_holdings(
                 value_display = market_value * fx
                 total_market_value += value_display
                 has_totals = True
-                if h.avg_cost is not None and h.avg_cost != 0:
+                if h.avg_cost is not None:
                     currencies_seen.add(cost_ccy)
                     cost_fx = fx_snap.convert(cost_ccy, pref_currency)
                     if cost_fx is not None:
                         cost_display = h.avg_cost * h.shares * cost_fx
                         pnl_display = value_display - cost_display
-                        pnl_pct_display = (value_display / cost_display - 1) * 100
+                        if cost_display:  # zero-cost (gifted) shares count in P&L but have no %
+                            pnl_pct_display = (value_display / cost_display - 1) * 100
                         total_market_value_for_pnl += value_display
                         total_cost += cost_display
 

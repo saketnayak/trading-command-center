@@ -1,6 +1,6 @@
 "use client";
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 
 import { getPortfolioXray, refreshPortfolioXray } from "@/lib/api";
@@ -18,6 +18,7 @@ import {
   type XraySector,
 } from "@/lib/xray";
 import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
+import { samePortfolioPlaceholder } from "@/lib/portfolioQueries";
 
 const CARD = "rounded-lg border border-border bg-surface p-3";
 const SECTION_TITLE = "mb-2 text-xs font-semibold text-fg";
@@ -30,7 +31,7 @@ export function XrayPanel({ portfolioId }: { portfolioId: string }) {
   const { data, isPending, isError, error } = useQuery({
     queryKey: [...xrayQueryKey(portfolioId), ccy],
     queryFn: () => getPortfolioXray(portfolioId, ccy),
-    placeholderData: keepPreviousData,
+    placeholderData: samePortfolioPlaceholder(portfolioId),
     refetchInterval: (q) => ((q.state.data as XrayReport | undefined)?.syncing ? 3000 : false),
   });
   const refresh = useMutation({

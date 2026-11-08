@@ -16,7 +16,7 @@ import { scopedFinnhubMessage } from "@/lib/finnhubMessages";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { HoldingsMobileCards } from "@/components/portfolio/HoldingsMobileCards";
 import { FIELD_INPUT_SM_CLASS, BTN_SECONDARY_CLASS, ALERT_BANNER_CLASS } from "@/lib/uiClasses";
-import { rowMoney, sortValue } from "@/lib/displayCurrency";
+import { pnlNote, rowMoney, sortValue } from "@/lib/displayCurrency";
 
 interface HoldingsTableProps {
   portfolioId: string;
@@ -987,9 +987,7 @@ export function HoldingsTable({ portfolioId, holdings, priceUnavailableReason, f
                         ) : (
                           <div
                             className="font-semibold font-data text-xs"
-                            title={h.pnl_unavailable_reason === "currency_mismatch"
-                              ? "Cost converted at today's rate; currency moves since purchase are not included."
-                              : undefined}
+                            title={showNative ? undefined : pnlNote(h, displayCurrency)}
                           >
                             {fmtPnl(pnl, pnlPct, showNative ? (h.quote_currency ?? displayCurrency) : displayCurrency)}
                           </div>

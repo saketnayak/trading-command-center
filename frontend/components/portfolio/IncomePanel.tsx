@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 
 import { getPortfolioIncome, setIncomeTarget } from "@/lib/api";
@@ -19,7 +19,7 @@ import {
 } from "@/lib/income";
 import { INCOME_COLORS, buildProjectionFigure } from "@/lib/incomeChart";
 import { fmtPct, fmtSignedPct } from "@/lib/performance";
-import { PORTFOLIO_STALE_TIMES, portfolioQueryKeys } from "@/lib/portfolioQueries";
+import { PORTFOLIO_STALE_TIMES, portfolioQueryKeys, samePortfolioPlaceholder } from "@/lib/portfolioQueries";
 import { ALERT_BANNER_CLASS, BTN_PRIMARY_SM_CLASS, BTN_SECONDARY_CLASS, FIELD_INPUT_SM_CLASS } from "@/lib/uiClasses";
 import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
 
@@ -33,7 +33,7 @@ export function IncomePanel({ portfolioId }: { portfolioId: string }) {
   const query = useQuery({
     queryKey: portfolioQueryKeys.income(portfolioId, ccy),
     queryFn: () => getPortfolioIncome(portfolioId, ccy),
-    placeholderData: keepPreviousData,
+    placeholderData: samePortfolioPlaceholder(portfolioId),
     staleTime: PORTFOLIO_STALE_TIMES.income,
   });
 

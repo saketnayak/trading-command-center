@@ -27,6 +27,13 @@ export const portfolioQueryKeys = {
   insightsList: (id: string) => ["insights-list", id] as const,
 };
 
+/** placeholderData that keeps the previous figures while a currency/range changes, but never
+ * shows another portfolio's data while this one loads (key index 1 is the portfolio id). */
+export function samePortfolioPlaceholder(portfolioId: string) {
+  return <T,>(previous: T | undefined, previousQuery?: { queryKey: readonly unknown[] }): T | undefined =>
+    previousQuery?.queryKey[1] === portfolioId ? previous : undefined;
+}
+
 export const marketQueryKeys = {
   trending: ["market-trending"] as const,
   movers: ["market-movers"] as const,

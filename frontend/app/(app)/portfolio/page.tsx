@@ -1,7 +1,7 @@
 "use client";
 import { Suspense, useState, useEffect, useMemo, useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   listPortfolios,
   createPortfolio,
@@ -39,6 +39,7 @@ import {
   MARKET_STALE_TIMES,
   PORTFOLIO_NEWS_DAYS,
   PORTFOLIO_EARNINGS_DAYS_AHEAD,
+  samePortfolioPlaceholder,
 } from "@/lib/portfolioQueries";
 import { usePortfolioSync } from "@/lib/usePortfolioSync";
 import { PortfolioFreshnessLabel } from "@/lib/usePortfolioFreshness";
@@ -69,6 +70,7 @@ import { XrayPanel } from "@/components/portfolio/XrayPanel";
 import { PortfolioTotalsSummary } from "@/components/portfolio/PortfolioTotalsSummary";
 import { DisplayCurrencyPicker } from "@/components/currency/DisplayCurrencyPicker";
 import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
+import { headline } from "@/lib/displayCurrency";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { Briefcase } from "lucide-react";
 import { DEFAULT_RESPONSE_LANGUAGE, RESPONSE_LANGUAGE_OPTIONS } from "@/lib/responseLanguage";
@@ -273,8 +275,9 @@ function PortfolioPageContent() {
     queryFn: () => getPortfolioCurrent(selectedId!, ccy),
     enabled: selectedId != null && displayCcy.ready,
     staleTime: PORTFOLIO_STALE_TIMES.current,
-    // Keep the old figures (dimmed) while another currency loads, so a switch never flashes empty.
-    placeholderData: keepPreviousData,
+    // Keep the old figures (dimmed) while another currency loads, so a switch never flashes empty,
+    // but never show another portfolio's holdings while this one loads.
+    placeholderData: samePortfolioPlaceholder(selectedId ?? ""),
   });
 
   const hasHoldings = (current?.holdings?.length ?? 0) > 0;
@@ -356,7 +359,7 @@ function PortfolioPageContent() {
     queryFn: () => getPortfolioTrimSignals(selectedId!, ccy),
     enabled: selectedId != null && markovEnabled && displayCcy.ready,
     staleTime: PORTFOLIO_STALE_TIMES.trimSignals,
-    placeholderData: keepPreviousData,
+    placeholderData: samePortfolioPlaceholder(selectedId ?? ""),
   });
 
   const trimByHoldingId = useMemo<Record<string, TrimSignalEntry>>(
@@ -555,10 +558,10 @@ function PortfolioPageContent() {
           actions={
             selectedPortfolio ? (
               <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
-                {hasTotals && current?.totals && current.totals_currency && (
+                {headline(current).show && current?.totals && (
                   <PortfolioTotalsSummary
                     totals={current.totals}
-                    totalsCurrency={current.totals_currency}
+                    totalsCurrency={headline(current).currency}
                     excluded={current.totals_excluded ?? []}
                     fx={current.fx}
                     primaryCurrency={largestQuoteCurrency}

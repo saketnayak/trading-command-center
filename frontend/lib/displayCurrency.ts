@@ -1,6 +1,6 @@
 /** Display-currency helpers: request paths, picker ordering and the "1 USD = … AUD · live" line. */
 
-import type { PortfolioHolding } from "./types";
+import type { PortfolioCurrentResponse, PortfolioHolding } from "./types";
 
 export type FxSource = "live" | "ecb" | "stale" | null;
 
@@ -86,4 +86,20 @@ export function sortValue(
   showNative: boolean,
 ): number | null {
   return (showNative ? h[key] : h[`${key}_display`]) ?? null;
+}
+
+/** The headline (total + currency picker) shows whenever a snapshot is loaded, so the picker stays
+ * reachable even when no holding could be converted. */
+export function headline(current: PortfolioCurrentResponse | null | undefined): { show: boolean; currency: string } {
+  const currency = current?.totals_currency ?? current?.display_currency ?? "USD";
+  return { show: current?.snapshot != null, currency };
+}
+
+/** Tooltip for a P&L whose cost and quote currencies differ. */
+export function pnlNote(h: PortfolioHolding, display: string): string | undefined {
+  if (h.pnl_unavailable_reason !== "currency_mismatch") return undefined;
+  if ((h.cost_basis_currency ?? "").toUpperCase() === display.toUpperCase()) {
+    return `Cost is in ${display}; the value converts at today's rate, so currency moves are included.`;
+  }
+  return "Cost converted at today's rate; currency moves since purchase are not included.";
 }
