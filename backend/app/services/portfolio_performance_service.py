@@ -24,7 +24,7 @@ from app.models.portfolio import Portfolio, PortfolioSnapshot
 from app.services.performance_calc import HoldingsPeriod, compute_performance, xirr
 from app.services import ledger_service
 from app.services.ledger_calc import holdings_timeline
-from app.services.portfolio_pricing import aggregate_shares, fx_factors
+from app.services.portfolio_pricing import aggregate_shares, fx_factors, no_rate_warning, without_rate
 from app.services.price_history_service import get_closes
 
 RangeKey = Literal["1m", "3m", "6m", "ytd", "1y", "3y", "5y"]
@@ -118,6 +118,11 @@ async def build_performance_report(
     closes, failed = await get_closes(db, [*symbols, benchmark], start - _PRICE_LOOKBACK, today)
     bench_closes = closes.pop(benchmark, {}) if benchmark not in symbols else dict(closes.get(benchmark, {}))
     fx, currencies = await fx_factors(db, symbols, display_currency)
+    no_rate = without_rate(symbols, fx)
+    if no_rate:
+        warnings.append(no_rate_warning(no_rate, display_currency))
+        symbols = [s for s in symbols if s in fx]
+        periods = [HoldingsPeriod(start=p.start, shares={s: q for s, q in p.shares.items() if s in fx}) for p in periods]
 
     result = compute_performance(
         periods=periods,
@@ -167,7 +172,7 @@ def _money_weighted(txs, series: list[dict], fx: dict[str, float]) -> dict:
     d1 = date.fromisoformat(series[-1]["date"])
     flows: list[tuple[date, float]] = [(d0, -series[0]["value"])]
     for t in txs:
-        if not (d0 < t.date <= d1) or t.type not in ("BUY", "SELL"):
+        if not (d0 < t.date <= d1) or t.type not in ("BUY", "SELL") or t.symbol not in fx:
             continue
         f = fx.get(t.symbol, 1.0)
         if t.type == "BUY":

@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, resolve_display_currency
 from app.models.investor_profile import InvestorProfile
 from app.models.portfolio import Portfolio, PortfolioSnapshot
 from app.models.portfolio_transaction import PortfolioTransaction
@@ -31,7 +31,7 @@ from app.models.user import User
 from app.services import dividend_service, fx_service
 from app.services.income_calc import analyse, calendar, projection
 from app.services.performance_calc import PriceLookup
-from app.services.portfolio_pricing import fx_factors
+from app.services.portfolio_pricing import fx_factors, no_rate_warning, without_rate
 from app.services.price_history_service import get_closes
 
 router = APIRouter()
@@ -65,9 +65,9 @@ async def set_income_target(portfolio_id: UUID, body: TargetIn, db: AsyncSession
 
 
 @router.get("/portfolio/{portfolio_id}/income")
-async def portfolio_income(portfolio_id: UUID, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+async def portfolio_income(portfolio_id: UUID, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+                           ccy: str = Depends(resolve_display_currency)):
     portfolio = await _own(db, portfolio_id, user)
-    ccy = (user.preferred_currency or "USD").upper()
     today = datetime.now(timezone.utc).date()
     snap = (await db.execute(select(PortfolioSnapshot).where(PortfolioSnapshot.portfolio_id == portfolio_id)
                              .options(selectinload(PortfolioSnapshot.holdings))
@@ -95,6 +95,8 @@ async def portfolio_income(portfolio_id: UUID, db: AsyncSession = Depends(get_db
     closes, price_failed = await get_closes(db, symbols, today - timedelta(days=14), today)
     divs, div_failed = await dividend_service.get_dividends(db, symbols)
     fx, _ = await fx_factors(db, symbols, ccy)
+    no_rate = without_rate(symbols, fx)
+    symbols = [t for t in symbols if t in fx]
 
     rows, entries = [], []
     total_value = total_income = total_cost = income_on_cost = 0.0
@@ -145,7 +147,10 @@ async def portfolio_income(portfolio_id: UUID, db: AsyncSession = Depends(get_db
     if target:
         totals["goal_progress"] = round(totals["monthly_income"] / target, 4)
 
-    warnings = []
+    warnings = [no_rate_warning(no_rate, ccy)] if no_rate else []
+    if received and received.get("left_out_currencies"):
+        warnings.append(f"No {ccy} exchange rate for dividends paid in {', '.join(received['left_out_currencies'])}; "
+                        "left out of income received.")
     unpriced = sorted(t for t in symbols if not closes.get(t))
     if unpriced:
         warnings.append("No price for " + ", ".join(unpriced) + ": yield and value leave them out.")
@@ -173,14 +178,18 @@ async def _received(db, portfolio: Portfolio, symbols, shares, divs, fx, ccy, to
     portfolio has one, otherwise an estimate from today's shares × each ex-date's dividend."""
     start = today.replace(day=1) - timedelta(days=730)
     months: dict[str, float] = defaultdict(float)
+    skipped: set[str] = set()  # dividend currencies with no rate to the display currency
     if portfolio.holdings_source == "ledger":
-        target_rate = await fx_service.get_rate(ccy)
+        snap = await fx_service.snapshot()
         rows = (await db.execute(select(PortfolioTransaction).where(
             PortfolioTransaction.portfolio_id == portfolio.id, PortfolioTransaction.type == "DIVIDEND",
             PortfolioTransaction.trade_date >= start))).scalars().all()
         for r in rows:
-            local = await fx_service.get_rate(r.currency) if r.currency in fx_service.SUPPORTED_CURRENCIES else 1.0
-            months[f"{r.trade_date:%Y-%m}"] += r.amount * (target_rate / local if local else 1.0)
+            rate = snap.convert(r.currency or "USD", ccy)
+            if rate is None:
+                skipped.add((r.currency or "USD").upper())
+                continue
+            months[f"{r.trade_date:%Y-%m}"] += r.amount * rate
         source = "ledger"
     else:
         for t in symbols:
@@ -193,4 +202,5 @@ async def _received(db, portfolio: Portfolio, symbols, shares, divs, fx, ccy, to
         "source": source,
         "by_month": [{"month": k, "amount": round(v, 2)} for k, v in sorted(months.items())],
         "last_12_months": round(last12, 2),
+        "left_out_currencies": sorted(skipped),
     }

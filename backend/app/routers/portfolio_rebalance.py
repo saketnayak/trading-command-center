@@ -21,13 +21,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, resolve_display_currency
 from app.models.portfolio import Portfolio, PortfolioSnapshot
 from app.models.portfolio_target import PortfolioTarget
 from app.models.user import User
 from app.services.alert_rules import TICKER_RE
 from app.services.performance_calc import PriceLookup
-from app.services.portfolio_pricing import aggregate_shares, fx_factors
+from app.services.portfolio_pricing import aggregate_shares, fx_factors, no_rate_warning, without_rate
 from app.services.price_history_service import get_closes
 from app.services.rebalance_calc import Position, Target, build_plan, drift
 from app.utils.asset_type import is_crypto
@@ -110,6 +110,7 @@ async def rebalance(
     whole_shares: bool = Query(False),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
+    display_currency: str = Depends(resolve_display_currency),
 ):
     await _own_portfolio(db, portfolio_id, user)
     if mode in ("contribute", "withdraw") and amount <= 0:
@@ -122,7 +123,6 @@ async def rebalance(
     shares = aggregate_shares(snapshot.holdings) if snapshot else {}
     target_rows = await _targets(db, portfolio_id)
     targets = {t.ticker: Target(t.weight, t.band) for t in target_rows}
-    display_currency = (user.preferred_currency or "USD").upper()
     base = {"portfolio_id": str(portfolio_id), "display_currency": display_currency, "disclaimer": DISCLAIMER,
             "targets": [_target_dict(t) for t in target_rows]}
 
@@ -137,7 +137,10 @@ async def rebalance(
 
     positions: dict[str, Position] = {}
     unpriced: list[str] = []
+    no_rate = without_rate(symbols, fx)
     for s in symbols:
+        if s in no_rate:
+            continue
         price = PriceLookup(closes.get(s, {})).at(today) if closes.get(s) else None
         if price is None:
             unpriced.append(s)
@@ -145,6 +148,8 @@ async def rebalance(
         positions[s] = Position(s, shares.get(s, 0.0), price, fx.get(s, 1.0), fractional=is_crypto(s))
 
     warnings: list[str] = []
+    if no_rate:
+        warnings.append(no_rate_warning(no_rate, display_currency))
     if unpriced:
         warnings.append("No recent price for " + ", ".join(unpriced) + "; left out of the plan.")
     stale = sorted(s for s in failed if s in positions)

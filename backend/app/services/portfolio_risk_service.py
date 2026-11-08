@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.portfolio import PortfolioSnapshot
 from app.services.performance_calc import PriceLookup, build_calendar
-from app.services.portfolio_pricing import aggregate_shares, fx_factors
+from app.services.portfolio_pricing import aggregate_shares, fx_factors, no_rate_warning, without_rate
 from app.services.price_history_service import get_closes, history_start
 from app.services.risk_calc import STRESS_SCENARIOS, compute_risk, stress_test
 
@@ -97,6 +97,10 @@ async def build_risk_report(
     fx, currencies = await fx_factors(db, symbols, display_currency)
 
     warnings: list[str] = []
+    no_rate = without_rate(symbols, fx)
+    if no_rate:
+        warnings.append(no_rate_warning(no_rate, display_currency))
+        symbols = [s for s in symbols if s in fx]
     values: dict[str, float] = {}
     for s in symbols:
         px = lookups[s].at(today) if s in lookups else None

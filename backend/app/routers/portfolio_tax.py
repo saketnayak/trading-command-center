@@ -17,7 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import get_current_user
+from app.dependencies import get_current_user, resolve_display_currency
 from app.models.portfolio import Portfolio
 from app.models.portfolio_transaction import PortfolioTransaction
 from app.models.user import User
@@ -25,7 +25,7 @@ from app.services import ledger_service
 from app.services.alert_rules import TICKER_RE
 from app.services.ledger_calc import replay
 from app.services.performance_calc import PriceLookup
-from app.services.portfolio_pricing import fx_factors
+from app.services.portfolio_pricing import fx_factors, no_rate_warning, without_rate
 from app.services.price_history_service import get_closes
 from app.services.tax_calc import (
     REPLACEMENT_POOL,
@@ -69,10 +69,10 @@ async def portfolio_tax(
     min_loss: float = Query(default=100.0, ge=0, le=1e9),
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
+    ccy: str = Depends(resolve_display_currency),
 ):
     portfolio = await _own(db, portfolio_id, user)
     today = datetime.now(timezone.utc).date()
-    ccy = (user.preferred_currency or "USD").upper()
     base = {"portfolio_id": str(portfolio_id), "display_currency": ccy, "disclaimer": DISCLAIMER,
             "jurisdiction": "US", "cost_basis_method": portfolio.cost_basis_method or "fifo"}
     if portfolio.holdings_source != "ledger":
@@ -95,9 +95,12 @@ async def portfolio_tax(
     prices = {s: PriceLookup(closes[s]).at(today) for s in symbols if closes.get(s)}
     prices = {s: p for s, p in prices.items() if p is not None}
     fx, _ = await fx_factors(db, symbols, ccy) if symbols else ({}, {})
-    harvest = harvest_candidates(st.lots, prices, fx, buys, today, min_loss)
+    no_rate = without_rate(prices, fx)
+    harvest = harvest_candidates(st.lots, {s: p for s, p in prices.items() if s in fx}, fx, buys, today, min_loss)
 
     warnings = list(st.warnings)
+    if no_rate:
+        warnings.append(no_rate_warning(no_rate, ccy))
     unpriced = [s for s in symbols if s not in prices]
     if unpriced:
         warnings.append("No price for " + ", ".join(unpriced) + ": their lots are not checked for losses.")
