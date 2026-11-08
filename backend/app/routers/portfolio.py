@@ -1712,7 +1712,7 @@ async def discover_stocks(
     held_tickers = {h.ticker.upper() for h in holdings}
 
     # Fetch sector gaps
-    gaps = await get_sector_gaps(portfolio_id, db, user)
+    gaps = await get_sector_gaps(portfolio_id, db, user, display_currency=(user.preferred_currency or "USD").upper())
 
     # Read trending tickers from shared market cache
     trending_tickers, _trending_expiry = _market_module._trending_cache

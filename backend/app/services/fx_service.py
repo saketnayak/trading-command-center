@@ -165,15 +165,3 @@ snapshot = _real_snapshot
 async def convert_rate(frm: str, to: str) -> Optional[float]:
     """Multiplier from one currency to another, or None when a rate is unknown."""
     return (await snapshot()).convert(frm, to)
-
-
-async def get_rate(currency: str) -> float:
-    """Return the USD → currency multiplier. Returns 1.0 for USD or on failure."""
-    return (await snapshot()).rates.get(currency.upper(), 1.0)
-
-
-def apply(value: Optional[float], rate: float) -> Optional[float]:
-    """Multiply a nullable USD value by an FX rate."""
-    if value is None:
-        return None
-    return value * rate

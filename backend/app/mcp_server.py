@@ -269,7 +269,8 @@ def build_server():
         async with AsyncSessionLocal() as db:
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
-            return await rebalance(uuid.UUID(portfolio_id), mode=mode, amount=amount, whole_shares=whole_shares, db=db, user=user)
+            return await rebalance(uuid.UUID(portfolio_id), mode=mode, amount=amount, whole_shares=whole_shares, db=db, user=user,
+                                   display_currency=(user.preferred_currency or "USD").upper())
 
     @server.tool()
     async def get_income(portfolio_id: str) -> dict[str, Any]:
@@ -282,7 +283,7 @@ def build_server():
         async with AsyncSessionLocal() as db:
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
-            return await portfolio_income(uuid.UUID(portfolio_id), db=db, user=user)
+            return await portfolio_income(uuid.UUID(portfolio_id), db=db, user=user, ccy=(user.preferred_currency or "USD").upper())
 
     @server.tool()
     async def get_filings(portfolio_id: str, days: int = 30) -> dict[str, Any]:
@@ -326,7 +327,8 @@ def build_server():
         async with AsyncSessionLocal() as db:
             await _own_portfolio(db, user_id, portfolio_id)
             user = await _user(db, user_id)
-            return await portfolio_tax(uuid.UUID(portfolio_id), year=year, min_loss=min_loss, db=db, user=user)
+            return await portfolio_tax(uuid.UUID(portfolio_id), year=year, min_loss=min_loss, db=db, user=user,
+                                       ccy=(user.preferred_currency or "USD").upper())
 
     @server.tool()
     async def get_net_worth(range: str = "1y") -> dict[str, Any]:  # noqa: A002
@@ -338,7 +340,7 @@ def build_server():
         user_id, _ = _caller()
         async with AsyncSessionLocal() as db:
             user = await _user(db, user_id)
-            return await net_worth(range=range, db=db, user=user)
+            return await net_worth(range=range, db=db, user=user, ccy=(user.preferred_currency or "USD").upper())
 
     @server.tool()
     async def get_regime(ticker: str) -> dict[str, Any]:

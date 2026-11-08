@@ -110,3 +110,29 @@ async def test_net_worth_items_wallets_and_series(fakes):
         assert (await c.get("/net-worth?range=10y", headers=h)).status_code == 422
         assert (await c.delete(f"/net-worth/items/{loan_id}", headers=h)).status_code == 204
         assert (await c.get("/net-worth", headers=h)).json()["liabilities"] == 0
+
+
+async def test_net_worth_in_any_currency_names_items_without_a_rate(fakes, fixed_fx):
+    fixed_fx({"USD": 1.0, "AUD": 1.5})
+    async with _client() as c:
+        h = await _token(c, "nwccy@example.com")
+        await c.post("/net-worth/items", headers=h, json={
+            "kind": "asset", "category": "cash", "name": "Synthetic AUD cash", "currency": "AUD",
+            "value": 1500, "as_of": _d(10)})
+        chf = await c.post("/net-worth/items", headers=h, json={
+            "kind": "asset", "category": "cash", "name": "Synthetic CHF account", "currency": "CHF",
+            "value": 1000, "as_of": _d(10)})
+        chf_id = chf.json()["id"]
+        aud = (await c.get("/net-worth?range=1y&currency=aud", headers=h)).json()
+        usd = (await c.get("/net-worth?range=1y&currency=USD", headers=h)).json()
+        bad = await c.get("/net-worth?range=1y&currency=XYZ", headers=h)
+
+    assert aud["display_currency"] == "AUD"
+    assert aud["excluded"] == [{"id": chf_id, "name": "Synthetic CHF account", "currency": "CHF"}]
+    assert "No AUD exchange rate for Synthetic CHF account (CHF); left out." in aud["warnings"]
+    assert aud["assets"] == pytest.approx(1500.0)
+    chf_row = next(i for i in aud["items"] if i["id"] == chf_id)
+    assert chf_row["value"] == 1000 and chf_row["value_display"] is None
+    assert usd["assets"] == pytest.approx(1000.0)
+    assert usd["fx"]["source"] == "live" and usd["fx"]["rates_used"] == {"AUD": pytest.approx(1 / 1.5)}
+    assert bad.status_code == 422
