@@ -150,3 +150,54 @@ async def test_unknown_currency_param_is_422(aud_rate, monkeypatch):
         token, pid = await _mixed_portfolio(client, "mixedccy6@example.com")
         r = await client.get(f"/portfolio/{pid}/current?currency=XYZ", headers=_auth(token))
     assert r.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_trim_signal_weights_count_holdings_in_other_currencies(aud_rate, monkeypatch):
+    _prices(monkeypatch)
+
+    async def no_regime(tickers):
+        return {}
+
+    async def analysed(tickers, *_args):
+        from types import SimpleNamespace
+        return {t: SimpleNamespace(verdict="hold", previous_verdict=None) for t in tickers}
+
+    weights = {}
+    real_score = portfolio_router.score_trim_signal
+
+    def capture(**kwargs):
+        weights[kwargs["ticker"]] = kwargs["portfolio_weight_pct"]
+        return real_score(**kwargs)
+
+    monkeypatch.setattr(portfolio_router, "get_regime_for_portfolio", no_regime)
+    monkeypatch.setattr(portfolio_router, "score_trim_signal", capture)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token, pid = await _mixed_portfolio(client, "mixedccy7@example.com")
+        monkeypatch.setattr(portfolio_router, "_get_last_runs_for_holdings", analysed)
+        r = await client.get(f"/portfolio/{pid}/trim-signals", headers=_auth(token))
+    assert r.status_code == 200, r.text
+
+    # $2,000 and A$1,200 = $800: weights 71.43% and 28.57% of $2,800.
+    assert weights["AAPL"] == pytest.approx(71.43, rel=1e-3)
+    assert weights["CSL.AX"] == pytest.approx(28.57, rel=1e-3)
+
+
+@pytest.mark.asyncio
+async def test_sector_gaps_count_holdings_in_other_currencies(aud_rate, monkeypatch):
+    from types import SimpleNamespace
+
+    _prices(monkeypatch)
+
+    async def fake_metadata(tickers, db, key):
+        sectors = {"AAPL": "Technology", "CSL.AX": "Health Care"}
+        return {t: SimpleNamespace(sector=sectors[t]) for t in tickers}
+
+    monkeypatch.setattr(portfolio_router, "get_many_ticker_metadata", fake_metadata)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        token, pid = await _mixed_portfolio(client, "mixedccy8@example.com")
+        rows = (await client.get(f"/portfolio/{pid}/sector-gaps", headers=_auth(token))).json()
+
+    weights = {r["sector"]: r["your_weight"] for r in rows}
+    assert weights["Health Care"] == pytest.approx(0.2857, rel=1e-3)
+    assert weights["Technology"] == pytest.approx(0.7143, rel=1e-3)

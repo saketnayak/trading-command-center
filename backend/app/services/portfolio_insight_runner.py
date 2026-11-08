@@ -17,7 +17,7 @@ from app.models.portfolio import Portfolio, PortfolioSnapshot
 from app.models.portfolio_insight import PortfolioInsight, InsightStatus, InsightStance
 from app.models.run import Run, RunStatus
 from app.models.api_key import ApiKey
-from app.services import insight_metrics
+from app.services import fx_service, insight_metrics
 from app.services.encryption import decrypt_key
 from app.services.llm_provider_registry import (
     LOCAL_PROVIDER_LABELS,
@@ -628,7 +628,9 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                     last_verdicts[ticker] = (run.verdict.value, days)
 
             # Compute portfolio totals and per-holding enrichment
+            fx_snap = await fx_service.snapshot()
             total_market_value = 0.0
+            total_value_for_pnl = 0.0
             total_cost = 0.0
             has_price = False
             enriched: list[dict] = []
@@ -649,16 +651,17 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                 ):
                     pnl_pct = (current_price / h.avg_cost - 1) * 100
 
-                include_in_totals = (
-                    quote is not None
-                    and quote.currency_code == pref_currency
-                    and cost_ccy == quote.currency_code
-                )
-                if include_in_totals and market_value is not None:
-                    total_market_value += market_value
+                # Totals and weights are in the preferred currency: value converts from the quote
+                # currency, cost from the cost-basis currency; no rate means left out, never 1:1.
+                rate = fx_snap.convert(quote_ccy, pref_currency) if quote_ccy else None
+                value_pref = market_value * rate if market_value is not None and rate is not None else None
+                if value_pref is not None:
+                    total_market_value += value_pref
                     has_price = True
-                    if h.avg_cost is not None:
-                        total_cost += h.avg_cost * h.shares
+                    cost_rate = fx_snap.convert(cost_ccy, pref_currency)
+                    if h.avg_cost is not None and cost_rate is not None:
+                        total_value_for_pnl += value_pref
+                        total_cost += h.avg_cost * h.shares * cost_rate
 
                 verdict_info = last_verdicts.get(h.ticker)
                 enriched.append({
@@ -670,6 +673,7 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                     "current_price": round(current_price, 2) if current_price else None,
                     "quote_currency": quote_ccy,
                     "market_value": round(market_value, 2) if market_value else None,
+                    "market_value_in_totals_currency": round(value_pref, 2) if value_pref else None,
                     "weight_pct": None,  # filled below
                     "unrealized_pnl_pct": round(pnl_pct, 2) if pnl_pct is not None else None,
                     "last_verdict": verdict_info[0] if verdict_info else None,
@@ -677,19 +681,15 @@ async def generate_portfolio_insight(insight_id: str) -> None:
                     "totals_currency": pref_currency if has_price else None,
                 })
 
-            # Fill in weights (preferred-currency holdings only)
-            pref_total = sum(
-                e["market_value"] or 0
-                for e in enriched
-                if e.get("quote_currency") == pref_currency and e.get("market_value")
-            )
+            # Fill in weights (every holding with a rate to the preferred currency)
+            pref_total = sum(e["market_value_in_totals_currency"] or 0 for e in enriched)
             for e in enriched:
-                if e["market_value"] and pref_total > 0 and e.get("quote_currency") == pref_currency:
-                    e["weight_pct"] = round(e["market_value"] / pref_total * 100, 1)
+                if e["market_value_in_totals_currency"] and pref_total > 0:
+                    e["weight_pct"] = round(e["market_value_in_totals_currency"] / pref_total * 100, 1)
                 e["totals_currency"] = pref_currency if has_price else None
 
-            total_pnl = (total_market_value - total_cost) if has_price and total_cost else None
-            total_pnl_pct = ((total_market_value / total_cost - 1) * 100) if has_price and total_cost else None
+            total_pnl = (total_value_for_pnl - total_cost) if has_price and total_cost else None
+            total_pnl_pct = ((total_value_for_pnl / total_cost - 1) * 100) if has_price and total_cost else None
 
             # Measured performance and risk (from the price-history store), so the
             # brief quotes computed numbers instead of guessing. Own session: the

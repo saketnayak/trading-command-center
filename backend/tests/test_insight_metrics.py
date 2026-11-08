@@ -132,3 +132,61 @@ async def test_runner_puts_measured_numbers_in_prompt_and_snapshot(noisy_prices,
     measured = row.holdings_snapshot["measured"]
     assert measured["risk"]["volatility"] > 0
     assert measured["performance"]["mode"] == "current"  # one day of upload history → what-if
+
+
+async def test_runner_totals_and_weights_include_holdings_in_other_currencies(monkeypatch, fixed_fx):
+    fixed_fx({"USD": 1.0, "AUD": 1.5})
+    async with _client() as client:
+        headers = await _token(client, "briefccy@example.com")
+        pid = await _portfolio(client, headers, [(1, {"AAPL": 10, "CSL.AX": 4})])  # cost 100 USD each
+
+    from app.schemas.money import PriceQuote
+    import app.routers.portfolio as portfolio_router
+    import app.services.delivery_service as delivery
+    import app.services.markov_service as markov
+
+    async def _prices(tickers, key, db):
+        q = {"AAPL": PriceQuote(200.0, "USD"), "CSL.AX": PriceQuote(300.0, "AUD")}
+        return {t: q[t] for t in tickers}
+
+    async def _fake_llm(provider, model, key, prompt):
+        return '{"health_score": 7, "overall_stance": "neutral", "summary": "ok", "action_items": [], ' \
+               '"risk_alerts": [], "sector_analysis": {}, "strengths": [], "weaknesses": []}'
+
+    async def _none(*_a, **_k):
+        return None
+
+    async def _empty(*_a, **_k):
+        return {}
+
+    async def _sector(ticker, key):
+        return "Tech"
+
+    monkeypatch.setattr(delivery, "deliver_insight_if_configured", _none)
+    monkeypatch.setattr(portfolio_insight_runner, "_call_llm", _fake_llm)
+    monkeypatch.setattr(portfolio_insight_runner, "_fetch_sector", _sector)
+    monkeypatch.setattr(portfolio_insight_runner, "_measured_metrics", _none)
+    monkeypatch.setattr(portfolio_router, "_fetch_prices_bulk", _prices)
+    monkeypatch.setattr(markov, "get_regime_for_portfolio", _empty)
+
+    async with AsyncSessionLocal() as db:
+        insight = PortfolioInsight(
+            id=uuid.uuid4(), portfolio_id=uuid.UUID(pid), status=InsightStatus.pending,
+            trigger=InsightTrigger.manual, llm_provider="ollama", llm_model="x",
+            generated_at=datetime.now(timezone.utc),
+        )
+        db.add(insight)
+        await db.commit()
+        insight_id = str(insight.id)
+
+    await portfolio_insight_runner.generate_portfolio_insight(insight_id)
+
+    async with AsyncSessionLocal() as db:
+        row = (await db.execute(select(PortfolioInsight).where(PortfolioInsight.id == uuid.UUID(insight_id)))).scalar_one()
+    assert row.status == InsightStatus.completed, row.error
+    snap = row.holdings_snapshot
+    # $2,000 + A$1,200 ($800) = $2,800; cost $1,000 + $400.
+    assert snap["total_market_value"] == pytest.approx(2800.0)
+    assert snap["total_pnl"] == pytest.approx(1400.0)
+    weights = {h["ticker"]: h["weight_pct"] for h in snap["holdings"]}
+    assert weights == {"AAPL": pytest.approx(71.4), "CSL.AX": pytest.approx(28.6)}

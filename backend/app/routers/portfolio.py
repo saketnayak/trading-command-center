@@ -1571,6 +1571,7 @@ async def get_sector_gaps(
     portfolio_id: UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
+    display_currency: str = Depends(resolve_display_currency),
 ) -> list[dict]:
     from app.services.sp500_sectors import SP500_SECTOR_WEIGHTS
 
@@ -1599,15 +1600,16 @@ async def get_sector_gaps(
         return []
 
     prices_map = await _fetch_prices_bulk(list(sector_by_ticker.keys()), finnhub_key, db)
-    pref_currency = user.preferred_currency.upper()
+    fx_snap = await fx_service.snapshot()
 
     sector_values: dict[str, float] = {}
     total_value = 0.0
     for holding in holdings:
         quote = prices_map.get(holding.ticker)
-        if quote is None or quote.currency_code != pref_currency:
+        rate = fx_snap.convert(quote.currency_code, display_currency) if quote is not None else None
+        if rate is None:  # no price, or no rate to the display currency: left out, never 1:1
             continue
-        market_value = quote.amount * holding.shares
+        market_value = quote.amount * holding.shares * rate
         sector = sector_by_ticker.get(holding.ticker.upper())
         if not sector:
             continue
@@ -1997,6 +1999,7 @@ async def get_portfolio_trim_signals(
     portfolio_id: UUID,
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
+    display_currency: str = Depends(resolve_display_currency),
 ):
     settings = await get_app_settings(db)
     if not settings["enable_markov_regime"]:
@@ -2022,7 +2025,6 @@ async def get_portfolio_trim_signals(
     tickers = [h.ticker for h in snapshot.holdings]
 
     av_key = await _get_finnhub_key(db)
-    pref_currency = user.preferred_currency.upper()
     last_runs, regime_map, price_map = await asyncio.gather(
         _get_last_runs_for_holdings(tickers, user.id, db),
         get_regime_for_portfolio(tickers),
@@ -2039,12 +2041,14 @@ async def get_portfolio_trim_signals(
             for ticker, (fundamentals, _) in zip(tickers, fundamentals_results)
         }
 
+    fx_snap = await fx_service.snapshot()
     total_value = 0.0
     holding_values: dict[str, float] = {}
     for h in snapshot.holdings:
         quote = price_map.get(h.ticker)
-        if quote is not None and quote.currency_code == pref_currency:
-            v = h.shares * quote.amount
+        rate = fx_snap.convert(quote.currency_code, display_currency) if quote is not None else None
+        if rate is not None:  # weights are in the display currency; no rate means left out, never 1:1
+            v = h.shares * quote.amount * rate
             holding_values[str(h.id)] = v
             total_value += v
 
