@@ -10,6 +10,7 @@ import type { RebalanceMode, RebalanceResponse, TargetRow } from "./rebalance";
 import type { IncomeReport } from "./income";
 import type { ReplacementIdeas, TaxReport } from "./tax";
 import type { NetWorthItemInput, NetWorthRange, NetWorthReport } from "./netWorth";
+import { withCurrency, type FxRates } from "./displayCurrency";
 import type { BacktestDetail, BacktestInput, BacktestMeta, BacktestSummary, Leaderboard } from "./backtest";
 import type { LearningStatus } from "./learning";
 import type { CreatedMcpToken, McpScope, McpToken } from "./mcp";
@@ -334,8 +335,8 @@ export async function uploadPortfolioSnapshot(portfolioId: string, file: File): 
   return r.json();
 }
 
-export async function getPortfolioCurrent(portfolioId: string): Promise<PortfolioCurrentResponse> {
-  const r = await fetchWithAuth(`/portfolio/${portfolioId}/current`);
+export async function getPortfolioCurrent(portfolioId: string, currency?: string): Promise<PortfolioCurrentResponse> {
+  const r = await fetchWithAuth(withCurrency(`/portfolio/${portfolioId}/current`, currency));
   if (!r.ok) throw new Error("Failed to fetch portfolio");
   return r.json();
 }
@@ -588,9 +589,10 @@ export async function getPortfolioWave(
 }
 
 export async function getPortfolioTrimSignals(
-  portfolioId: string
+  portfolioId: string,
+  currency?: string
 ): Promise<TrimSignalsResponse> {
-  const r = await fetchWithAuth(`/portfolio/${portfolioId}/trim-signals`);
+  const r = await fetchWithAuth(withCurrency(`/portfolio/${portfolioId}/trim-signals`, currency));
   if (!r.ok) {
     throw new Error(`Failed to fetch trim signals (${r.status})`);
   }
@@ -602,10 +604,11 @@ export async function getPortfolioPerformance(
   portfolioId: string,
   mode: PerformanceMode,
   range: PerformanceRange,
-  benchmark: string
+  benchmark: string,
+  currency?: string
 ): Promise<PortfolioPerformance> {
   const r = await fetchWithAuth(
-    `/portfolio/${portfolioId}/performance?${performanceQueryParams(mode, range, benchmark)}`
+    withCurrency(`/portfolio/${portfolioId}/performance?${performanceQueryParams(mode, range, benchmark)}`, currency)
   );
   if (!r.ok) {
     let detail = `Failed to load performance (${r.status})`;
@@ -623,10 +626,11 @@ export async function getPortfolioPerformance(
 export async function getPortfolioRisk(
   portfolioId: string,
   lookback: RiskLookback,
-  benchmark: string
+  benchmark: string,
+  currency?: string
 ): Promise<PortfolioRisk> {
   const params = new URLSearchParams({ lookback, benchmark: benchmark.trim().toUpperCase() });
-  const r = await fetchWithAuth(`/portfolio/${portfolioId}/risk?${params.toString()}`);
+  const r = await fetchWithAuth(withCurrency(`/portfolio/${portfolioId}/risk?${params.toString()}`, currency));
   if (!r.ok) {
     let detail = `Failed to load risk (${r.status})`;
     try {
@@ -734,8 +738,8 @@ export interface DiscoverResponse {
   cached: boolean;
 }
 
-export async function getSectorGaps(portfolioId: string): Promise<SectorGap[]> {
-  const r = await fetchWithAuth(`/portfolio/${portfolioId}/sector-gaps`);
+export async function getSectorGaps(portfolioId: string, currency?: string): Promise<SectorGap[]> {
+  const r = await fetchWithAuth(withCurrency(`/portfolio/${portfolioId}/sector-gaps`, currency));
   if (!r.ok) throw new Error("Failed to fetch sector gaps");
   return r.json();
 }
@@ -963,7 +967,8 @@ export const updateAlertRule = (
 
 // ── ETF look-through ─────────────────────────────────────────────────────────
 
-export const getPortfolioXray = (portfolioId: string) => apiJson<XrayReport>(`/portfolio/${portfolioId}/xray`);
+export const getPortfolioXray = (portfolioId: string, currency?: string) =>
+  apiJson<XrayReport>(withCurrency(`/portfolio/${portfolioId}/xray`, currency));
 
 export const refreshPortfolioXray = (portfolioId: string) =>
   apiJson<{ started: boolean; syncing: boolean }>(`/portfolio/${portfolioId}/xray/refresh`, { method: "POST" });
@@ -1007,9 +1012,10 @@ export function getRebalancePlan(
   mode: RebalanceMode,
   amount: number,
   wholeShares: boolean,
+  currency?: string,
 ): Promise<RebalanceResponse> {
   const params = new URLSearchParams({ mode, amount: String(amount || 0), whole_shares: String(wholeShares) });
-  return apiJson<RebalanceResponse>(`/portfolio/${portfolioId}/rebalance?${params.toString()}`);
+  return apiJson<RebalanceResponse>(withCurrency(`/portfolio/${portfolioId}/rebalance?${params.toString()}`, currency));
 }
 
 // ── MCP access tokens ─────────────────────────────────────────────────────────
@@ -1067,7 +1073,8 @@ export const clearLedger = (portfolioId: string) => apiJson<void>(`/portfolio/${
 
 // ── Dividend income ───────────────────────────────────────────────────────────
 
-export const getPortfolioIncome = (portfolioId: string) => apiJson<IncomeReport>(`/portfolio/${portfolioId}/income`);
+export const getPortfolioIncome = (portfolioId: string, currency?: string) =>
+  apiJson<IncomeReport>(withCurrency(`/portfolio/${portfolioId}/income`, currency));
 
 export const setIncomeTarget = (portfolioId: string, monthly: number | null) =>
   apiJson<{ monthly: number | null }>(`/portfolio/${portfolioId}/income/target`, {
@@ -1077,10 +1084,10 @@ export const setIncomeTarget = (portfolioId: string, monthly: number | null) =>
 
 // ── Tax tools ─────────────────────────────────────────────────────────────────
 
-export const getPortfolioTax = (portfolioId: string, year: number | null, minLoss: number) => {
+export const getPortfolioTax = (portfolioId: string, year: number | null, minLoss: number, currency?: string) => {
   const params = new URLSearchParams({ min_loss: String(minLoss) });
   if (year) params.set("year", String(year));
-  return apiJson<TaxReport>(`/portfolio/${portfolioId}/tax?${params.toString()}`);
+  return apiJson<TaxReport>(withCurrency(`/portfolio/${portfolioId}/tax?${params.toString()}`, currency));
 };
 
 export const getTaxReplacements = (portfolioId: string, symbol: string) =>
@@ -1088,7 +1095,12 @@ export const getTaxReplacements = (portfolioId: string, symbol: string) =>
 
 // ── Net worth ─────────────────────────────────────────────────────────────────
 
-export const getNetWorth = (range: NetWorthRange) => apiJson<NetWorthReport>(`/net-worth?range=${range}`);
+export const getNetWorth = (range: NetWorthRange, currency?: string) =>
+  apiJson<NetWorthReport>(withCurrency(`/net-worth?range=${range}`, currency));
+
+// ── Exchange rates ────────────────────────────────────────────────────────────
+
+export const getFxRates = (base = "USD") => apiJson<FxRates>(`/fx/rates?base=${encodeURIComponent(base)}`);
 
 export const addNetWorthItem = (body: NetWorthItemInput) =>
   apiJson<{ id: string; sync_error: string | null }>("/net-worth/items", { method: "POST", body: JSON.stringify(body) });

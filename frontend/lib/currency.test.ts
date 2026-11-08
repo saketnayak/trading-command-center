@@ -20,3 +20,8 @@ test("fmtMoney falls back for non-ISO crypto quote currencies", () => {
   assert.doesNotThrow(() => fmtMoney(1234.5, "USDT"));
   assert.equal(fmtMoney(1234.5, "USDT"), "1,234.50 USDT");
 });
+
+test("fmtMoney shows KRW and ISK without decimals", () => {
+  assert.equal(fmtMoney(1234.5, "KRW"), "₩1,235");
+  assert.equal(fmtMoney(1234.5, "ISK"), "ISK\u00a01,235"); // Intl puts a no-break space after the code
+});

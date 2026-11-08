@@ -49,6 +49,8 @@ export interface XrayReport {
   overlap: { tickers: string[]; matrix: number[][] };
   concentration: { as_held: XrayConcentration; look_through: XrayConcentration };
   no_price: string[];
+  /** Holdings left out for want of an exchange rate to the display currency. */
+  no_rate?: string[];
   pending: string[];
   failed: Record<string, string>;
   last_updated_at: string | null;

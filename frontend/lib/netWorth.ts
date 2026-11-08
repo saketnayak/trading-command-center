@@ -1,5 +1,6 @@
 /** Net worth (GET /net-worth): types and pure helpers. */
 
+import type { FxMeta } from "./displayCurrency";
 import { fmtMoney } from "./currency";
 
 export type NetWorthRange = "6m" | "ytd" | "1y" | "3y" | "5y";
@@ -66,6 +67,9 @@ export interface NetWorthReport {
   categories: { asset: { id: string; label: string }[]; liability: { id: string; label: string }[] };
   warnings: string[];
   methodology: string;
+  /** Items left out for want of an exchange rate to the display currency. */
+  excluded?: { id: string; name: string; currency: string }[];
+  fx?: FxMeta | null;
 }
 
 export interface NetWorthItemInput {
