@@ -20,6 +20,7 @@ import {
 } from "@/lib/risk";
 import { RISK_COLORS, buildCorrelationFigure, buildFanFigure } from "@/lib/riskChart";
 import { ALERT_BANNER_CLASS, FIELD_INPUT_SM_CLASS, selectionPillClass } from "@/lib/uiClasses";
+import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
 
 const Plot = dynamic(() => import("react-plotly.js"), { ssr: false });
 
@@ -29,9 +30,10 @@ export function PortfolioRiskPanel({ portfolioId }: { portfolioId: string }) {
   const [lookback, setLookback] = useState<RiskLookback>("1y");
   const [benchmark, setBenchmark] = useState("SPY");
 
+  const { currency: ccy } = useDisplayCurrency();
   const query = useQuery({
-    queryKey: portfolioQueryKeys.risk(portfolioId, lookback, benchmark),
-    queryFn: () => getPortfolioRisk(portfolioId, lookback, benchmark),
+    queryKey: portfolioQueryKeys.risk(portfolioId, lookback, benchmark, ccy),
+    queryFn: () => getPortfolioRisk(portfolioId, lookback, benchmark, ccy),
     staleTime: PORTFOLIO_STALE_TIMES.risk,
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[1] === portfolioId ? keepPreviousData(previous) : undefined,

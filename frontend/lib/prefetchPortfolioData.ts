@@ -13,6 +13,7 @@ import {
   getMarketTrending,
   getMarketMovers,
   getMarketSectors,
+  getMe,
 } from "@/lib/api";
 import {
   portfolioQueryKeys,
@@ -111,10 +112,19 @@ async function runPrefetch(queryClient: QueryClient): Promise<void> {
     // Prefetch enrichment with defaults when settings are unavailable.
   }
 
+  // Money queries are keyed by the display currency the page will ask for.
+  let ccy = "USD";
+  try {
+    const me = await queryClient.fetchQuery({ queryKey: ["me"], queryFn: getMe, staleTime: 60_000 });
+    ccy = (me.preferred_currency ?? "USD").toUpperCase();
+  } catch {
+    // Fall back to USD; the page refetches with the real preference.
+  }
+
   const prefetches: Array<Promise<void>> = [
     queryClient.prefetchQuery({
-      queryKey: portfolioQueryKeys.current(portfolioId),
-      queryFn: () => getPortfolioCurrent(portfolioId),
+      queryKey: portfolioQueryKeys.current(portfolioId, ccy),
+      queryFn: () => getPortfolioCurrent(portfolioId, ccy),
       staleTime: PORTFOLIO_STALE_TIMES.current,
     }),
     queryClient.prefetchQuery({
@@ -138,8 +148,8 @@ async function runPrefetch(queryClient: QueryClient): Promise<void> {
         staleTime: PORTFOLIO_STALE_TIMES.regime,
       }),
       queryClient.prefetchQuery({
-        queryKey: portfolioQueryKeys.trimSignals(portfolioId),
-        queryFn: () => getPortfolioTrimSignals(portfolioId),
+        queryKey: portfolioQueryKeys.trimSignals(portfolioId, ccy),
+        queryFn: () => getPortfolioTrimSignals(portfolioId, ccy),
         staleTime: PORTFOLIO_STALE_TIMES.trimSignals,
       })
     );

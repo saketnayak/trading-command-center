@@ -15,6 +15,9 @@ import {
   updateNetWorthItem,
 } from "@/lib/api";
 import { fmtMoney } from "@/lib/currency";
+import { DisplayCurrencyPicker } from "@/components/currency/DisplayCurrencyPicker";
+import { FxRateLine } from "@/components/currency/FxRateLine";
+import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
 import {
   ITEM_CURRENCIES,
   NET_WORTH_RANGES,
@@ -48,9 +51,11 @@ const KEY = ["net-worth"] as const;
 
 export function NetWorthView() {
   const [range, setRange] = useState<NetWorthRange>("1y");
+  const displayCcy = useDisplayCurrency();
   const query = useQuery({
-    queryKey: [...KEY, range],
-    queryFn: () => getNetWorth(range),
+    queryKey: [...KEY, range, displayCcy.currency],
+    queryFn: () => getNetWorth(range, displayCcy.currency),
+    enabled: displayCcy.ready,
     placeholderData: keepPreviousData,
   });
 
@@ -64,8 +69,23 @@ export function NetWorthView() {
     <div className={`space-y-4 transition-opacity ${query.isFetching ? "opacity-70" : ""}`} aria-busy={query.isFetching}>
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <div className="text-[11px] uppercase tracking-wide text-muted">Net worth</div>
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-wide text-muted">
+            Net worth
+            <DisplayCurrencyPicker
+              value={displayCcy.currency}
+              held={[...new Set(r.items.map((i) => i.currency))]}
+              supported={displayCcy.supported}
+              onChange={displayCcy.setCurrency}
+              saveError={displayCcy.saveError}
+            />
+          </div>
           <div className="text-3xl font-semibold tabular-nums text-fg">{fmtMoney(r.net_worth, ccy)}</div>
+          <FxRateLine fx={r.fx} display={ccy} />
+          {excludedText(r) && (
+            <div className="text-[11px] text-amber-400" title={(r.excluded ?? []).map((e) => e.name).join(", ")}>
+              {excludedText(r)}
+            </div>
+          )}
           {changeText(r) && <div className="text-xs text-fg-secondary">{changeText(r)}</div>}
         </div>
         <div className="flex flex-wrap gap-1.5" role="group" aria-label="Range">
@@ -108,6 +128,14 @@ export function NetWorthView() {
       <p className="text-[11px] leading-relaxed text-muted">{r.methodology}</p>
     </div>
   );
+}
+
+/** "1 item left out: no CHF rate" / "3 items left out: no exchange rate". */
+function excludedText(r: NetWorthReport): string | null {
+  const left = r.excluded ?? [];
+  if (!left.length) return null;
+  if (left.length === 1) return `1 item left out: no ${left[0].currency} rate`;
+  return `${left.length} items left out: no exchange rate`;
 }
 
 function Tile({ label, value, sub }: { label: string; value: string; sub?: string }) {

@@ -564,7 +564,7 @@ export default function SettingsPage() {
               <div className="sm:w-32 shrink-0">
                 <label className="text-muted text-xs">Preferred Currency</label>
                 <p className="text-[10px] text-muted mt-0.5 hidden sm:block">
-                  Selects which currency to use when multiple are available. Values are never converted.
+                  Portfolio and net-worth figures are converted to this currency at current FX rates.
                 </p>
               </div>
               <select

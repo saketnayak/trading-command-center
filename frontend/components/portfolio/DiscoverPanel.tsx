@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import {
   getSectorGaps,
@@ -14,6 +14,7 @@ import { TickerLabel } from "@/components/ui/TickerLabel";
 import { useTickerMetadata } from "@/lib/useTickerMetadata";
 import { LlmConfigPicker, type LlmConfigValue } from "@/components/llm/LlmConfigPicker";
 import { useDefaultLlmConfig } from "@/lib/useDefaultLlmConfig";
+import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
 
 type TagFilter = "All" | "Gap Fill" | "Trending" | "Mover";
 const TAG_COLORS: Record<string, string> = {
@@ -32,9 +33,11 @@ export function DiscoverPanel({ portfolioId }: { portfolioId: string }) {
     setLlmConfig({ provider, model });
   }, [provider, model]);
 
+  const { currency: ccy } = useDisplayCurrency();
   const { data: gaps = [], isLoading: gapsLoading } = useQuery({
-    queryKey: ["sector-gaps", portfolioId],
-    queryFn: () => getSectorGaps(portfolioId),
+    queryKey: ["sector-gaps", portfolioId, ccy],
+    queryFn: () => getSectorGaps(portfolioId, ccy),
+    placeholderData: keepPreviousData,
     staleTime: 300_000,
   });
 

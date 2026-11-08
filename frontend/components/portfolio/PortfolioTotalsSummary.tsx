@@ -1,4 +1,7 @@
+import type { ReactNode } from "react";
+import { FxRateLine } from "@/components/currency/FxRateLine";
 import { fmtMoney } from "@/lib/currency";
+import type { FxMeta } from "@/lib/displayCurrency";
 import type { PortfolioTotals } from "@/lib/types";
 
 type PortfolioTotalsSummaryProps = {
@@ -6,6 +9,13 @@ type PortfolioTotalsSummaryProps = {
   totalsCurrency: string;
   /** Holdings left out of the totals for want of an exchange rate. */
   excluded?: string[];
+  /** Currency picker shown in place of the currency code. */
+  picker?: ReactNode;
+  /** Rates behind the totals, and the pair to show first. */
+  fx?: FxMeta | null;
+  primaryCurrency?: string | null;
+  /** Dim the figures while the new currency's numbers load. */
+  pending?: boolean;
 };
 
 function fmtPct(n: number | null | undefined): string {
@@ -13,19 +23,22 @@ function fmtPct(n: number | null | undefined): string {
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
 
-export function PortfolioTotalsSummary({ totals, totalsCurrency, excluded = [] }: PortfolioTotalsSummaryProps) {
+export function PortfolioTotalsSummary({
+  totals, totalsCurrency, excluded = [], picker, fx, primaryCurrency, pending = false,
+}: PortfolioTotalsSummaryProps) {
   const pnl = totals.unrealized_pnl ?? null;
   const pnlPct = totals.unrealized_pnl_pct ?? null;
   const pnlPositive = pnl != null && pnl >= 0;
   const pnlColor = pnl == null ? "text-muted" : pnlPositive ? "text-green-400" : "text-red-400";
 
   return (
-    <div className="flex flex-wrap items-baseline justify-end gap-x-5 gap-y-1">
+    <div className={`flex flex-wrap items-baseline justify-end gap-x-5 gap-y-1 transition-opacity ${pending ? "opacity-60" : ""}`}>
       <div className="text-right">
         <div className="text-lg sm:text-2xl font-semibold font-data tabular-nums text-fg">
           {fmtMoney(totals.market_value, totalsCurrency)}
         </div>
-        <div className="text-xs text-muted">Market value ({totalsCurrency})</div>
+        <div className="text-xs text-muted">Market value ({picker ?? totalsCurrency})</div>
+        <FxRateLine fx={fx} display={totalsCurrency} primary={primaryCurrency} />
         {excluded.length > 0 && (
           <div className="text-[10px] text-amber-400" title={excluded.join(", ")}>
             {`Excludes ${excluded.length} ${excluded.length === 1 ? "holding" : "holdings"} (no exchange rate)`}

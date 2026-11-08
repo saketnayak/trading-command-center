@@ -9,6 +9,7 @@ import { fmtSignedPct, returnTone } from "@/lib/performance";
 import { portfolioQueryKeys } from "@/lib/portfolioQueries";
 import { taxHeadline, taxRowsCsv, washRiskText, type HarvestCandidate, type TaxReport, type TaxRow } from "@/lib/tax";
 import { ALERT_BANNER_CLASS, BTN_PRIMARY_SM_CLASS, BTN_SECONDARY_CLASS, selectionPillClass } from "@/lib/uiClasses";
+import { useDisplayCurrency } from "@/lib/useDisplayCurrency";
 
 const CARD = "rounded-lg border border-border bg-surface p-3";
 const MIN_LOSS_OPTIONS = [0, 100, 500, 1000];
@@ -21,9 +22,10 @@ interface Props {
 export function TaxPanel({ portfolioId, onOpenTransactions }: Props) {
   const [year, setYear] = useState<number | null>(null);
   const [minLoss, setMinLoss] = useState(100);
+  const { currency: ccy } = useDisplayCurrency();
   const query = useQuery({
-    queryKey: portfolioQueryKeys.tax(portfolioId, year, minLoss),
-    queryFn: () => getPortfolioTax(portfolioId, year, minLoss),
+    queryKey: portfolioQueryKeys.tax(portfolioId, year, minLoss, ccy),
+    queryFn: () => getPortfolioTax(portfolioId, year, minLoss, ccy),
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[1] === portfolioId ? keepPreviousData(previous) : undefined,
   });
